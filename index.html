@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מדפסת לחברים</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-auth="signed-out" data-role="friend" data-mode="friend">
+    <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+      <form class="login-card" id="login-form">
+        <p class="eyebrow">כניסה למערכת</p>
+        <h1 id="login-title">מדפסת לחברים</h1>
+        <p>בחר משתמש דמו כדי לראות את המערכת כמנהל או כחבר.</p>
+        <label>
+          משתמש
+          <select name="userId" id="login-user"></select>
+        </label>
+        <label>
+          סיסמה
+          <input name="password" type="password" required autocomplete="current-password" placeholder="סיסמה" />
+        </label>
+        <p class="login-hint">דמו: מנהל admin123, חברים 1234</p>
+        <p class="form-error" id="login-error"></p>
+        <button class="primary-button" type="submit">כניסה</button>
+      </form>
+    </section>
+
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">הזמנות הדפסה תלת מימדית</p>
+        <h1>מדפסת לחברים</h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="user-bar" aria-label="משתמש מחובר">
+          <span id="current-user"></span>
+          <div class="view-switch" aria-label="החלפת תצוגה">
+            <button class="ghost-button view-mode-button" type="button" data-mode-target="friend">תצוגת חבר</button>
+            <button class="ghost-button view-mode-button" type="button" data-mode-target="admin">תצוגת מנהל</button>
+          </div>
+          <button class="ghost-button" id="logout-button" type="button">יציאה</button>
+        </div>
+        <div class="summary-strip admin-only" aria-label="סיכום מערכת">
+          <div>
+            <span id="summary-orders">0</span>
+            <small>הזמנות פתוחות</small>
+          </div>
+          <div>
+            <span id="summary-debt">₪0</span>
+            <small>חוב כולל</small>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <nav class="tabs friend-tabs" aria-label="ניווט חבר">
+        <button class="tab is-active" data-view="landing">בית</button>
+        <button class="tab" data-view="catalog">קטלוג</button>
+      </nav>
+      <nav class="tabs admin-tabs" aria-label="ניווט מנהל">
+        <button class="tab admin-tab" data-view="orders">הזמנות</button>
+        <button class="tab admin-tab" data-view="debts">חובות</button>
+        <button class="tab admin-tab" data-view="product-list">מוצרים</button>
+        <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
+      </nav>
+
+      <section class="view is-active" id="landing-view" aria-labelledby="landing-title">
+        <div class="landing-page">
+          <section class="landing-hero">
+            <div class="landing-copy">
+              <p class="landing-pill">פרויקט הדפסה שיתופית בתלת מימד לחברים</p>
+              <h2 id="landing-title">ברוכים הבאים לעולם קטן של רעיונות מודפסים</h2>
+              <p>
+                כאן תוכלו להזמין מוצרים שימושיים, חמודים ומותאמים אישית בהדפסת תלת מימד,
+                במחיר עלות של חומר הגלם ובלי מחירי חנות מוגזמים.
+              </p>
+              <div class="landing-actions">
+                <button class="primary-button" type="button" data-goto-view="catalog">לראות מוצרים</button>
+                <button class="ghost-button" type="button" data-goto-view="catalog">יש לי רעיון להדפסה</button>
+              </div>
+            </div>
+            <div class="landing-showcase" aria-hidden="true">
+              <div class="showcase-tile tile-orange"></div>
+              <div class="showcase-tile tile-blue"></div>
+              <div class="showcase-tile tile-violet"></div>
+              <div class="showcase-tile tile-green"></div>
+            </div>
+          </section>
+
+          <section class="landing-category-grid" aria-label="סוגי מוצרים">
+            <article>
+              <span>בית</span>
+              <h3>ארגון וסדר לבית</h3>
+              <p>פתרונות קטנים למטבח, מגירות, שולחן עבודה וחדרים.</p>
+            </article>
+            <article>
+              <span>מתנות</span>
+              <h3>פריטי נוי ומתנות</h3>
+              <p>דברים חמודים, צבעוניים ונעימים לעין לקישוט או מתנה.</p>
+            </article>
+            <article>
+              <span>הורים</span>
+              <h3>להורים צעירים</h3>
+              <p>מחזיקים, מסדרים ואביזרים קטנים לבית ולשגרה.</p>
+            </article>
+            <article>
+              <span>אישי</span>
+              <h3>בקשות אישיות</h3>
+              <p>יש בעיה קטנה בבית? ננסה למצוא או לעצב פתרון מודפס.</p>
+            </article>
+          </section>
+
+          <section class="landing-info-grid">
+            <article class="info-panel">
+              <span>מחיר</span>
+              <h3>איך המחיר נקבע?</h3>
+              <p>
+                המחיר שמופיע באתר מבוסס בעיקר על עלות חומר הגלם שנדרש להדפסה.
+                מי שרוצה לפרגן ולשלם קצת יותר יכול לעשות את זה מבחירה בלבד.
+              </p>
+            </article>
+            <article class="info-panel dark-panel">
+              <span>התאמה</span>
+              <h3>אפשר לבקש משהו אישי?</h3>
+              <p>
+                כן. אפשר לשלוח רעיון, תמונה, קישור למודל חינמי או בעיה קטנה בבית.
+                אני אבדוק אם אפשר להדפיס, להתאים או לעצב פתרון חדש.
+              </p>
+            </article>
+          </section>
+
+          <section class="support-panel">
+            <div>
+              <span>למה לפרגן?</span>
+              <h3>למה אולי כן לשלם קצת יותר?</h3>
+              <p>
+                מחיר הבסיס הוא מחיר עלות. תוספת קטנה עוזרת לי ללמוד, להתנסות,
+                להבין מה אנשים באמת אוהבים ולראות אם יש כאן פוטנציאל לעסק צדדי.
+              </p>
+            </div>
+            <div class="support-reasons">
+              <article>
+                <h4>לעזור לזה לגדול</h4>
+                <p>אם יהיה עניין אמיתי, אולי בעתיד זה ייפתח לקהל רחב יותר.</p>
+              </article>
+              <article>
+                <h4>לפתח תחביב חדש</h4>
+                <p>כל הזמנה עוזרת לי להשתפר בהדפסה ובעיצוב תלת מימד.</p>
+              </article>
+              <article>
+                <h4>להבין ערך אמיתי</h4>
+                <p>התוספת שתבחרו לשלם עוזרת להבין כמה מוצר באמת שווה.</p>
+              </article>
+              <article>
+                <h4>עוד סיבה להיפגש</h4>
+                <p>בסוף זו גם אחלה סיבה להיפגש כשאני מביא את ההדפסות.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="landing-logistics">
+            <article>
+              <h3>איך מקבלים את המוצר?</h3>
+              <p>בצורה חברית ופשוטה: כשניפגש, כשאני באזור, או בתיאום אישי שמתאים לשנינו.</p>
+            </article>
+            <article>
+              <h3>מתי משלמים?</h3>
+              <p>משלמים לכל המאוחר בזמן קבלת המוצר, אלא אם סיכמנו אחרת מראש.</p>
+            </article>
+            <article class="dark-panel">
+              <h3>לא קיבלתם? לא שילמתם.</h3>
+              <p>אם המוצר לא הגיע אליכם או שלא קיבלתם אותו בפועל, אתם לא צריכים לשלם עליו.</p>
+            </article>
+          </section>
+
+          <section class="landing-steps">
+            <div>
+              <span>איך זה עובד?</span>
+              <h3>מתהליך פשוט לרעיון מודפס</h3>
+            </div>
+            <ol>
+              <li>בוחרים מוצר קיים או שולחים רעיון.</li>
+              <li>אני בודק אם יש קובץ הדפסה מתאים או אם צריך התאמה אישית.</li>
+              <li>אני מעריך חומר גלם, זמן הדפסה ומורכבות.</li>
+              <li>מקבלים מחיר עלות ומחליטים אם להדפיס.</li>
+            </ol>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="catalog-view" aria-labelledby="catalog-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="catalog-title">קטלוג מוצרים</h2>
+            <p>בחר מוצר, כמות וסכום לתשלום. המינימום הוא עלות ההדפסה.</p>
+          </div>
+        </div>
+        <div class="catalog-grid" id="catalog-grid"></div>
+      </section>
+
+      <section class="view" id="orders-view" aria-labelledby="orders-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="orders-title">ניהול הזמנות</h2>
+            <p>עדכון סטטוס, סימון תשלום ומעקב אחרי מה שעדיין פתוח.</p>
+          </div>
+          <button class="ghost-button" id="reset-demo">איפוס דמו</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>חבר</th>
+                <th>מוצר</th>
+                <th>כמות</th>
+                <th>סכום</th>
+                <th>סטטוס</th>
+                <th>תשלום</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
+      </section>
+
+      <section class="view" id="debts-view" aria-labelledby="debts-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="debts-title">חובות לפי חבר</h2>
+            <p>החוב מחושב מכל הזמנה שעדיין לא סומנה כשולמה.</p>
+          </div>
+        </div>
+        <div class="debt-grid" id="debt-grid"></div>
+        <p class="empty-state" id="debts-empty">אין חובות פתוחים כרגע.</p>
+      </section>
+
+      <section class="view" id="product-list-view" aria-labelledby="products-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="products-title">ניהול מוצרים</h2>
+            <p>צפייה ועריכה של כל מוצרי הקטלוג.</p>
+          </div>
+        </div>
+        <div class="products-manager">
+          <div class="table-wrap products-table-wrap">
+            <table class="products-table">
+              <thead>
+                <tr>
+                  <th>תמונה</th>
+                  <th>שם</th>
+                  <th>הוזמן</th>
+                  <th>עלות</th>
+                  <th>תיאור</th>
+                  <th>לינק תמונה</th>
+                  <th>קובץ תמונה</th>
+                  <th>STL</th>
+                  <th>פעולות</th>
+                </tr>
+              </thead>
+              <tbody id="products-table"></tbody>
+            </table>
+          </div>
+          <p class="empty-state" id="products-empty">אין מוצרים בקטלוג.</p>
+        </div>
+      </section>
+
+      <section class="view" id="product-add-view" aria-labelledby="product-add-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="product-add-title">הוספת מוצר</h2>
+            <p>הוספת מוצר חדש עם מחיר, תמונה ולינק לקובץ STL.</p>
+          </div>
+        </div>
+        <div class="ai-product-panel">
+          <div>
+            <h3>טיוטת מוצר בעזרת AI</h3>
+            <p>רעיון קצר למוצר, לפני עריכה ושמירה.</p>
+          </div>
+          <label>
+            רעיון למוצר
+            <textarea id="ai-product-idea" rows="2" placeholder="למשל: פתרון קטן לסידור כבלים ליד מיטה"></textarea>
+          </label>
+          <button class="ghost-button" id="ai-draft-button" type="button">מילוי טיוטה</button>
+        </div>
+        <form class="product-form" id="product-form">
+          <label>
+            שם מוצר
+            <input name="name" required placeholder="למשל: מחזיק מפתחות לקיר" />
+          </label>
+          <label>
+            עלות הדפסה מינימלית
+            <input name="cost" required type="number" min="1" step="1" placeholder="₪" />
+          </label>
+          <label>
+            תיאור קצר
+            <textarea name="description" required rows="3" placeholder="מה זה, למי זה מתאים, צבעים זמינים"></textarea>
+          </label>
+          <label>
+            לינק לתמונה
+            <input name="image" placeholder="https://example.com/product-image.jpg או assets/products/image.png" />
+          </label>
+          <label>
+            העלאת תמונה
+            <input name="imageFile" type="file" accept="image/*" />
+          </label>
+          <label>
+            לינק לקובץ STL
+            <input name="stlUrl" type="url" placeholder="https://example.com/model.stl או קישור מקור" />
+          </label>
+          <button class="primary-button" type="submit">הוספת מוצר</button>
+        </form>
+      </section>
+    </main>
+
+    <dialog id="order-dialog">
+      <form method="dialog" class="order-form" id="order-form">
+        <button class="icon-button close-button" type="button" aria-label="סגירה">×</button>
+        <h2 id="order-product-name">הזמנה חדשה</h2>
+        <p id="order-product-description"></p>
+        <input type="hidden" name="productId" />
+        <label>
+          שם החבר
+          <input name="friendName" required autocomplete="name" placeholder="שם מלא" />
+        </label>
+        <div class="form-row">
+          <label>
+            כמות
+            <input name="quantity" required type="number" min="1" value="1" />
+          </label>
+          <label>
+            סכום לתשלום
+            <input name="price" required type="number" min="1" step="1" />
+          </label>
+        </div>
+        <p class="minimum-note" id="minimum-note"></p>
+        <menu>
+          <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
+          <button class="primary-button" id="submit-order" type="submit">יצירת הזמנה</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <template id="product-card-template">
+      <article class="product-card">
+        <div class="product-image" aria-hidden="true"></div>
+        <div class="product-body">
+          <h3></h3>
+          <p></p>
+          <a class="stl-link" href="#" target="_blank" rel="noopener noreferrer">פתיחת מקור</a>
+          <div class="product-meta">
+            <span class="cost"></span>
+            <button class="primary-button">הזמנה</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
