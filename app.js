@@ -968,7 +968,7 @@ function applyAuth() {
   document.body.dataset.role = currentUser?.role ?? "friend";
   const currentUserLabel = document.querySelector("#current-user");
   if (currentUserLabel) {
-    currentUserLabel.textContent = currentUser ? `שלום, ${currentUser.name}` : currentUserLabel.textContent;
+    currentUserLabel.textContent = currentUser ? `שלום ${currentUser.name}, איזה כיף שהגעת 😀` : currentUserLabel.textContent;
   }
 
   // Update landing page buttons based on auth state
