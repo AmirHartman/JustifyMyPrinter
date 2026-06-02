@@ -596,7 +596,7 @@ const pageName = document.body.dataset.page || "app";
 saveState();
 
 const loginForm = document.querySelector("#login-form");
-const loginUser = document.querySelector("#login-user");
+const loginName = document.querySelector("#login-name");
 const loginError = document.querySelector("#login-error");
 const registerForm = document.querySelector("#register-form");
 const registerError = document.querySelector("#register-error");
@@ -611,8 +611,6 @@ const productForm = document.querySelector("#product-form");
 const productsTable = document.querySelector("#products-table");
 const aiProductIdea = document.querySelector("#ai-product-idea");
 
-populateLoginUsers();
-
 authModeButtons.forEach((button) => {
   button.addEventListener("click", () => setAuthPanel(button.dataset.authTarget));
 });
@@ -620,7 +618,8 @@ authModeButtons.forEach((button) => {
 loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(loginForm);
-  const user = getUsers().find((appUser) => appUser.id === data.get("userId"));
+  const typedName = String(data.get("loginName") ?? "").trim();
+  const user = getUsers().find((appUser) => appUser.name === typedName);
 
   if (!user || user.password !== data.get("password")) {
     loginError.textContent = "שם המשתמש או הסיסמה לא נכונים.";
@@ -927,18 +926,6 @@ function loadRegisteredUsers() {
 
 function saveRegisteredUsers() {
   localStorage.setItem(USERS_KEY, JSON.stringify(registeredUsers));
-}
-
-function populateLoginUsers() {
-  if (!loginUser) return;
-
-  loginUser.replaceChildren();
-  getUsers().forEach((user) => {
-    const option = document.createElement("option");
-    option.value = user.id;
-    option.textContent = user.name;
-    loginUser.append(option);
-  });
 }
 
 function loadSession() {

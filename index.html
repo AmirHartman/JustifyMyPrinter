@@ -33,17 +33,16 @@
           <form class="auth-form is-active" id="login-form" data-auth-form="login">
             <div>
               <h2>טוב לראות אותך</h2>
-              <p>בחרו משתמש, הכניסו סיסמה, וממשיכים פנימה.</p>
+              <p>הקלידו שם משתמש, הכניסו סיסמה, וממשיכים פנימה.</p>
             </div>
             <label>
-              משתמש
-              <select name="userId" id="login-user"></select>
+              שם משתמש
+              <input name="loginName" id="login-name" required autocomplete="username" placeholder="השם שלך" />
             </label>
             <label>
               סיסמה
               <input name="password" type="password" required autocomplete="current-password" placeholder="הסיסמה שלך" />
             </label>
-            <p class="login-hint">דמו: אמיר 1236, חברים 1234</p>
             <p class="form-error" id="login-error"></p>
             <button class="primary-button wide-button" type="submit">כניסה</button>
           </form>
