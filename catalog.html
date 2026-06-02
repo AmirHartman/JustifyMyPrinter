@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מדפסת לחברים - חנות</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-auth="signed-out" data-entry="app" data-role="friend" data-mode="friend" data-page="catalog">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">החנות הקטנה שלנו</p>
+        <h1>מדפסת לחברים</h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="user-bar" aria-label="משתמש מחובר">
+          <a class="admin-return-button" href="index.html">חזרה לניהול</a>
+          <a class="ghost-button" href="welcome.html">ברוכים הבאים</a>
+          <a class="ghost-button" href="landing.html">הסבר</a>
+          <span id="current-user">תצוגת חבר</span>
+          <button class="ghost-button" id="logout-button" type="button">יציאה</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell catalog-shell">
+      <section class="catalog-intro" id="catalog-view" aria-labelledby="catalog-title">
+        <div>
+          <p class="eyebrow">קטלוג הדפסות</p>
+          <h2 id="catalog-title">מה אפשר להדפיס?</h2>
+          <p>
+            בחרו מוצר, כמות וסכום שנראה לכם הוגן. המינימום הוא עלות ההדפסה,
+            וכל דבר מעבר לזה הוא פשוט פרגון חמוד לפרויקט.
+          </p>
+        </div>
+        <div class="catalog-note">
+          <strong>יש רעיון שלא מופיע כאן?</strong>
+          <span>תזמינו משהו קרוב או דברו איתי. חצי מהכיף הוא למצוא פתרונות מוזרים לדברים קטנים.</span>
+        </div>
+      </section>
+
+      <div class="catalog-grid" id="catalog-grid"></div>
+    </main>
+
+    <dialog id="order-dialog">
+      <form method="dialog" class="order-form" id="order-form">
+        <button class="icon-button close-button" type="button" aria-label="סגירה">×</button>
+        <h2 id="order-product-name">הזמנה חדשה</h2>
+        <p id="order-product-description"></p>
+        <input type="hidden" name="productId" />
+        <label class="friend-name-field">
+          שם החבר
+          <input name="friendName" required autocomplete="name" placeholder="שם מלא" />
+        </label>
+        <div class="form-row">
+          <label>
+            כמות
+            <input name="quantity" required type="number" min="1" value="1" />
+          </label>
+          <label>
+            סכום לתשלום
+            <input name="price" required type="number" min="0.01" step="0.01" />
+          </label>
+        </div>
+        <p class="minimum-note" id="minimum-note"></p>
+        <menu>
+          <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
+          <button class="primary-button" id="submit-order" type="submit">יצירת הזמנה</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <template id="product-card-template">
+      <article class="product-card">
+        <div class="product-image" aria-hidden="true"></div>
+        <div class="product-body">
+          <h3></h3>
+          <p></p>
+          <a class="stl-link" href="#" target="_blank" rel="noopener noreferrer">פתיחת מקור</a>
+          <div class="product-meta">
+            <span class="cost"></span>
+            <button class="primary-button">הזמנה</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>

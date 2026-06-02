@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git config --global --add safe\\.directory \"E:/Code/Personal Projects/Justifying_3D_Printer\"; git -C \"E:/Code/Personal Projects/Justifying_3D_Printer\" remote -v; git -C \"E:/Code/Personal Projects/Justifying_3D_Printer\" status --short --branch$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^git -C \"E:/Code/Personal Projects/Justifying_3D_Printer\" status --short$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

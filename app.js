@@ -1,13 +1,15 @@
 const STORAGE_KEY = "friends-printer-app-v5";
 const SESSION_KEY = "friends-printer-session-v1";
+const USERS_KEY = "friends-printer-users-v1";
 const PLA_COST_PER_KG = 60;
+const IMAGE_SEED_VERSION = 3;
 
 const demoUsers = [
   {
     id: "admin",
     name: "אמיר",
     role: "admin",
-    password: "admin123",
+    password: "1236",
   },
   {
     id: "daniel",
@@ -22,488 +24,537 @@ const demoUsers = [
     password: "1234",
   },
   {
-    id: "maya",
-    name: "מאיה",
+    id: "neomi",
+    name: "נעמיקי",
     role: "friend",
     password: "1234",
   },
 ];
 
-const ideaCategoryImages = {
-  "ארגון וסדר לבית": "assets/products/idea-drawer-organizers.png",
-  "נוי וקישוט לבית": "assets/products/idea-planters.png",
-  "אנימה ודמויות": "assets/products/idea-anime-figure.png",
-  "פתרונות להורים צעירים": "assets/products/stroller-cup-holder.png",
-  "רכב ומשרד": "assets/products/idea-car-organizers.png",
-  "משחקים ופידג׳טים": "assets/products/idea-game-fidget.png",
-};
-
-const sourceImageByUrl = {
-  "https://www.printables.com/model/120962-modular-drawer-organizer":
-    "https://media.printables.com/media/prints/120962/images/1171952_ee7bbd0e-ed0d-4974-accd-c204c639869b/thumbs/cover/1200x630/jpg/dscn16342-l.jpg",
-  "https://www.printables.com/model/181089-customisable-drawer-organizer":
-    "https://media.printables.com/media/prints/181089/images/1695472_58e4226d-e18c-4259-b81c-d155893d1018/thumbs/cover/1200x630/jpeg/img_3502.jpg",
-  "https://www.printables.com/model/1716448-cute-kawaii-cat-succulent-planter/files":
-    "https://media.printables.com/media/prints/00823f1f-dd68-457e-bd58-532a5c2a7609/images/12879102_3185dd14-c903-409f-bf25-ee01a845e982_9572416e-d594-4b1c-812a-00d6f6de4a9b/thumbs/cover/1200x630/png/doniczka-kotek.png",
-  "https://www.printables.com/model/1472968-labubu-planter":
-    "https://media.printables.com/media/prints/886dab9a-4ac6-4b7d-aceb-90df662cb331/images/11102640_2b76e557-d535-42c5-8cec-5804d357f444_e6020f12-521a-4a38-9aef-4161ec9d1d01/thumbs/cover/1200x630/png/zrzut-ekranu-2025-11-7-o-142302.png",
-  "https://www.printables.com/model/440482-chibi-anime-girl":
-    "https://media.printables.com/media/prints/440482/images/3640701_1696cbce-2c33-4fa2-8366-b7ff781a9102/thumbs/cover/1200x630/jpg/chibi-cute-girl-final.jpg",
-  "https://www.printables.com/model/455254-universal-stroller-hook/collections":
-    "https://media.printables.com/media/prints/455254/images/3742727_3dcb23c0-072f-4ef8-8f0a-c609af7a01d1/thumbs/cover/1200x630/png/stroller_hook_01.png",
-  "https://www.printables.com/model/119409-bag-hook-for-baby-stroller":
-    "https://media.printables.com/media/prints/119409/images/1160364_fda9dbea-02dc-4c5e-b834-a93eadc11347/thumbs/cover/1200x630/jpg/f7306abc0eefbf6e53c16e54500617d5_display_large_11.jpg",
-  "https://www.printables.com/model/502049-abc-design-stroller-hood-clip":
-    "https://media.printables.com/media/prints/502049/images/4091346_02d0d175-eea8-4b59-8cca-3aeeab87eaba/thumbs/cover/1200x630/jpeg/img_0094.jpg",
-  "https://www.printables.com/model/52411-car-seat-gap-organizer/collections":
-    "https://media.printables.com/media/prints/52411/images/517732_048410cd-ef65-42e6-a5b1-436993fe7fe0/thumbs/cover/1200x630/jpg/20210117_164122.jpg",
-  "https://www.printables.com/model/526739-car-trunk-organizer":
-    "https://media.printables.com/media/prints/526739/images/4396739_aa2a864a-26d3-4d1f-87f0-fd0bd98db11b/thumbs/cover/1200x630/jpeg/2934b84a-3b6e-455a-bd00-11f36e1e9f43_1_105_c.jpg",
-  "https://www.printables.com/model/598851-trunk-velcro-holders/related":
-    "https://media.printables.com/media/prints/598851/images/4768730_c617ce61-6860-467a-b5aa-5f72f1304363_9d22e183-37dd-4807-af2d-44c81794e6c2/thumbs/cover/1200x630/jpg/img_0087.jpg",
-  "https://www.printables.com/model/907809-console-organizer":
-    "https://media.printables.com/media/prints/907809/images/6940043_a7db92c7-cf9c-483e-914a-9ab3e6247202_f3740503-5e2b-4da0-af0b-14b9d8ce40ad/thumbs/cover/1200x630/jpg/img_3049.jpg",
-  "https://www.printables.com/model/679611-board-game-card-holder":
-    "https://media.printables.com/media/prints/679611/images/5341876_9f74c666-59f1-4469-b11c-8e78e3bf89da_ee920f09-6c00-421b-a14e-26a783907da4/thumbs/cover/1200x630/jpg/img20231212220852.jpg",
-  "https://www.printables.com/model/259724-catan-card-holder":
-    "https://media.printables.com/media/prints/259724/images/2322544_6c11c60e-b98f-4dbb-9f00-2b68598af73d/thumbs/cover/1200x630/jpg/catan-card-holder6.jpg",
-  "https://www.printables.com/model/724930-deck-holders-collection":
-    "https://media.printables.com/media/prints/724930/images/5705239_e6d3b7e6-9858-441a-9bd7-247b103285ce_85e0f0d7-d1d8-407e-824e-c20ff0bf8a09/thumbs/cover/1200x630/jpg/20240119_183653.jpg",
-  "https://www.thingiverse.com/thing:6613158":
-    "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/71/3f/a9/7b/97/5126fcd5-c325-487b-80b6-25cd37e1b849.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
-  "https://www.thingiverse.com/thing:6932353":
-    "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/5e/4e/06/99/de/IMG_0989.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+const productImagesByStlUrl = {
+  "https://www.thingiverse.com/thing:3598949": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/f1/dd/82/9f/97/Key_Tray_2019-Apr-30_08-46-29PM-000_CustomizedView18435398591.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6309491": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/98/76/ba/5b/ad/a0d89ce3-2a7a-4ce6-bf0d-48ddec0eed44.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:3347414": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/f6/42/99/2e/10/02.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:644491": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/93/f5/9a/e3/6d/P1060532.JPG&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:5898290": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/7a/0e/8f/57/44/109d18de-2416-4626-9d80-ec888068dd4c.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6935945": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/71/8e/aa/df/97/remotes_mount.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:37960": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/renders/e6/e3/bd/2a/75/cable_clips_x_3.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6155858": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/d9/81/17/c9/b8/d204dc84-a7fa-4399-a719-5a3a613bc48d.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:2050885": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/fd/20/9e/68/4f/MakerBot_headphone_Stand_Render.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:3827538": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/3c/50/85/f7/70/IMG_9756.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:1187364": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/de/72/96/07/c2/SpongeHolder4.JPG&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6763116": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/e5/5f/1a/05/37/9bac5fc7-12c1-4f8d-9795-b7cf26645c36.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:330151": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/renders/2b/a9/56/2d/4e/bagClip_2.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:3058310": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/f1/62/7b/d9/21/MVIMG_20180820_125633.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:80106": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/renders/01/5e/7a/e7/66/IMG_1969.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:1891584": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/8c/50/8c/51/95/low_poly_spoon_rest_3dprintny.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:2850883": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/68/76/98/98/de/IMG_20180405_111259.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:1596322": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/a2/d0/89/f6/e6/IMG_7235.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:725952": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/08/1c/af/1c/46/BAG_DISPENCER-1.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:7190665": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/a5/0a/c4/a7/70/Universal_towel_hook.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:5151237": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/be/19/9a/d5/e0/3.JPG&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:867811": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/05/99/2c/c4/62/Toothpaste_Squeezer.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6516633": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/80/5e/84/a6/7c/30a907e5-af74-4942-b55c-5c07928d5a07.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:662714": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/4f/d1/65/af/f0/shaver_holder00.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6875435": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/d7/2a/86/6d/e8/IMG_4418.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:5740323": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/8b/96/19/a3/c7/90e888c5-dfd7-43af-ba03-32e71dcb19b9.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:37283": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/renders/b3/6b/59/ca/75/DSC_0077.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:2637487": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/c6/7f/b5/e1/aa/USB_01.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:73489": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/renders/bc/e4/fd/b4/36/IMG_5710.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6426072": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/c8/2b/80/f0/19/779e4488-8d1f-4306-bced-6d926e2049d5.jpeg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:923111": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/0f/9d/96/fb/58/IMG_3210.JPG&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:3898441": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/de/f5/05/1a/0a/jewelryHolderV2.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:5902365": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/a3/71/65/f1/af/ebb451f9-bd4b-4d1c-884a-f3f316946627.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6791127": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/43/bb/d5/1c/36/IMG_2380.JPG_compressed.JPEG&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6813328": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/cd/d5/82/20/1a/Label_12.5_50_30.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:5371231": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/38/41/18/18/f7/1651154882116111.jpeg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:2545456": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/68/06/b3/62/6c/20170920_171340.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:3719476": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/e6/81/4a/e9/b7/hrbh.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:1775488": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/3e/ec/a8/e6/fb/20161119_135005.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:98825": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/renders/69/6f/77/d2/bb/photo_3.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:4740308": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/be/9f/f1/41/d6/030d2078-2540-47a5-a9ae-4938c521c7c5.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:3675279": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/45/ae/03/5c/ac/20190606_181915.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:2805978": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/19/ce/fd/5a/62/thingverse.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:5958301": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/5d/d8/34/01/f3/0816ca48-5e8d-4477-8d78-2592f2617f92.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:2858696": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/28/53/42/18/a1/Seed_Storage_Box_01.jpeg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:7145404": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/4d/b0/57/e2/23/5.jpeg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:4782296": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/08/d0/1c/43/ba/Stroller_Hook.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:4910958": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/af/81/52/90/94/Cupholder_-_Right.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6420289": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/f5/bc/de/e8/f3/3a20cafd-13aa-4b34-a60c-35a908a887fa.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:7047129": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/1d/84/b4/c6/a8/20250525_152314.jpg&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6628547": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/c4/4c/27/f1/49/9048d767-a7c3-4588-94a6-52f8682bcdd5.png&w=628&h=472&fit=contain&cbg=white&n=-1",
+  "https://www.thingiverse.com/thing:6998597": "https://resize.thingiverse.com/?url=https://cdn.thingiverse.com/assets/c4/d6/81/2f/0e/mam.jpeg&w=628&h=472&fit=contain&cbg=white&n=-1",
 };
 
 const demoProducts = [
   {
     id: crypto.randomUUID(),
-    name: "קליפסים לסידור כבלים",
+    name: "מחזיק מפתחות לקיר",
+    cost: 3.3,
+    grams: 55,
+    description: "מתלה קיר עם ווים ומדף קטן למפתחות/פריטים קטנים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3598949",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "קופסת כניסה לבית",
+    cost: 9.6,
+    grams: 160,
+    description: "מגש catch-all לארנק, מפתחות, שעון ומטבעות.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6309491",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מעמד לטלפון",
+    cost: 2.7,
+    grams: 45,
+    description: "סטנד שולחני פשוט לטלפון בזווית צפייה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3347414",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק משקפיים",
+    cost: 2.4,
+    grams: 40,
+    description: "מעמד קטן למשקפיים לשידה/שולחן.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:644491",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק שלט מזגן",
+    cost: 2.7,
+    grams: 45,
+    description: "תושבת קיר לשלט מזגן/טלוויזיה יחיד.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:5898290",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "ארגונית שלטים",
+    cost: 8.1,
+    grams: 135,
+    description: "מעמד קיר לשני שלטים או יותר.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6935945",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "קליפס כבלים לשולחן",
+    cost: 0.48,
+    grams: 8,
+    description: "תופסן קטן שמונע מכבלי טעינה ליפול מהשולחן.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:37960",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "ארגונית כבלים",
+    cost: 4.2,
+    grams: 70,
+    description: "פתרון לניהול כבלים מתחת לשולחן/עמדת עבודה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6155858",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מעמד לאוזניות",
+    cost: 6.3,
+    grams: 105,
+    description: "סטנד שולחני לאוזניות, מתאים לעמדת מחשב.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:2050885",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מפרידי מגירה מודולריים",
+    cost: 7.2,
+    grams: 120,
+    description: "מערכת מחיצות מודולרית לסידור מגירות.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3827538",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק ספוג לכיור",
+    cost: 2.28,
+    grams: 38,
+    description: "מעמד קטן לספוג/סקוץ׳ עם ניקוז.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:1187364",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מעמד לסבון כלים וסקוץ׳",
+    cost: 6.9,
+    grams: 115,
+    description: "ארגונית לכיור עבור סבון, ספוג ומברשת.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6763116",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "קליפסים לשקיות אוכל",
+    cost: 0.72,
+    grams: 12,
+    description: "קליפסים לסגירת שקיות מזון; הדפסה קטנה ומהירה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:330151",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "ארגונית תבלינים",
+    cost: 12.6,
+    grams: 210,
+    description: "מדף/ארגונית לתבלינים במטבח.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3058310",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק קפסולות קפה",
+    cost: 10.2,
+    grams: 170,
+    description: "מסילה/מעמד לקפסולות נספרסו.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:80106",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מעמד לכף בישול",
+    cost: 2.7,
+    grams: 45,
+    description: "מגש לשמירה על משטח נקי בזמן בישול.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:1891584",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק מכסה סיר",
+    cost: 4.5,
+    grams: 75,
+    description: "תושבת/מתלה למכסה סיר במטבח.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:2850883",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "משפך קטן",
+    cost: 1.44,
+    grams: 24,
+    description: "משפך מטבח בסיסי להעברת נוזלים/תבלינים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:1596322",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק שקיות ניילון",
+    cost: 10.8,
+    grams: 180,
+    description: "דיספנסר לאחסון ושליפה של שקיות ניילון.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:725952",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מתלה מגבת מטבח",
+    cost: 2.1,
+    grams: 35,
+    description: "וו לדלת ארון/מגירה עבור מגבת מטבח.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:7190665",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק מברשות שיניים",
+    cost: 4.2,
+    grams: 70,
+    description: "מעמד למברשות שיניים ומשחת שיניים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:5151237",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "סוחט משחת שיניים",
+    cost: 0.96,
+    grams: 16,
+    description: "כלי קטן לגלגול/סחיטת שפופרת משחת שיניים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:867811",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק סבון עם ניקוז",
     cost: 3,
-    description: "סט קליפסים לשולחן או לשידה כדי שהכבלים לא יברחו לרצפה.",
-    image: "assets/products/cable-clips.png",
-    stlUrl: "https://www.printables.com/search/models?q=cable%20clip",
+    grams: 50,
+    description: "מגש סבון עם ניקוז למניעת הצטברות מים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6516633",
   },
   {
     id: crypto.randomUUID(),
-    name: "מתלה מפתחות ומגש כניסה",
-    cost: 8,
-    description: "מתלה קטן ליד הדלת למפתחות, משקפי שמש וכרטיסים.",
-    image: "assets/products/entry-key-tray.png",
-    stlUrl: "https://www.printables.com/search/models?q=key%20holder%20tray",
+    name: "מתלה לסכין גילוח",
+    cost: 1.08,
+    grams: 18,
+    description: "מחזיק קטן לסכין גילוח במקלחת/אמבטיה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:662714",
   },
   {
     id: crypto.randomUUID(),
-    name: "מייבש בקבוקים ומוצצים",
-    cost: 11,
-    description: "מעמד קומפקטי לחלקי בקבוקים ומוצצים. לא מיועד לשימוש בטיחותי או לעומס.",
-    image: "assets/products/baby-bottle-rack.png",
-    stlUrl: "https://www.printables.com/search/models?q=baby%20bottle%20drying%20rack",
+    name: "ארגונית איפור / קרמים",
+    cost: 12.6,
+    grams: 210,
+    description: "ארגונית מחולקת לאיפור, קרמים ומברשות.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6875435",
   },
   {
     id: crypto.randomUUID(),
-    name: "מחזיק כוס לעגלה",
-    cost: 10,
-    description: "תוסף קליפס לעגלה לכוס קפה, בקבוק קטן או כוס חטיפים. לא להעמיס משקל כבד.",
-    image: "assets/products/stroller-cup-holder.png",
-    stlUrl: "https://www.printables.com/search/models?q=stroller%20cup%20holder",
+    name: "סטנד ללפטופ",
+    cost: 18,
+    grams: 300,
+    description: "סטנד נייד/מתקפל ללפטופ לשיפור זווית עבודה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:5740323",
   },
   {
     id: crypto.randomUUID(),
-    name: "ארגונית מברשות לחדר רחצה",
-    cost: 7,
-    description: "מחזיק קיר למברשות שיניים, משחה וסכין גילוח.",
-    image: "assets/products/bathroom-organizer.png",
-    stlUrl: "https://www.printables.com/search/models?q=toothbrush%20holder",
+    name: "מעמד לטאבלט",
+    cost: 7.5,
+    grams: 125,
+    description: "מעמד מתכוונן לטאבלט או טלפון גדול.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:37283",
   },
   {
     id: crypto.randomUUID(),
-    name: "מדרגות לתבלינים במגירה",
-    cost: 14,
-    description: "סט מודולרי שמרים צנצנות תבלינים בזווית כדי למצוא הכול מהר.",
-    image: "assets/products/spice-drawer-risers.png",
-    stlUrl: "https://www.printables.com/search/models?q=spice%20drawer%20organizer",
+    name: "מחזיק USB / כרטיסי זיכרון",
+    cost: 3.3,
+    grams: 55,
+    description: "ארגונית ל־USB, SD ו־MicroSD.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:2637487",
   },
   {
     id: crypto.randomUUID(),
-    name: "תגיות השקיה לעציצים",
-    cost: 3,
-    description: "תגיות חמודות לעציצים עם מקום לתזכורת השקיה.",
-    image: "assets/products/plant-reminder-tags.png",
-    stlUrl: "https://www.printables.com/search/models?q=plant%20tags",
+    name: "מעמד עטים",
+    cost: 6.6,
+    grams: 110,
+    description: "כוס/מעמד לעטים, עפרונות וכלי כתיבה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:73489",
   },
   {
     id: crypto.randomUUID(),
-    name: "מגש לערב משחקים",
-    cost: 11,
-    description: "מגש מחולק לקוביות, קלפים ואסימונים לערב משחקים מסודר.",
-    image: "assets/products/game-night-tray.png",
-    stlUrl: "https://www.printables.com/search/models?q=board%20game%20tray",
+    name: "מעמד לספר לימוד",
+    cost: 11.4,
+    grams: 190,
+    description: "סטנד מתקפל/יציב לספר לימוד או ספר מתכונים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6426072",
   },
   {
     id: crypto.randomUUID(),
-    name: "ווים מתחת למדף",
-    cost: 6,
-    description: "ווים נתפסים למדף בלי ברגים, לכוסות או אביזרי מטבח קטנים.",
-    image: "assets/products/under-shelf-hooks.png",
-    stlUrl: "https://www.printables.com/search/models?q=under%20shelf%20hooks",
+    name: "מחזיק חגורות",
+    cost: 5.7,
+    grams: 95,
+    description: "מתלה לחגורות בארון.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:923111",
   },
-  createIdeaProduct({
-    name: "מחלקי מגירות מודולריים",
-    titleEn: "Modular Drawer Organizer",
-    category: "ארגון וסדר לבית",
-    description: "מערכת מודולרית לחלוקה פנימית של מגירות בבית, במטבח, במשרד או בשולחן עבודה.",
-    useCase: "מתאים לסכו״ם, כבלים, כלי כתיבה, ברגים, כלי מטבח קטנים ואביזרים יומיומיים.",
-    source: "Printables",
-    url: "https://www.printables.com/model/120962-modular-drawer-organizer",
-    material: "PLA",
-    difficulty: "קל",
-    note: "מומלץ למדוד את המגירה לפני הדפסה.",
-  }),
-  createIdeaProduct({
-    name: "אוסף מחלקי מגירות",
-    titleEn: "Drawer Dividers Collection",
-    category: "ארגון וסדר לבית",
-    description: "עמוד עם מגוון מחלקי מגירות להדפסה.",
-    useCase: "מתאים למשתמש שרוצה לבחור פתרון לפי מידות המגירה שלו.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/drawerdividers",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "מארגן מגירה מותאם אישית",
-    titleEn: "Customisable Drawer Organizer",
-    category: "ארגון וסדר לבית",
-    description: "מארגן מגירות גמיש שניתן להתאים לפי גודל וצורת המגירה.",
-    useCase: "מתאים למי שרוצה פתרון מדויק יותר ולא רק קופסאות מוכנות.",
-    source: "Printables",
-    url: "https://www.printables.com/model/181089-customisable-drawer-organizer",
-    material: "PLA",
-    difficulty: "בינוני",
-  }),
-  createIdeaProduct({
-    name: "ארגונית לחלקים קטנים",
-    titleEn: "Parts Organizer",
-    category: "ארגון וסדר לבית",
-    description: "קופסאות או תאים קטנים לאחסון ברגים, רכיבי אלקטרוניקה, מחברים וחלקים קטנים.",
-    useCase: "מעולה לשולחן עבודה, תחביבים, תיקונים וציוד טכני.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/partsorganizer",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "ארגון כלי עבודה",
-    titleEn: "Tool Organization",
-    category: "ארגון וסדר לבית",
-    description: "מחזיקים ומתלים לכלי עבודה, ביטים, מברגים, פליירים ואביזרי עבודה.",
-    useCase: "מתאים לסדנה ביתית, שולחן תיקונים, מגירות כלי עבודה או קיר כלים.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/toolorganization",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "עציץ חתול חמוד לסוקולנט",
-    titleEn: "Cute Kawaii Cat Succulent Planter",
-    category: "נוי וקישוט לבית",
-    description: "עציץ קטן וחמוד בצורת חתול, מתאים לסוקולנטים או קישוט מדף.",
-    useCase: "מתאים לקישוט חדר, שולחן עבודה, מתנה קטנה או מוצר נוי.",
-    source: "Printables",
-    url: "https://www.printables.com/model/1716448-cute-kawaii-cat-succulent-planter/files",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "אוסף עציצים להדפסה",
-    titleEn: "Planter Models",
-    category: "נוי וקישוט לבית",
-    description: "עמוד עם מגוון עציצים להדפסה תלת־ממדית.",
-    useCase: "מתאים למשתמשים שמחפשים קישוטים לבית, עציצים קטנים או מתנות.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/planter",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "אוסף עציצים ואגרטלים",
-    titleEn: "Flowerpot Models",
-    category: "נוי וקישוט לבית",
-    description: "עמוד תגית לעציצים, flowerpots ואגרטלים דקורטיביים.",
-    useCase: "מתאים לקישוט הבית, מדפים, שולחן עבודה או אדן חלון.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/flowerpot",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "עציץ לאבובו",
-    titleEn: "Labubu Planter",
-    category: "נוי וקישוט לבית",
-    description: "עציץ חמוד בסגנון פופולרי, מתאים לסוקולנטים או קישוט.",
-    useCase: "טוב כפריט חמוד לקישוט או מתנה.",
-    source: "Printables",
-    url: "https://www.printables.com/model/1472968-labubu-planter",
-    material: "PLA",
-    difficulty: "קל",
-    note: "ייתכן שיש רגישות לזכויות יוצרים/מותג. לא להציג כמתאים למכירה בלי בדיקת רישיון.",
-  }),
-  createIdeaProduct({
-    name: "אוסף דמויות אנימה",
-    titleEn: "Anime Models",
-    category: "אנימה ודמויות",
-    description: "עמוד תגית עם דמויות, פסלונים ואביזרים בסגנון אנימה.",
-    useCase: "מתאים למשתמשים שמחפשים דמויות קטנות להדפסה אישית.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/anime",
-    material: "PLA",
-    difficulty: "בינוני",
-    note: "דמויות מוכרות עלולות להיות מוגנות בזכויות יוצרים. לא להציג כמתאים לשימוש מסחרי.",
-  }),
-  createIdeaProduct({
-    name: "אוסף דמויות צ׳יבי",
-    titleEn: "Chibi Models",
-    category: "אנימה ודמויות",
-    description: "עמוד תגית לדמויות צ׳יבי קטנות וחמודות.",
-    useCase: "מתאים לקישוט, צעצועי מדף, דמויות אספנות והדפסות קטנות.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/chibi",
-    material: "PLA",
-    difficulty: "בינוני",
-    note: "יש לבדוק רישיון לכל מודל בנפרד.",
-  }),
-  createIdeaProduct({
-    name: "דמות צ׳יבי אנימה",
-    titleEn: "Chibi Anime Girl",
-    category: "אנימה ודמויות",
-    description: "דמות קטנה בסגנון אנימה/צ׳יבי להדפסה.",
-    useCase: "קישוט מדף, מתנה או דמות אספנות קטנה.",
-    source: "Printables",
-    url: "https://www.printables.com/model/440482-chibi-anime-girl",
-    material: "PLA",
-    difficulty: "בינוני",
-    note: "לא להניח שמותר שימוש מסחרי בלי בדיקת רישיון.",
-  }),
-  createIdeaProduct({
-    name: "אוסף מודלים בסגנון נארוטו",
-    titleEn: "Naruto Models",
-    category: "אנימה ודמויות",
-    description: "עמוד תגית למודלים שקשורים לנארוטו.",
-    useCase: "מתאים לחיפוש דמויות, סמלים ואביזרי קוספליי קטנים להדפסה אישית.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/naruto",
-    material: "PLA",
-    difficulty: "בינוני",
-    note: "מותגים ודמויות מוכרות מוגנים בזכויות יוצרים. לא להציג כמתאים למכירה.",
-  }),
-  createIdeaProduct({
-    name: "אוסף מודלים בסגנון טוטורו",
-    titleEn: "Totoro Models",
-    category: "אנימה ודמויות",
-    description: "עמוד תגית למודלים בסגנון טוטורו.",
-    useCase: "מתאים להדפסות נוי חמודות ואנימה.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/totoro",
-    material: "PLA",
-    difficulty: "בינוני",
-    note: "מותגים ודמויות מוכרות מוגנים בזכויות יוצרים. לא להציג כמתאים למכירה.",
-  }),
-  createIdeaProduct({
-    name: "ווים לעגלה",
-    titleEn: "Stroller Hooks",
-    category: "פתרונות להורים צעירים",
-    description: "עמוד תגית עם ווים ומתלים לעגלות.",
-    useCase: "שימושי לתליית תיק קל או אביזרים קטנים על עגלה.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/strollerhook",
-    material: "PETG",
-    difficulty: "בינוני",
-    note: "לא להעמיס משקל כבד על עגלה ולא להשתמש כחלק בטיחותי.",
-  }),
-  createIdeaProduct({
-    name: "וו אוניברסלי לעגלה",
-    titleEn: "Universal Stroller Hook",
-    category: "פתרונות להורים צעירים",
-    description: "וו כללי לעגלה, מתאים לתליית אביזרים קלים.",
-    useCase: "פתרון נוח להורים צעירים בזמן יציאה מהבית.",
-    source: "Printables",
-    url: "https://www.printables.com/model/455254-universal-stroller-hook/collections",
-    material: "PETG",
-    difficulty: "בינוני",
-    note: "לבדוק התאמה לקוטר הידית ולכיוון ההדפסה.",
-  }),
-  createIdeaProduct({
-    name: "וו שקיות לעגלת תינוק",
-    titleEn: "Bag Hook for Baby Stroller",
-    category: "פתרונות להורים צעירים",
-    description: "וו לתליית שקיות או תיק קל על עגלה.",
-    useCase: "עוזר להורים כשצריך יד נוספת לקניות קלות או תיק קטן.",
-    source: "Printables",
-    url: "https://www.printables.com/model/119409-bag-hook-for-baby-stroller",
-    material: "PETG",
-    difficulty: "בינוני",
-    note: "לא להשתמש לעומסים כבדים. להציג כפתרון אביזר בלבד ולא כמוצר בטיחות.",
-  }),
-  createIdeaProduct({
-    name: "קליפס לגגון עגלה",
-    titleEn: "Stroller Hood Clip",
-    category: "פתרונות להורים צעירים",
-    description: "קליפס לחיבור בד קל, מגבת קלה או הצללה לגגון עגלה.",
-    useCase: "שימושי כהצללה זמנית או קיבוע קל.",
-    source: "Printables",
-    url: "https://www.printables.com/model/502049-abc-design-stroller-hood-clip",
-    material: "PETG",
-    difficulty: "קל",
-    note: "לא לכסות עגלה באופן שפוגע באוורור.",
-  }),
-  createIdeaProduct({
-    name: "ארגונית לרווח בין מושב לקונסולה",
-    titleEn: "Car Seat Gap Organizer",
-    category: "רכב ומשרד",
-    description: "ארגונית קטנה לרכב שנכנסת בין המושב לקונסולה.",
-    useCase: "מתאימה לטלפון, כרטיסים, מטבעות, עט או אביזרים קטנים.",
-    source: "Printables",
-    url: "https://www.printables.com/model/52411-car-seat-gap-organizer/collections",
-    material: "PETG",
-    difficulty: "בינוני",
-    note: "PETG עדיף לרכב בגלל חום. PLA עלול להתעוות בשמש.",
-  }),
-  createIdeaProduct({
-    name: "מעצור/ארגונית לתא מטען",
-    titleEn: "Car Trunk Organizer",
-    category: "רכב ומשרד",
-    description: "מעצור לתא המטען שמונע מחפצים לזוז בזמן נסיעה.",
-    useCase: "מתאים לקניות, תיקים, ארגזים וחפצים בתא המטען.",
-    source: "Printables",
-    url: "https://www.printables.com/model/526739-car-trunk-organizer",
-    material: "PETG",
-    difficulty: "קל",
-    note: "המודל דורש בדרך כלל חיבור סקוץ׳/ולקרו לתחתית.",
-  }),
-  createIdeaProduct({
-    name: "מחזיקי ולקרו לתא מטען",
-    titleEn: "Trunk Velcro Holders",
-    category: "רכב ומשרד",
-    description: "מחזיקים פשוטים שמתחברים לרצפת תא המטען באמצעות ולקרו.",
-    useCase: "פתרון פשוט וזול לארגון תא המטען.",
-    source: "Printables",
-    url: "https://www.printables.com/model/598851-trunk-velcro-holders/related",
-    material: "PETG",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "מחזיקי כוסות לרכב",
-    titleEn: "Car Cup Holders",
-    category: "רכב ומשרד",
-    description: "עמוד תגית עם מחזיקי כוסות ומתאמים לרכב.",
-    useCase: "מתאים למי שרוצה להוסיף או להתאים מחזיק כוסות ברכב.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/carcupholder",
-    material: "PETG",
-    difficulty: "בינוני",
-    note: "ברכב מומלץ PETG או חומר עמיד יותר, כי PLA עלול להתעוות בחום.",
-  }),
-  createIdeaProduct({
-    name: "ארגונית לקונסולה ברכב",
-    titleEn: "Console Organizer",
-    category: "רכב ומשרד",
-    description: "ארגונית לתא הקונסולה ברכב, ניתנת להתאמה לרכבים שונים.",
-    useCase: "מתאימה לסידור מטבעות, מפתחות, כרטיסים, מטענים ואביזרים קטנים.",
-    source: "Printables",
-    url: "https://www.printables.com/model/907809-console-organizer",
-    material: "PETG",
-    difficulty: "בינוני",
-    note: "ברכב מומלץ PETG או חומר עמיד יותר, כי PLA עלול להתעוות בחום.",
-  }),
-  createIdeaProduct({
-    name: "אוסף אינסרטים למשחקי קופסה",
-    titleEn: "Board Game Inserts Collection",
-    category: "משחקים ופידג׳טים",
-    description: "אוסף גדול של אינסרטים וארגוניות למשחקי קופסה.",
-    useCase: "מתאים לשחקני משחקי קופסה שרוצים לקצר setup ולשמור על סדר בקופסה.",
-    source: "MakerWorld",
-    url: "https://makerworld.com/en/collections/1245676-board-game-inserts",
-    material: "PLA",
-    difficulty: "בינוני",
-  }),
-  createIdeaProduct({
-    name: "מחזיק קלפים למשחקי קופסה",
-    titleEn: "Board Game Card Holder",
-    category: "משחקים ופידג׳טים",
-    description: "מחזיק קלפים פשוט למשחקי קופסה, במקור עבור קלפי קטאן.",
-    useCase: "עוזר לסדר קלפים על השולחן ולשמור על אזור משחק נקי.",
-    source: "Printables",
-    url: "https://www.printables.com/model/679611-board-game-card-holder",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "מחזיק קלפים לקטאן",
-    titleEn: "Catan Card Holder",
-    category: "משחקים ופידג׳טים",
-    description: "מחזיק קלפים למשחק קטאן, מתאים לקלפי משאבים ופיתוח.",
-    useCase: "שימושי מאוד למי שמשחק קטאן ורוצה לסדר את הקלפים.",
-    source: "Printables",
-    url: "https://www.printables.com/model/259724-catan-card-holder",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "אוסף מחזיקי חפיסות קלפים",
-    titleEn: "Deck Holders Collection",
-    category: "משחקים ופידג׳טים",
-    description: "אוסף של מחזיקים פשוטים לחפיסות קלפים ומשחקי קופסה.",
-    useCase: "מתאים למשחקי קלפים, משחקי קופסה וקלפי TCG.",
-    source: "Printables",
-    url: "https://www.printables.com/model/724930-deck-holders-collection",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "אוסף מחזיקי קלפים",
-    titleEn: "Playing Card Holders",
-    category: "משחקים ופידג׳טים",
-    description: "עמוד תגית עם מחזיקי קלפים מסוגים שונים.",
-    useCase: "מתאים למשחקי קופסה, ילדים, מבוגרים או אנשים שמתקשים להחזיק הרבה קלפים ביד.",
-    source: "Printables",
-    url: "https://www.printables.com/tag/playingcardholder",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "אוסף פידג׳טים",
-    titleEn: "Fidget Toys",
-    category: "משחקים ופידג׳טים",
-    description: "עמוד קהילה/אוסף סביב פידג׳טים להדפסה.",
-    useCase: "מתאים לצעצועים קטנים, משחקי ידיים, הדפסות כיפיות וניסוי במדפסת.",
-    source: "Thingiverse",
-    url: "https://www.thingiverse.com/groups/fidget",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "פידג׳ט ספירלה",
-    titleEn: "Spiral Cone Fidget Toy",
-    category: "משחקים ופידג׳טים",
-    description: "פידג׳ט ספירלי קטן עם תנועה חלקה ומספקת.",
-    useCase: "מתאים כהדפסה מהירה, צעצוע שולחני או בדיקת איכות הדפסה.",
-    source: "Thingiverse",
-    url: "https://www.thingiverse.com/thing:6613158",
-    material: "PLA",
-    difficulty: "קל",
-  }),
-  createIdeaProduct({
-    name: "פידג׳ט קליקר",
-    titleEn: "Fidget Clicker",
-    category: "משחקים ופידג׳טים",
-    description: "פידג׳ט קטן בסגנון קליקר.",
-    useCase: "מתאים למשתמשים שאוהבים קליקים, צעצועי יד ושולחן עבודה.",
-    source: "Thingiverse",
-    url: "https://www.thingiverse.com/thing:6932353",
-    material: "PLA",
-    difficulty: "קל",
-  }),
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק תכשיטים",
+    cost: 6.9,
+    grams: 115,
+    description: "סטנד/ארגונית לתכשיטים, טבעות ושרשראות.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3898441",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "קליפסים לגרביים בכביסה",
+    cost: 0.84,
+    grams: 14,
+    description: "קליפסים לשמירת זוגות גרביים בזמן כביסה/ייבוש.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:5902365",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק נעליים בזווית",
+    cost: 10.8,
+    grams: 180,
+    description: "מודול לאחסון נעליים/הגדלת מקום במדף.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6791127",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "תוויות למדפים בארון",
+    cost: 0.48,
+    grams: 8,
+    description: "מחזיק תגית/תווית למדף, קופסה או מגירה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6813328",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק טלפון לרכב",
+    cost: 5.1,
+    grams: 85,
+    description: "מחזיק טלפון אוניברסלי לרכב.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:5371231",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק משקפי שמש לרכב",
+    cost: 1.44,
+    grams: 24,
+    description: "קליפס למגן שמש עבור משקפי שמש.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:2545456",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "וו לשקיות בגב מושב",
+    cost: 2.1,
+    grams: 35,
+    description: "וו לתליית שקיות קניות/תיק על משענת ראש ברכב.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3719476",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מתקן שקית אשפה לרכב",
+    cost: 6.3,
+    grams: 105,
+    description: "מחזיק/מסגרת לשקית אשפה קטנה ברכב.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:1775488",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "קופסה למטבעות ברכב",
+    cost: 3.3,
+    grams: 55,
+    description: "ארגונית מטבעות לכוס/קונסולה ברכב.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:98825",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "תוויות לעציצים",
+    cost: 0.48,
+    grams: 8,
+    description: "תגיות/שלטים לצמחים ולערוגות.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:4740308",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "תופסן לצמחים מטפסים",
+    cost: 0.3,
+    grams: 5,
+    description: "קליפס תמיכה לצמח וגבעול/מקל במבוק.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:3675279",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מתאם טפטוף לבקבוק",
+    cost: 1.5,
+    grams: 25,
+    description: "מתאם השקיה איטית לבקבוק PET/סודה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:2805978",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "תחתית לעציץ",
+    cost: 7.2,
+    grams: 120,
+    description: "צלחת ניקוז לעציץ במספר גדלים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:5958301",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "קופסה לזרעים",
+    cost: 8.1,
+    grams: 135,
+    description: "קופסת אחסון לזרעים עם מכסה/אוורור.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:2858696",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק מוצץ",
+    cost: 2.1,
+    grams: 35,
+    description: "ארגונית/מעמד למוצצים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:7145404",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "וו לעגלה",
+    cost: 3.3,
+    grams: 55,
+    description: "וו לתליית תיק/שקית על עגלת תינוק.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:4782296",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מחזיק בקבוק לעגלה",
+    cost: 7.8,
+    grams: 130,
+    description: "מחזיק כוס/בקבוק לעגלה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:4910958",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "ארגונית לשידת החתלה",
+    cost: 18,
+    grams: 300,
+    description: "מחזיק חיתולים וציוד בסיסי לשידת החתלה.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6420289",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מגן פינות לשולחן",
+    cost: 1.08,
+    grams: 18,
+    description: "מגיני פינות לתינוקות/רהיטים, עדיף TPU.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:7047129",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "תוויות בגדי תינוק לפי מידה",
+    cost: 0.48,
+    grams: 8,
+    description: "מחיצות לארון בגדי תינוק לפי חודשים/מידות.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6628547",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "מעמד ייבוש בקבוקים",
+    cost: 14.4,
+    grams: 240,
+    description: "מתקן לייבוש בקבוקי תינוק וחלקים קטנים.",
+    image: "",
+    stlUrl: "https://www.thingiverse.com/thing:6998597",
+  },
 ];
 
 const demoOrders = [
@@ -536,13 +587,20 @@ const statusLabels = {
   delivered: "נמסר",
 };
 
-let state = loadState();
+let registeredUsers = loadRegisteredUsers();
+let state = normalizeState(loadState());
 let currentUser = loadSession();
 let appMode = currentUser?.role === "admin" ? "admin" : "friend";
+const pageName = document.body.dataset.page || "app";
+
+saveState();
 
 const loginForm = document.querySelector("#login-form");
 const loginUser = document.querySelector("#login-user");
 const loginError = document.querySelector("#login-error");
+const registerForm = document.querySelector("#register-form");
+const registerError = document.querySelector("#register-error");
+const authModeButtons = document.querySelectorAll(".auth-mode-button");
 const catalogGrid = document.querySelector("#catalog-grid");
 const cardTemplate = document.querySelector("#product-card-template");
 const orderDialog = document.querySelector("#order-dialog");
@@ -552,14 +610,17 @@ const debtGrid = document.querySelector("#debt-grid");
 const productForm = document.querySelector("#product-form");
 const productsTable = document.querySelector("#products-table");
 const aiProductIdea = document.querySelector("#ai-product-idea");
-const viewModeButtons = document.querySelectorAll(".view-mode-button");
 
 populateLoginUsers();
 
-loginForm.addEventListener("submit", (event) => {
+authModeButtons.forEach((button) => {
+  button.addEventListener("click", () => setAuthPanel(button.dataset.authTarget));
+});
+
+loginForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(loginForm);
-  const user = demoUsers.find((demoUser) => demoUser.id === data.get("userId"));
+  const user = getUsers().find((appUser) => appUser.id === data.get("userId"));
 
   if (!user || user.password !== data.get("password")) {
     loginError.textContent = "שם המשתמש או הסיסמה לא נכונים.";
@@ -576,69 +637,116 @@ loginForm.addEventListener("submit", (event) => {
   };
   appMode = currentUser.role === "admin" ? "admin" : "friend";
   saveSession();
+
+  if (currentUser.role === "friend") {
+    window.location.href = "welcome.html";
+    return;
+  }
+
+  document.body.dataset.entry = "app";
   applyAuth();
   applyMode();
-  setView(appMode === "admin" ? "orders" : "landing");
+  setView(appMode === "admin" ? "product-list" : "catalog");
   render();
 });
 
-document.querySelector("#logout-button").addEventListener("click", () => {
-  if (orderDialog.open) {
+registerForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const data = new FormData(registerForm);
+  const name = data.get("name").trim();
+  const password = data.get("password");
+  const confirmPassword = data.get("confirmPassword");
+
+  if (name.length < 2) {
+    showRegisterError("שם צריך להיות לפחות שני תווים, בכל זאת אנחנו לא מדפיסים משתמש בלי שם.");
+    return;
+  }
+
+  if (password.length < 4) {
+    showRegisterError("הסיסמה צריכה להיות לפחות 4 תווים.");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showRegisterError("הסיסמאות לא תואמות.");
+    return;
+  }
+
+  if (getUsers().some((user) => user.name.trim() === name)) {
+    showRegisterError("כבר יש משתמש בשם הזה. נסה שם קצת יותר ספציפי.");
+    return;
+  }
+
+  const user = {
+    id: `friend-${crypto.randomUUID()}`,
+    name,
+    role: "friend",
+    password,
+  };
+
+  registeredUsers.push(user);
+  saveRegisteredUsers();
+  currentUser = {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+  };
+  appMode = "friend";
+  registerError.classList.remove("is-visible");
+  registerForm.reset();
+  saveSession();
+  window.location.href = "welcome.html";
+});
+
+document.querySelector("#logout-button")?.addEventListener("click", () => {
+  if (orderDialog?.open) {
     orderDialog.close();
   }
   currentUser = null;
   appMode = "friend";
   localStorage.removeItem(SESSION_KEY);
+  document.body.dataset.entry = pageName === "app" ? "login" : "landing";
   applyAuth();
   setView("landing");
+
+  if (pageName !== "app") {
+    window.location.href = "index.html";
+  }
 });
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => setView(tab.dataset.view));
 });
 
-viewModeButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    if (currentUser?.role !== "admin") return;
-
-    appMode = button.dataset.modeTarget;
-    applyMode();
-    setView(appMode === "admin" ? "orders" : "landing");
-  });
-});
-
-document.querySelectorAll("[data-goto-view]").forEach((button) => {
-  button.addEventListener("click", () => setView(button.dataset.gotoView));
-});
-
-document.querySelector("#reset-demo").addEventListener("click", () => {
-  state = createDemoState();
+document.querySelector("#reset-demo")?.addEventListener("click", () => {
+  state = normalizeState(createDemoState());
   saveState();
   render();
 });
 
-document.querySelector(".close-button").addEventListener("click", () => orderDialog.close());
-document.querySelector("#cancel-order").addEventListener("click", () => orderDialog.close());
+document.querySelector(".close-button")?.addEventListener("click", () => orderDialog.close());
+document.querySelector("#cancel-order")?.addEventListener("click", () => orderDialog.close());
 
-document.querySelector("#ai-draft-button").addEventListener("click", () => {
+document.querySelector("#ai-draft-button")?.addEventListener("click", () => {
   const draft = createAiProductDraft(aiProductIdea.value);
   productForm.elements["name"].value = draft.name;
   productForm.elements["cost"].value = draft.cost;
+  productForm.elements["grams"].value = draft.grams;
   productForm.elements["description"].value = draft.description;
   productForm.elements["image"].value = draft.image;
   productForm.elements["stlUrl"].value = draft.stlUrl;
 });
 
-productForm.addEventListener("submit", async (event) => {
+productForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(productForm);
-  const imageFromFile = await readImageFile(data.get("imageFile"));
   const product = {
     id: crypto.randomUUID(),
     name: data.get("name").trim(),
-    cost: Number(data.get("cost")),
+    cost: normalizeProductCost(data.get("cost")),
+    grams: normalizeProductGrams(data.get("grams")),
     description: data.get("description").trim(),
-    image: imageFromFile || data.get("image").trim() || getDemoImage(state.products.length),
+    image: normalizeProductImage(data.get("image").trim()),
     stlUrl: data.get("stlUrl").trim(),
   };
 
@@ -649,10 +757,12 @@ productForm.addEventListener("submit", async (event) => {
   setView("product-list");
 });
 
-orderForm.addEventListener("submit", (event) => {
+orderForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(orderForm);
   const product = findProduct(data.get("productId"));
+  if (!product) return;
+
   const quantity = Number(data.get("quantity"));
   const price = Number(data.get("price"));
   const minimum = product.cost * quantity;
@@ -681,29 +791,152 @@ orderForm.addEventListener("submit", (event) => {
   setView(appMode === "admin" ? "orders" : "catalog");
 });
 
-orderForm.quantity.addEventListener("input", updateOrderMinimum);
+orderForm?.quantity?.addEventListener("input", updateOrderMinimum);
 
 function createDemoState() {
   return {
     products: structuredClone(demoProducts),
     orders: structuredClone(demoOrders),
+    imagesCleared: true,
+    imagesSeeded: false,
+    imageSeedVersion: 0,
   };
 }
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
-  return saved ? JSON.parse(saved) : createDemoState();
+  if (!saved) return createDemoState();
+
+  try {
+    const parsedState = JSON.parse(saved);
+    if (!Array.isArray(parsedState.products) || !Array.isArray(parsedState.orders)) {
+      return createDemoState();
+    }
+    return parsedState;
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+    return createDemoState();
+  }
+}
+
+function normalizeState(stateToNormalize) {
+  const shouldClearImages = !stateToNormalize.imagesCleared;
+  const shouldSeedImages = stateToNormalize.imageSeedVersion !== IMAGE_SEED_VERSION;
+
+  return {
+    ...stateToNormalize,
+    imagesCleared: true,
+    imagesSeeded: true,
+    imageSeedVersion: IMAGE_SEED_VERSION,
+    products: stateToNormalize.products.map((product) => ({
+      ...product,
+      cost: normalizeProductCost(product.cost),
+      image: getNormalizedProductImage(product, shouldClearImages, shouldSeedImages),
+      grams: normalizeProductGrams(product.grams),
+    })),
+    orders: stateToNormalize.orders.map((order) => ({
+      ...order,
+      quantity: Math.max(Number(order.quantity) || 1, 1),
+      price: normalizeProductCost(order.price),
+      status: statusLabels[order.status] ? order.status : "new",
+      paid: Boolean(order.paid),
+      createdAt: order.createdAt || new Date().toISOString(),
+    })),
+  };
+}
+
+function getNormalizedProductImage(product, shouldClearImages, shouldSeedImages) {
+  const currentImage = normalizeProductImage(product.image);
+  const seedImage = getSeedProductImage(product);
+
+  if ((shouldClearImages || shouldSeedImages || !currentImage) && seedImage) {
+    return seedImage;
+  }
+
+  return currentImage;
+}
+
+function getSeedProductImage(product) {
+  return toImageProxyUrl(unwrapThingiverseResizeUrl(productImagesByStlUrl[product.stlUrl] ?? ""));
+}
+
+function unwrapThingiverseResizeUrl(imageUrl) {
+  if (!imageUrl) return "";
+
+  try {
+    const parsedUrl = new URL(imageUrl);
+    return parsedUrl.searchParams.get("url") || imageUrl;
+  } catch {
+    return imageUrl;
+  }
+}
+
+function toImageProxyUrl(imageUrl) {
+  if (!imageUrl) return "";
+
+  try {
+    const parsedUrl = new URL(imageUrl);
+    const proxiedUrl = `${parsedUrl.hostname}${parsedUrl.pathname}`;
+    return `https://images.weserv.nl/?url=${encodeURIComponent(proxiedUrl)}&w=628&h=472&fit=contain&output=webp`;
+  } catch {
+    return imageUrl;
+  }
+}
+
+function normalizeProductImage(image) {
+  return image?.trim() ?? "";
+}
+
+function normalizeProductGrams(grams) {
+  return Math.max(Number(grams) || 1, 1);
+}
+
+function normalizeProductCost(cost) {
+  return Math.max(Number(cost) || 0.01, 0.01);
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function getUsers() {
+  return [...demoUsers, ...registeredUsers];
+}
+
+function loadRegisteredUsers() {
+  const saved = localStorage.getItem(USERS_KEY);
+  if (!saved) return [];
+
+  try {
+    const parsedUsers = JSON.parse(saved);
+    if (!Array.isArray(parsedUsers)) return [];
+
+    return parsedUsers
+      .filter((user) => user?.id && user?.name && user?.password)
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        role: "friend",
+        password: user.password,
+      }));
+  } catch {
+    localStorage.removeItem(USERS_KEY);
+    return [];
+  }
+}
+
+function saveRegisteredUsers() {
+  localStorage.setItem(USERS_KEY, JSON.stringify(registeredUsers));
+}
+
 function populateLoginUsers() {
-  demoUsers.forEach((user) => {
+  if (!loginUser) return;
+
+  loginUser.replaceChildren();
+  getUsers().forEach((user) => {
     const option = document.createElement("option");
     option.value = user.id;
-    option.textContent = `${user.name} - ${user.role === "admin" ? "מנהל" : "חבר"}`;
+    option.textContent = user.name;
     loginUser.append(option);
   });
 }
@@ -714,7 +947,7 @@ function loadSession() {
 
   try {
     const session = JSON.parse(saved);
-    return demoUsers.some((user) => user.id === session.id && user.role === session.role) ? session : null;
+    return getUsers().some((user) => user.id === session.id && user.role === session.role) ? session : null;
   } catch {
     localStorage.removeItem(SESSION_KEY);
     return null;
@@ -725,44 +958,62 @@ function saveSession() {
   localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
 }
 
+function setAuthPanel(panelName) {
+  document.querySelectorAll(".auth-form").forEach((form) => {
+    form.classList.toggle("is-active", form.dataset.authForm === panelName);
+  });
+
+  authModeButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.authTarget === panelName);
+  });
+
+  loginError?.classList.remove("is-visible");
+  registerError?.classList.remove("is-visible");
+}
+
+function showRegisterError(message) {
+  registerError.textContent = message;
+  registerError.classList.add("is-visible");
+}
+
 function applyAuth() {
   document.body.dataset.auth = currentUser ? "signed-in" : "signed-out";
   document.body.dataset.role = currentUser?.role ?? "friend";
-  document.querySelector("#current-user").textContent = currentUser
-    ? `${currentUser.name} - ${currentUser.role === "admin" ? "מנהל" : "חבר"}`
-    : "";
+  const currentUserLabel = document.querySelector("#current-user");
+  if (currentUserLabel) {
+    currentUserLabel.textContent = currentUser ? currentUser.name : currentUserLabel.textContent;
+  }
 }
 
 function applyMode() {
-  if (!currentUser) return;
-  if (currentUser.role !== "admin") {
+  if (!currentUser || currentUser.role !== "admin") {
     appMode = "friend";
   }
 
   document.body.dataset.mode = appMode;
-  viewModeButtons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.modeTarget === appMode);
-  });
 
-  if (appMode === "friend") {
-    document.querySelector("#catalog-title").textContent = "מה אפשר להדפיס?";
-    document.querySelector("#catalog-view .section-heading p").textContent =
-      "בחר מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה.";
-    return;
+  const catalogTitle = document.querySelector("#catalog-title");
+  const catalogDescription = document.querySelector("#catalog-view .section-heading p");
+  if (catalogTitle && catalogDescription) {
+    if (appMode === "friend") {
+      catalogTitle.textContent = "מה אפשר להדפיס?";
+      catalogDescription.textContent = "בחר מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה.";
+      return;
+    }
+
+    catalogTitle.textContent = "קטלוג מוצרים";
+    catalogDescription.textContent = "בחר מוצר, כמות וסכום לתשלום. המינימום הוא עלות ההדפסה.";
   }
-
-  document.querySelector("#catalog-title").textContent = "קטלוג מוצרים";
-  document.querySelector("#catalog-view .section-heading p").textContent =
-    "בחר מוצר, כמות וסכום לתשלום. המינימום הוא עלות ההדפסה.";
 }
 
 function setView(viewName) {
-  if (!currentUser) return;
+  if (!document.querySelector(".view")) return;
+
   const friendViews = ["landing", "catalog"];
   const nextView =
     appMode === "friend"
       ? friendViews.includes(viewName) ? viewName : "landing"
-      : friendViews.includes(viewName) ? "orders" : viewName;
+      : friendViews.includes(viewName) ? "product-list" : viewName;
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("is-active", tab.dataset.view === nextView);
   });
@@ -772,7 +1023,6 @@ function setView(viewName) {
 }
 
 function render() {
-  if (!currentUser) return;
   renderCatalog();
   renderOrders();
   renderDebts();
@@ -781,14 +1031,16 @@ function render() {
 }
 
 function renderCatalog() {
+  if (!catalogGrid || !cardTemplate) return;
+
   catalogGrid.replaceChildren();
 
   state.products.forEach((product) => {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
-    card.querySelector(".product-image").style.backgroundImage = `url("${product.image || getDemoImage(0)}")`;
+    renderProductImage(card.querySelector(".product-image"), product);
     card.querySelector("h3").textContent = product.name;
     card.querySelector("p").textContent = product.description;
-    card.querySelector(".cost").textContent = `עלות ייצור : ${formatCurrency(product.cost)}`;
+    card.querySelector(".cost").textContent = `עלות ייצור: ${formatCurrency(product.cost)}`;
     renderStlLink(card, product);
     card.querySelector("button").addEventListener("click", () => openOrderDialog(product.id));
     catalogGrid.append(card);
@@ -796,8 +1048,10 @@ function renderCatalog() {
 }
 
 function renderOrders() {
+  if (!ordersTable) return;
+
   ordersTable.replaceChildren();
-  document.querySelector("#orders-empty").classList.toggle("is-visible", state.orders.length === 0);
+  document.querySelector("#orders-empty")?.classList.toggle("is-visible", state.orders.length === 0);
 
   state.orders.forEach((order) => {
     const product = findProduct(order.productId);
@@ -841,6 +1095,8 @@ function renderOrders() {
 }
 
 function renderDebts() {
+  if (!debtGrid) return;
+
   debtGrid.replaceChildren();
   const debts = state.orders.reduce((totals, order) => {
     if (!order.paid) {
@@ -850,7 +1106,7 @@ function renderDebts() {
   }, {});
 
   const entries = Object.entries(debts).sort((a, b) => b[1] - a[1]);
-  document.querySelector("#debts-empty").classList.toggle("is-visible", entries.length === 0);
+  document.querySelector("#debts-empty")?.classList.toggle("is-visible", entries.length === 0);
 
   entries.forEach(([friendName, total]) => {
     const card = document.createElement("article");
@@ -861,8 +1117,10 @@ function renderDebts() {
 }
 
 function renderProducts() {
+  if (!productsTable) return;
+
   productsTable.replaceChildren();
-  document.querySelector("#products-empty").classList.toggle("is-visible", state.products.length === 0);
+  document.querySelector("#products-empty")?.classList.toggle("is-visible", state.products.length === 0);
 
   state.products.forEach((product) => {
     const row = document.createElement("tr");
@@ -871,7 +1129,7 @@ function renderProducts() {
     const imageCell = document.createElement("td");
     const preview = document.createElement("div");
     preview.className = "product-thumb";
-    preview.style.backgroundImage = `url("${product.image || getDemoImage(0)}")`;
+    renderProductImage(preview, product);
     imageCell.append(preview);
 
     const nameCell = document.createElement("td");
@@ -884,6 +1142,9 @@ function renderProducts() {
     const costCell = document.createElement("td");
     costCell.append(createEditableInput(product, "cost", "number"));
 
+    const gramsCell = document.createElement("td");
+    gramsCell.append(createEditableInput(product, "grams", "number"));
+
     const descriptionCell = document.createElement("td");
     const descriptionInput = document.createElement("textarea");
     descriptionInput.value = product.description;
@@ -893,16 +1154,6 @@ function renderProducts() {
 
     const imageUrlCell = document.createElement("td");
     imageUrlCell.append(createEditableInput(product, "image", "text"));
-
-    const imageFileCell = document.createElement("td");
-    const imageFileInput = document.createElement("input");
-    imageFileInput.type = "file";
-    imageFileInput.accept = "image/*";
-    imageFileInput.addEventListener("change", async () => {
-      const image = await readImageFile(imageFileInput.files[0]);
-      if (image) updateProduct(product.id, { image });
-    });
-    imageFileCell.append(imageFileInput);
 
     const stlCell = document.createElement("td");
     stlCell.append(createEditableInput(product, "stlUrl", "url"));
@@ -915,12 +1166,28 @@ function renderProducts() {
     deleteButton.addEventListener("click", () => deleteProduct(product.id));
     actionsCell.append(deleteButton);
 
-    row.append(imageCell, nameCell, orderedCell, costCell, descriptionCell, imageUrlCell, imageFileCell, stlCell, actionsCell);
+    row.append(imageCell, nameCell, orderedCell, costCell, gramsCell, descriptionCell, imageUrlCell, stlCell, actionsCell);
     productsTable.append(row);
   });
 }
 
+function renderProductImage(container, product) {
+  container.replaceChildren();
+  container.classList.toggle("has-image", Boolean(product.image));
+
+  if (!product.image) return;
+
+  const image = document.createElement("img");
+  image.src = product.image;
+  image.alt = product.name;
+  image.loading = "lazy";
+  image.referrerPolicy = "no-referrer";
+  container.append(image);
+}
+
 function renderSummary() {
+  if (!document.querySelector("#summary-orders") || !document.querySelector("#summary-debt")) return;
+
   const openOrders = state.orders.filter((order) => !order.paid).length;
   const totalDebt = state.orders.reduce((sum, order) => sum + (order.paid ? 0 : order.price), 0);
   document.querySelector("#summary-orders").textContent = openOrders;
@@ -929,10 +1196,18 @@ function renderSummary() {
 
 function openOrderDialog(productId) {
   const product = findProduct(productId);
+  if (!product || !orderForm || !orderDialog) return;
+  const friendNameIsKnown = currentUser?.role === "friend";
+  const friendNameField = orderForm.friendName.closest(".friend-name-field");
+
   orderForm.reset();
   orderForm.productId.value = product.id;
-  orderForm.friendName.value = appMode === "friend" ? currentUser.name : "";
-  orderForm.friendName.readOnly = appMode === "friend";
+  orderForm.friendName.value = friendNameIsKnown ? currentUser.name : "";
+  orderForm.friendName.required = !friendNameIsKnown;
+  orderForm.friendName.readOnly = friendNameIsKnown;
+  if (friendNameField) {
+    friendNameField.hidden = friendNameIsKnown;
+  }
   orderForm.quantity.value = 1;
   orderForm.price.value = product.cost;
   orderForm.price.min = product.cost;
@@ -943,6 +1218,8 @@ function openOrderDialog(productId) {
 }
 
 function updateOrderMinimum() {
+  if (!orderForm) return;
+
   const product = findProduct(orderForm.productId.value);
   if (!product) return;
   const quantity = Math.max(Number(orderForm.quantity.value) || 1, 1);
@@ -958,30 +1235,6 @@ function findProduct(productId) {
   return state.products.find((product) => product.id === productId);
 }
 
-function createIdeaProduct({ name, titleEn, category, description, useCase, source, url, material, difficulty, note = "" }) {
-  const summary = `${titleEn} - ${cleanSentencePart(description)} ${cleanSentencePart(useCase)}.`;
-  const printDetails = `מקור: ${source}; חומר מומלץ: ${material}; רמת קושי: ${difficulty}.`;
-  const licenseWarning = "יש לבדוק רישיון וזכויות יוצרים לפני שימוש מסחרי.";
-  const descriptionParts = [summary, printDetails, ensureSentence(note || licenseWarning)];
-
-  return {
-    id: crypto.randomUUID(),
-    name,
-    cost: 1,
-    description: descriptionParts.join(" "),
-    image: sourceImageByUrl[url] ?? ideaCategoryImages[category] ?? "assets/products/cable-clips.png",
-    stlUrl: url,
-  };
-}
-
-function cleanSentencePart(value) {
-  return value.trim().replace(/[.!?]+\s+/gu, ", ").replace(/[.!?]+$/u, "");
-}
-
-function ensureSentence(value) {
-  return `${cleanSentencePart(value)}.`;
-}
-
 function getProductOrderedQuantity(productId) {
   return state.orders.reduce((total, order) => {
     return order.productId === productId ? total + order.quantity : total;
@@ -994,13 +1247,29 @@ function createEditableInput(product, field, type) {
   input.value = product[field] ?? "";
 
   if (field === "cost") {
+    input.min = 0.01;
+    input.step = 0.01;
+  }
+
+  if (field === "grams") {
     input.min = 1;
     input.step = 1;
   }
 
   input.addEventListener("change", () => {
-    const value = field === "cost" ? Number(input.value) : input.value.trim();
+    const value =
+      field === "cost"
+        ? normalizeProductCost(input.value)
+        : field === "grams"
+          ? normalizeProductGrams(input.value)
+          : normalizeEditableProductValue(field, input.value);
     updateProduct(product.id, { [field]: value });
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      input.blur();
+    }
   });
 
   return input;
@@ -1015,30 +1284,17 @@ function updateProduct(productId, updates) {
   render();
 }
 
+function normalizeEditableProductValue(field, value) {
+  const trimmedValue = value.trim();
+  return field === "image" ? normalizeProductImage(trimmedValue) : trimmedValue;
+}
+
 function deleteProduct(productId) {
   if (!window.confirm("למחוק את המוצר מהקטלוג?")) return;
 
   state.products = state.products.filter((product) => product.id !== productId);
   saveState();
   render();
-}
-
-function readImageFile(file) {
-  if (!(file instanceof File) || !file.type.startsWith("image/")) {
-    return Promise.resolve("");
-  }
-
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result));
-    reader.addEventListener("error", () => resolve(""));
-    reader.readAsDataURL(file);
-  });
-}
-
-function getDemoImage(index) {
-  const images = demoProducts.map((product) => product.image);
-  return images[index % images.length];
 }
 
 function renderStlLink(card, product) {
@@ -1058,10 +1314,11 @@ function createAiProductDraft(idea) {
   return {
     name: trimmedIdea ? `פתרון מודפס - ${trimmedIdea}` : "ארגונית קטנה לבית",
     cost: estimatePlaCost(estimatedWeightGrams),
+    grams: estimatedWeightGrams,
     description: trimmedIdea
       ? `מוצר פרקטי בהדפסת PLA עבור ${trimmedIdea}. העלות חושבה לפי הערכת משקל של כ-${estimatedWeightGrams} גרם.`
       : `מוצר קטן ושימושי לבית, מתאים לסידור יומיומי. העלות חושבה לפי הערכת משקל של כ-${estimatedWeightGrams} גרם.`,
-    image: getDemoImage(state.products.length),
+    image: "",
     stlUrl: "",
   };
 }
@@ -1071,15 +1328,19 @@ function estimatePlaCost(weightGrams) {
 }
 
 function getOrderFriendName(data) {
-  return appMode === "friend" ? currentUser.name : data.get("friendName").trim();
+  return currentUser?.role === "friend" ? currentUser.name : data.get("friendName").trim();
 }
 
 function formatCurrency(value) {
+  const numericValue = Number(value) || 0;
+  const fractionDigits = Number.isInteger(numericValue) ? 0 : 2;
+
   return new Intl.NumberFormat("he-IL", {
     style: "currency",
     currency: "ILS",
-    maximumFractionDigits: 0,
-  }).format(value);
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(numericValue);
 }
 
 function escapeHtml(value) {
@@ -1088,7 +1349,23 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
-applyAuth();
-applyMode();
-setView(appMode === "admin" ? "orders" : "landing");
-render();
+if (["catalog", "welcome"].includes(pageName) && !currentUser) {
+  window.location.href = "index.html";
+} else if (currentUser?.role === "friend" && pageName === "app") {
+  window.location.href = "welcome.html";
+} else if (currentUser?.role === "admin" && pageName === "welcome") {
+  window.location.href = "index.html";
+} else {
+  if (currentUser && pageName === "app") {
+    document.body.dataset.entry = "app";
+  }
+
+  if (pageName === "catalog" && currentUser?.role === "admin") {
+    appMode = "friend";
+  }
+
+  applyAuth();
+  applyMode();
+  setView(appMode === "admin" ? "product-list" : "catalog");
+  render();
+}
