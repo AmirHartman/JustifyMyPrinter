@@ -968,7 +968,33 @@ function applyAuth() {
   document.body.dataset.role = currentUser?.role ?? "friend";
   const currentUserLabel = document.querySelector("#current-user");
   if (currentUserLabel) {
-    currentUserLabel.textContent = currentUser ? currentUser.name : currentUserLabel.textContent;
+    currentUserLabel.textContent = currentUser ? `שלום, ${currentUser.name}` : currentUserLabel.textContent;
+  }
+
+  // Update landing page buttons based on auth state
+  const landingButtonHero = document.querySelector("#landing-store-button-hero");
+  const landingButtonFinal = document.querySelector("#landing-store-button-final");
+  
+  if (currentUser) {
+    // User is logged in - show "חזרה לאזור האישי"
+    if (landingButtonHero) {
+      landingButtonHero.textContent = "חזרה לאזור האישי";
+      landingButtonHero.href = "catalog.html";
+    }
+    if (landingButtonFinal) {
+      landingButtonFinal.textContent = "חזרה לאזור האישי";
+      landingButtonFinal.href = "catalog.html";
+    }
+  } else {
+    // User is not logged in - show "מעבור לחנות"
+    if (landingButtonHero) {
+      landingButtonHero.textContent = "מעבור לחנות";
+      landingButtonHero.href = "index.html";
+    }
+    if (landingButtonFinal) {
+      landingButtonFinal.textContent = "מעבור לחנות";
+      landingButtonFinal.href = "index.html";
+    }
   }
 }
 
@@ -1184,17 +1210,23 @@ function renderSummary() {
 function openOrderDialog(productId) {
   const product = findProduct(productId);
   if (!product || !orderForm || !orderDialog) return;
-  const friendNameIsKnown = currentUser?.role === "friend";
-  const friendNameField = orderForm.friendName.closest(".friend-name-field");
+  const friendNameIsKnown = !!currentUser;
 
   orderForm.reset();
   orderForm.productId.value = product.id;
   orderForm.friendName.value = friendNameIsKnown ? currentUser.name : "";
-  orderForm.friendName.required = !friendNameIsKnown;
-  orderForm.friendName.readOnly = friendNameIsKnown;
-  if (friendNameField) {
-    friendNameField.hidden = friendNameIsKnown;
+  
+  // Update greeting message
+  const greetingElement = document.querySelector("#order-greeting");
+  if (greetingElement) {
+    if (friendNameIsKnown) {
+greetingElement.textContent = `שמע ${currentUser.name}, איזה בחירה פגז!
+זה הזמן להחליט כמה יחידות אתה רוצה, 
+וכמה נראה לך הוגן לשלם עבור ההדפסה.`;    } else {
+      greetingElement.textContent = "";
+    }
   }
+  
   orderForm.quantity.value = 1;
   orderForm.price.value = product.cost;
   orderForm.price.min = product.cost;
@@ -1315,7 +1347,7 @@ function estimatePlaCost(weightGrams) {
 }
 
 function getOrderFriendName(data) {
-  return currentUser?.role === "friend" ? currentUser.name : data.get("friendName").trim();
+  return currentUser ? currentUser.name : data.get("friendName").trim();
 }
 
 function formatCurrency(value) {

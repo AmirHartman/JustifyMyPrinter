@@ -1,3 +1,9 @@
+/* ============================================================
+   ROOT TOKENS — Typography-first design system
+   Fonts: Heebo (Hebrew UI, clean geometric) + Frank Ruhl Libre (display headings)
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;700;900&family=Heebo:wght@400;500;700;800;900&display=swap');
+
 :root {
   --ink: #172126;
   --muted: #627178;
@@ -7,18 +13,29 @@
   --line: #dce5e1;
   --teal: #0f7f7a;
   --teal-dark: #0b625e;
-  --coral: #d5624a;
-  --coral-dark: #b84f3b;
+  --coral: #c2533b;
+  --coral-dark: #9e3f2c;
   --plum: #5b4b7a;
   --gold: #b58b2b;
   --danger: #b83e42;
   --shadow: 0 18px 44px rgba(23, 33, 38, 0.1);
-  --font-ui: "Heebo", "Rubik", "Noto Sans Hebrew", "Segoe UI", sans-serif;
-  --fs-body: clamp(0.96rem, 0.2vw + 0.92rem, 1.05rem);
-  --fs-h1: clamp(2.7rem, 5.2vw, 5.15rem);
-  --fs-h2: clamp(1.95rem, 2.8vw, 2.85rem);
-  --fs-h3: clamp(1.22rem, 1.1vw, 1.46rem);
-  font-family: var(--font-ui);
+
+  /* Typography scale */
+  --font-display: 'Frank Ruhl Libre', Georgia, serif;
+  --font-body: 'Heebo', Arial, sans-serif;
+
+  --text-xs:   0.78rem;   /* 12.5px — labels, badges */
+  --text-sm:   0.875rem;  /* 14px  — captions, hints */
+  --text-base: 1rem;      /* 16px  — body default */
+  --text-md:   1.05rem;   /* 16.8px — comfortable reading */
+  --text-lg:   1.15rem;   /* 18.4px — lead paragraphs */
+  --text-xl:   1.35rem;   /* 21.6px — sub-headings */
+  --text-2xl:  1.65rem;   /* 26.4px — section titles */
+  --text-3xl:  2.1rem;    /* 33.6px — page headings */
+  --text-4xl:  2.75rem;   /* 44px   — hero headings */
+  --text-hero: clamp(2.4rem, 5vw, 3.6rem); /* landing hero only */
+
+  font-family: var(--font-body);
 }
 
 * {
@@ -32,14 +49,12 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: var(--font-ui);
-  font-size: var(--fs-body);
-  line-height: 1.62;
-  font-weight: 500;
   color: var(--ink);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(243, 246, 244, 0.94)),
     var(--soft);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
 }
 
 button,
@@ -49,42 +64,52 @@ select,
 a.primary-button,
 a.ghost-button {
   font: inherit;
+  font-family: var(--font-body);
 }
 
-h1,
-h2,
-h3,
-p {
+/* ============================================================
+   BASE TYPOGRAPHY
+   ============================================================ */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  line-height: 1.18;
   margin-top: 0;
-}
-
-h1,
-h2,
-h3 {
-  line-height: 1.2;
-  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 h1 {
   margin-bottom: 0;
-  font-size: var(--fs-h1);
-  letter-spacing: -0.01em;
+  font-size: var(--text-hero);
+  font-weight: 900;
 }
 
 h2 {
-  margin-bottom: 10px;
-  font-size: var(--fs-h2);
+  margin-bottom: 8px;
+  font-size: var(--text-3xl);
+  font-weight: 700;
 }
 
 h3 {
-  margin-bottom: 10px;
-  font-size: var(--fs-h3);
+  margin-bottom: 6px;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+h4 {
+  margin-bottom: 4px;
+  font-size: var(--text-md);
+  font-weight: 700;
 }
 
 p {
-  line-height: 1.62;
+  margin-top: 0;
+  line-height: 1.65;
+  font-size: var(--text-base);
 }
 
+/* ============================================================
+   AUTH VISIBILITY RULES
+   ============================================================ */
 body[data-auth="signed-out"] .topbar,
 body[data-auth="signed-out"] .app-shell,
 body[data-auth="signed-out"] dialog,
@@ -101,14 +126,22 @@ body[data-mode="friend"] .admin-tabs {
   display: none;
 }
 
+/* ============================================================
+   EYEBROW / LABEL
+   ============================================================ */
 .eyebrow {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: var(--coral);
+  font-family: var(--font-body);
   font-weight: 800;
-  font-size: 0.84rem;
-  letter-spacing: 0.045em;
+  font-size: var(--text-xl);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
+/* ============================================================
+   BUTTONS & LINKS
+   ============================================================ */
 .primary-button,
 .ghost-button,
 .tab,
@@ -119,21 +152,23 @@ body[data-mode="friend"] .admin-tabs {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  min-height: 40px;
   border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
   text-decoration: none;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .primary-button {
-  padding: 0 17px;
+  padding: 0 18px;
   background: var(--teal);
   color: #fff;
   border-color: var(--teal);
-  font-size: 0.98rem;
-  font-weight: 800;
-  box-shadow: 0 10px 20px rgba(15, 127, 122, 0.18);
+  box-shadow: 0 8px 18px rgba(15, 127, 122, 0.18);
 }
 
 .primary-button:hover {
@@ -142,12 +177,10 @@ body[data-mode="friend"] .admin-tabs {
 }
 
 .ghost-button {
-  padding: 0 15px;
+  padding: 0 14px;
   background: rgba(255, 255, 255, 0.78);
   color: var(--ink);
   border-color: var(--line);
-  font-size: 0.96rem;
-  font-weight: 700;
 }
 
 .ghost-button:hover {
@@ -161,15 +194,16 @@ body[data-mode="friend"] .admin-tabs {
 
 .back-link {
   width: fit-content;
-  min-height: 36px;
+  min-height: 34px;
   padding: 0 12px;
   color: var(--teal-dark);
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(15, 127, 122, 0.16);
-  font-weight: 800;
 }
 
-/* Landing */
+/* ============================================================
+   LANDING PAGE
+   ============================================================ */
 .public-landing {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
@@ -192,60 +226,65 @@ body[data-mode="friend"] .admin-tabs {
   grid-template-columns: minmax(0, 1.04fr) minmax(340px, 0.96fr);
   align-items: center;
   gap: clamp(28px, 5vw, 72px);
-  min-height: min(720px, calc(100vh - 56px));
-  padding: clamp(26px, 5vw, 58px);
+  min-height: min(660px, calc(100vh - 56px));
+  padding: clamp(26px, 5vw, 52px);
 }
 
-.landing-copy {
-  max-width: 720px;
+/* Hero heading gets the largest scale — display font shines here */
+.landing-copy h1 {
+  font-size: var(--text-hero);
+  line-height: 1.12;
+  margin-bottom: 14px;
 }
 
 .landing-copy p {
-  max-width: 660px;
+  max-width: 640px;
   color: var(--muted);
-  font-size: 1.03rem;
+  font-size: var(--text-md);
+  line-height: 1.7;
 }
 
 .landing-actions,
 .welcome-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 26px;
+  gap: 10px;
+  margin-top: 22px;
 }
 
 .landing-actions a,
 .welcome-actions a {
-  min-height: 50px;
-  padding-inline: 22px;
+  min-height: 46px;
+  padding-inline: 20px;
+  font-size: var(--text-base);
 }
 
 .landing-product-wall {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
   align-items: stretch;
 }
 
 .landing-product-wall img {
   width: 100%;
-  min-height: 190px;
+  min-height: 175px;
   aspect-ratio: 4 / 3;
   object-fit: contain;
   background: #f8faf9;
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 12px 26px rgba(23, 33, 38, 0.1);
+  box-shadow: 0 10px 22px rgba(23, 33, 38, 0.09);
 }
 
 .landing-product-wall img:first-child {
   grid-row: span 2;
-  min-height: 398px;
+  min-height: 362px;
 }
 
 .landing-section {
-  margin-top: 18px;
-  padding: clamp(22px, 4vw, 34px);
+  margin-top: 16px;
+  padding: clamp(20px, 4vw, 32px);
 }
 
 .landing-summary,
@@ -254,7 +293,12 @@ body[data-mode="friend"] .admin-tabs {
 .landing-logistics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
+}
+
+/* Section-level h2 — smaller than hero */
+.landing-section h2 {
+  font-size: var(--text-2xl);
 }
 
 .landing-summary article,
@@ -262,10 +306,19 @@ body[data-mode="friend"] .admin-tabs {
 .process-grid article,
 .welcome-grid article,
 .support-reasons article {
-  padding: 20px;
+  padding: 18px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+/* Article headings inside cards */
+.landing-summary article h2,
+.category-strip article h3,
+.process-grid article h3,
+.welcome-grid article h3 {
+  font-size: var(--text-xl);
+  font-weight: 700;
 }
 
 .landing-section span,
@@ -276,14 +329,22 @@ body[data-mode="friend"] .admin-tabs {
   width: fit-content;
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  margin-bottom: 12px;
-  padding: 0 10px;
-  border-radius: 8px;
+  min-height: 32px;
+  margin-bottom: 10px;
+  padding: 0 12px;
+  border-radius: 6px;
   background: #eef8f6;
   color: var(--teal-dark);
+  font-family: var(--font-body);
   font-weight: 900;
-  font-size: 0.86rem;
+  font-size: var(--text-base);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.process-grid span {
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .dark-panel {
@@ -292,15 +353,30 @@ body[data-mode="friend"] .admin-tabs {
   border-color: rgba(23, 33, 38, 0.5) !important;
 }
 
-.dark-panel p,
-.dark-panel span {
+.dark-panel p {
   color: rgba(255, 255, 255, 0.78);
+}
+
+.dark-panel span {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dark-panel h2,
+.dark-panel h3 {
+  color: #fff;
 }
 
 .process-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+.process-grid article p {
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .value-panel {
@@ -313,20 +389,25 @@ body[data-mode="friend"] .admin-tabs {
     var(--surface);
 }
 
+.value-panel h2 {
+  font-size: var(--text-2xl);
+}
+
 .friendly-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
 .friendly-list li {
-  padding: 12px 14px;
+  padding: 11px 14px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--muted);
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -334,13 +415,18 @@ body[data-mode="friend"] .admin-tabs {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.category-strip article p {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
 .landing-final-panel {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  margin-top: 18px;
-  padding: clamp(22px, 4vw, 34px);
+  margin-top: 16px;
+  padding: clamp(20px, 4vw, 32px);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.86)),
     var(--surface);
@@ -350,12 +436,19 @@ body[data-mode="friend"] .admin-tabs {
   max-width: 760px;
 }
 
+.landing-final-panel h2 {
+  font-size: var(--text-2xl);
+}
+
 .landing-final-panel p {
   margin-bottom: 0;
   color: var(--muted);
+  font-size: var(--text-sm);
 }
 
-/* Auth */
+/* ============================================================
+   AUTH
+   ============================================================ */
 .login-screen {
   min-height: 100vh;
   display: grid;
@@ -364,19 +457,19 @@ body[data-mode="friend"] .admin-tabs {
 }
 
 .auth-shell {
-  width: min(1120px, 100%);
+  width: min(1080px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
-  gap: 22px;
-  padding: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: 20px;
+  padding: 16px;
 }
 
 .auth-story {
   display: grid;
   align-content: center;
-  gap: 16px;
-  min-height: 560px;
-  padding: clamp(24px, 4vw, 48px);
+  gap: 14px;
+  min-height: 520px;
+  padding: clamp(22px, 4vw, 44px);
   background:
     linear-gradient(135deg, rgba(238, 248, 246, 0.86), rgba(255, 247, 243, 0.94)),
     var(--surface-2);
@@ -384,21 +477,27 @@ body[data-mode="friend"] .admin-tabs {
   border-radius: 8px;
 }
 
+/* Auth story heading — large but not hero-huge */
+.auth-story h1 {
+  font-size: var(--text-3xl);
+  line-height: 1.16;
+}
+
 .auth-story p {
-  max-width: 580px;
+  max-width: 560px;
   color: var(--muted);
-  font-size: 1.01rem;
+  font-size: var(--text-base);
 }
 
 .auth-note-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .auth-note-grid span {
-  min-height: 34px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   padding: 0 12px;
@@ -406,6 +505,7 @@ body[data-mode="friend"] .admin-tabs {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
   color: var(--teal-dark);
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -415,15 +515,26 @@ body[data-mode="friend"] .admin-tabs {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 16px 36px rgba(23, 33, 38, 0.08);
+  box-shadow: 0 14px 32px rgba(23, 33, 38, 0.08);
+}
+
+/* Auth form headings — functional, not decorative */
+.auth-form h2 {
+  font-size: var(--text-xl);
+  margin-bottom: 4px;
+}
+
+.auth-form > div p {
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .auth-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 18px;
-  padding: 5px;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 4px;
   background: var(--soft);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -432,19 +543,20 @@ body[data-mode="friend"] .admin-tabs {
 .auth-mode-button {
   background: transparent;
   color: var(--muted);
-  font-weight: 900;
+  font-weight: 800;
+  font-size: var(--text-sm);
 }
 
 .auth-mode-button.is-active {
   background: var(--surface);
   color: var(--teal-dark);
   border-color: var(--line);
-  box-shadow: 0 8px 20px rgba(23, 33, 38, 0.08);
+  box-shadow: 0 6px 16px rgba(23, 33, 38, 0.08);
 }
 
 .auth-form {
   display: none;
-  gap: 14px;
+  gap: 12px;
 }
 
 .auth-form.is-active {
@@ -458,39 +570,49 @@ body[data-mode="friend"] .admin-tabs {
 
 .login-hint {
   margin-bottom: 0;
-  font-size: 0.92rem;
+  font-size: var(--text-xs);
 }
 
 .form-error {
   display: none;
   margin-bottom: 0;
   color: var(--danger);
-  font-weight: 800;
+  font-weight: 700;
+  font-size: var(--text-sm);
 }
 
 .form-error.is-visible {
   display: block;
 }
 
-/* Shared app chrome */
+/* ============================================================
+   TOPBAR
+   ============================================================ */
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  padding: 24px clamp(18px, 4vw, 56px);
+  padding: 16px clamp(18px, 4vw, 52px);
   background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 10px 30px rgba(23, 33, 38, 0.05);
+  box-shadow: 0 8px 24px rgba(23, 33, 38, 0.05);
 }
 
+/* Topbar title — clear but not dominating */
 .topbar h1 {
-  font-size: clamp(2.3rem, 4.4vw, 3.9rem);
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  font-family: var(--font-display);
+  font-weight: 900;
+}
+
+.topbar .eyebrow {
+  font-size: var(--text-xs);
 }
 
 .topbar-actions {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   justify-items: end;
 }
 
@@ -499,19 +621,20 @@ body[data-mode="friend"] .admin-tabs {
   flex-wrap: wrap;
   justify-content: end;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .user-bar span {
-  min-height: 38px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
-  padding: 0 13px;
+  padding: 0 12px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
-  font-weight: 900;
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .admin-return-button {
@@ -520,13 +643,14 @@ body[data-mode="friend"] .admin-tabs {
 
 body[data-role="admin"] .admin-return-button {
   display: inline-flex;
-  min-height: 42px;
-  margin-left: 16px;
-  padding: 0 16px;
+  min-height: 40px;
+  margin-left: 14px;
+  padding: 0 15px;
   color: #fff;
   background: var(--danger);
   border-color: var(--danger);
-  font-weight: 900;
+  font-weight: 800;
+  font-size: var(--text-sm);
 }
 
 body[data-role="admin"] .admin-return-button:hover {
@@ -535,13 +659,13 @@ body[data-role="admin"] .admin-return-button:hover {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(120px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 8px;
 }
 
 .summary-strip div {
-  min-height: 70px;
-  padding: 12px 14px;
+  min-height: 60px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   background: var(--surface-2);
   border-radius: 8px;
@@ -549,49 +673,70 @@ body[data-role="admin"] .admin-return-button:hover {
 
 .summary-strip span {
   display: block;
-  font-size: 1.35rem;
+  font-size: var(--text-xl);
   font-weight: 900;
+  font-family: var(--font-display);
 }
 
-.summary-strip small,
-.section-heading p,
-.catalog-intro p,
-.catalog-note span,
-.product-card p,
-.empty-state,
-.minimum-note {
+.summary-strip small {
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
+/* ============================================================
+   APP SHELL
+   ============================================================ */
 .app-shell,
 .welcome-shell {
   width: min(1180px, calc(100% - 32px));
-  margin: 24px auto 56px;
+  margin: 20px auto 52px;
 }
 
 body[data-mode="admin"] .app-shell {
   width: min(1880px, calc(100% - 40px));
 }
 
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+/* Section headings — clear hierarchy, not competing with page titles */
+.section-heading h2 {
+  font-size: var(--text-2xl);
+}
+
+.section-heading p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 18px;
+  gap: 7px;
+  margin-bottom: 16px;
 }
 
 .tab {
-  padding: 0 18px;
+  padding: 0 16px;
   background: var(--surface);
   color: var(--ink);
   border-color: var(--line);
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .tab.admin-tab {
   color: var(--danger);
-  border-color: rgba(184, 62, 66, 0.32);
+  border-color: rgba(184, 62, 66, 0.28);
   background: #fff7f7;
 }
 
@@ -614,40 +759,38 @@ body[data-mode="admin"] .app-shell {
   display: block;
 }
 
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: start;
-  margin-bottom: 18px;
-}
-
-/* Welcome */
+/* ============================================================
+   WELCOME PAGE
+   ============================================================ */
 .welcome-shell {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .welcome-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.7fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.65fr);
+  gap: 22px;
   align-items: stretch;
-  padding: clamp(24px, 5vw, 48px);
+  padding: clamp(22px, 5vw, 44px);
+}
+
+.welcome-copy h2 {
+  font-size: var(--text-3xl);
 }
 
 .welcome-copy p {
-  max-width: 740px;
+  max-width: 720px;
   color: var(--muted);
-  font-size: 1.02rem;
+  font-size: var(--text-base);
 }
 
 .welcome-panel {
   display: grid;
   align-content: center;
-  gap: 12px;
-  min-height: 260px;
-  padding: 24px;
+  gap: 10px;
+  min-height: 230px;
+  padding: 22px;
   background:
     linear-gradient(135deg, rgba(15, 127, 122, 0.1), rgba(213, 98, 74, 0.11)),
     var(--surface-2);
@@ -656,48 +799,72 @@ body[data-mode="admin"] .app-shell {
 }
 
 .welcome-panel strong {
-  font-size: 1.05rem;
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .welcome-panel p {
   margin-bottom: 0;
   color: var(--ink);
-  font-size: 1.18rem;
-  font-weight: 900;
+  font-size: var(--text-xl);
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .welcome-panel span {
   color: var(--muted);
-  font-size: 0.97rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
 .welcome-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
-/* Catalog */
+.welcome-grid article h3 {
+  font-size: var(--text-lg);
+}
+
+.welcome-grid article p {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/* ============================================================
+   CATALOG
+   ============================================================ */
 .catalog-shell {
   display: grid;
-  gap: 20px;
+  gap: 18px;
 }
 
 .catalog-intro {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.45fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  gap: 16px;
   align-items: center;
-  padding: 24px;
+  padding: 22px 24px;
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
 
+.catalog-intro h2 {
+  font-size: var(--text-2xl);
+}
+
+.catalog-intro p {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
 .catalog-note {
-  padding: 18px;
+  padding: 16px;
   background: var(--surface-2);
   border: 1px solid rgba(15, 127, 122, 0.16);
   border-radius: 8px;
@@ -709,15 +876,24 @@ body[data-mode="admin"] .app-shell {
 }
 
 .catalog-note strong {
-  margin-bottom: 6px;
+  margin-bottom: 5px;
+  font-size: var(--text-sm);
+}
+
+.catalog-note span {
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .catalog-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
 }
 
+/* ============================================================
+   PRODUCT CARDS
+   ============================================================ */
 .product-card,
 .debt-card {
   background: var(--surface);
@@ -729,17 +905,17 @@ body[data-mode="admin"] .app-shell {
 .product-card {
   display: grid;
   grid-template-rows: auto 1fr;
-  box-shadow: 0 12px 30px rgba(23, 33, 38, 0.07);
+  box-shadow: 0 10px 26px rgba(23, 33, 38, 0.07);
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    border-color 160ms ease;
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
 }
 
 .product-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(15, 127, 122, 0.35);
-  box-shadow: 0 18px 42px rgba(23, 33, 38, 0.12);
+  border-color: rgba(15, 127, 122, 0.32);
+  box-shadow: 0 16px 38px rgba(23, 33, 38, 0.11);
 }
 
 .product-image {
@@ -762,63 +938,76 @@ body[data-mode="admin"] .app-shell {
 .product-body {
   display: grid;
   grid-template-rows: auto auto auto 1fr;
-  padding: 16px;
+  padding: 14px;
+}
+
+/* Product name — clearly bigger than description */
+.product-body h3 {
+  font-size: var(--text-lg);
+  margin-bottom: 5px;
+  line-height: 1.25;
 }
 
 .product-body p {
   margin-bottom: 0;
-  font-size: 0.96rem;
-  line-height: 1.56;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .stl-link {
   width: fit-content;
-  min-height: 30px;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
-  margin-top: 8px;
-  color: var(--ink);
-  font-size: 0.94rem;
-  font-weight: 800;
+  margin-top: 7px;
+  color: var(--teal-dark);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .product-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   align-self: end;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 
 .cost {
-  min-height: 36px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
   color: var(--teal-dark);
   background: #eef8f6;
-  border: 1px solid rgba(15, 127, 122, 0.16);
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 900;
+  border: 1px solid rgba(15, 127, 122, 0.14);
+  border-radius: 7px;
+  font-size: var(--text-sm);
+  font-weight: 800;
 }
 
-/* Admin */
+/* ============================================================
+   ADMIN TABLES
+   ============================================================ */
 .table-wrap {
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(23, 33, 38, 0.06);
+  box-shadow: 0 10px 24px rgba(23, 33, 38, 0.06);
 }
 
 table {
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
+  font-size: var(--text-sm);
 }
 
 #orders-view table {
@@ -826,7 +1015,7 @@ table {
 }
 
 .products-manager {
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .products-table {
@@ -835,25 +1024,25 @@ table {
 
 .products-table th,
 .products-table td {
-  min-width: 135px;
+  min-width: 130px;
 }
 
 .products-table th:first-child,
 .products-table td:first-child,
 .products-table th:nth-child(3),
 .products-table td:nth-child(3) {
-  min-width: 92px;
-  width: 92px;
+  min-width: 88px;
+  width: 88px;
 }
 
 .products-table th:nth-child(6),
 .products-table td:nth-child(6) {
-  min-width: 260px;
+  min-width: 250px;
 }
 
 th,
 td {
-  padding: 13px 12px;
+  padding: 11px 12px;
   text-align: right;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
@@ -861,13 +1050,11 @@ td {
 
 th {
   background: #f5f8f7;
-  color: var(--ink);
-  font-size: 0.86rem;
-  letter-spacing: 0.02em;
-}
-
-td {
-  font-size: 0.93rem;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 tr:last-child td {
@@ -875,33 +1062,37 @@ tr:last-child td {
 }
 
 .ordered-count {
-  font-weight: 900;
+  font-weight: 800;
   color: var(--teal-dark);
 }
 
 .product-thumb {
-  width: 64px;
+  width: 60px;
   aspect-ratio: 1;
   overflow: hidden;
   background: #eef3f1;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .product-edit-row textarea {
-  min-height: 92px;
+  min-height: 80px;
   resize: vertical;
+  font-size: var(--text-sm);
 }
 
+/* ============================================================
+   DEBTS
+   ============================================================ */
 .debt-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
 }
 
 .debt-card {
-  padding: 18px;
-  border-top: 5px solid var(--gold);
+  padding: 16px;
+  border-top: 4px solid var(--gold);
 }
 
 .debt-card strong,
@@ -909,41 +1100,62 @@ tr:last-child td {
   display: block;
 }
 
+.debt-card strong {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
 .debt-card span {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--danger);
-  font-size: 1.38rem;
+  font-size: var(--text-2xl);
+  font-family: var(--font-display);
   font-weight: 900;
 }
 
+/* ============================================================
+   PRODUCT ADD / AI PANEL
+   ============================================================ */
 .ai-product-panel,
 .product-form,
 .order-form {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .ai-product-panel,
 .product-form {
-  max-width: 860px;
+  max-width: 820px;
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 12px 26px rgba(23, 33, 38, 0.06);
+  box-shadow: 0 10px 22px rgba(23, 33, 38, 0.06);
 }
 
 .ai-product-panel {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   background: #f3faf8;
-  border-color: rgba(15, 127, 122, 0.24);
+  border-color: rgba(15, 127, 122, 0.22);
 }
 
+.ai-product-panel h3 {
+  font-size: var(--text-lg);
+}
+
+.ai-product-panel p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
 label {
   display: grid;
-  gap: 7px;
-  font-size: 0.95rem;
-  font-weight: 800;
+  gap: 6px;
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 select,
@@ -952,11 +1164,11 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   background: #fff;
   color: var(--ink);
-  font-size: 0.97rem;
-  line-height: 1.45;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
 }
 
 select:focus,
@@ -967,74 +1179,110 @@ textarea:focus {
 }
 
 select {
-  min-width: 132px;
+  min-width: 128px;
 }
 
 .paid-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   white-space: nowrap;
+  font-size: var(--text-sm);
 }
 
 .paid-toggle input {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .empty-state {
   display: none;
-  padding: 18px;
+  padding: 16px;
   background: var(--surface);
   border: 1px dashed var(--line);
   border-radius: 8px;
   color: var(--muted);
-  font-size: 0.97rem;
+  font-size: var(--text-sm);
 }
 
 .empty-state.is-visible {
   display: block;
 }
 
+/* ============================================================
+   DIALOG / ORDER FORM
+   ============================================================ */
 dialog {
-  width: min(560px, calc(100% - 28px));
+  width: min(520px, calc(100% - 28px));
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0;
-  box-shadow: 0 22px 70px rgba(23, 33, 38, 0.24);
+  box-shadow: 0 20px 64px rgba(23, 33, 38, 0.22);
 }
 
 dialog::backdrop {
-  background: rgba(23, 33, 38, 0.42);
+  background: rgba(23, 33, 38, 0.4);
 }
 
 .order-form {
-  padding: 22px;
+  padding: 20px;
+}
+
+.order-form h2 {
+  font-size: var(--text-xl);
+}
+
+#order-product-description {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+#order-greeting {
+  font-size: var(--text-base);
+  color: var(--teal-dark);
+  font-weight: 600;
+  line-height: 1.6;
+  margin: 16px 0;
+  padding: 12px 14px;
+  background: rgba(15, 127, 122, 0.08);
+  border-radius: 6px;
+  border-right: 3px solid var(--teal);
+  white-space: pre-line;
+  text-align: center;
 }
 
 .close-button {
-  width: 40px;
+  width: 38px;
   justify-self: end;
   background: transparent;
   border-color: var(--line);
-  font-size: 1.35rem;
+  font-size: var(--text-xl);
   line-height: 1;
+}
+
+.minimum-note {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  margin-bottom: 0;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 menu {
   display: flex;
   justify-content: end;
-  gap: 10px;
+  gap: 8px;
   padding: 0;
   margin: 4px 0 0;
 }
 
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
 @media (max-width: 880px) {
   .landing-hero-v2,
   .auth-shell,
@@ -1058,9 +1306,7 @@ menu {
 
 @media (max-width: 680px) {
   :root {
-    --fs-h1: clamp(2.05rem, 9vw, 2.85rem);
-    --fs-h2: clamp(1.58rem, 6.2vw, 2.12rem);
-    --fs-h3: clamp(1.08rem, 4.4vw, 1.28rem);
+    --text-hero: clamp(2rem, 7vw, 2.6rem);
   }
 
   .public-landing,
@@ -1110,7 +1356,7 @@ menu {
 
   .landing-product-wall img:first-child {
     grid-row: auto;
-    min-height: 190px;
+    min-height: 175px;
   }
 
   .landing-actions,
