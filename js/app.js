@@ -13,7 +13,7 @@ const registerError = document.querySelector("#register-error");
 const orderDialog   = document.querySelector("#order-dialog");
 const orderForm     = document.querySelector("#order-form");
 const productForm   = document.querySelector("#product-form");
-const aiProductIdea = document.querySelector("#ai-product-idea");x
+const aiProductIdea = document.querySelector("#ai-product-idea");
 
 // ── Auth panel ────────────────────────────────────────────────
 document.querySelectorAll(".auth-mode-button").forEach((button) => {
