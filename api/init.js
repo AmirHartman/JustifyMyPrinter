@@ -67,7 +67,11 @@ module.exports = async (req, res) => {
       await sql`
         INSERT INTO users (id, name, full_name, email, role, password, status)
         VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.email}, ${u.role}, ${u.password}, ${u.status})
-        ON CONFLICT (id) DO NOTHING
+        ON CONFLICT (id) DO UPDATE
+          SET name = EXCLUDED.name,
+              password = EXCLUDED.password,
+              role = EXCLUDED.role,
+              status = EXCLUDED.status
       `;
     }
 
