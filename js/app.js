@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
 import { openOrderDialog, updateOrderMinimum, getOrderFriendName } from "./orders.js";
-import { setAuthPanel, showRegisterError, showRegisterPending, applyAuth, applyMode, setView } from "./auth.js";
+import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
 import { formatCurrency, createAiProductDraft } from "./utils.js";
 
 // ── DOM references ────────────────────────────────────────────
@@ -24,8 +24,9 @@ loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = new FormData(loginForm);
 
+  let result;
   try {
-    store.currentUser = await api("/api/auth", {
+    result = await api("/api/auth", {
       method: "POST",
       body: JSON.stringify({
         action: "login",
@@ -39,8 +40,15 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  if (result.status === "pending" || result.status === "rejected") {
+    loginForm.reset();
+    showLoginStatus(result.status, result.reason);
+    return;
+  }
+
   loginError.classList.remove("is-visible");
   loginForm.reset();
+  store.currentUser = result;
   store.appMode = store.currentUser.role === "admin" ? "admin" : "friend";
 
   if (store.currentUser.role === "friend") {
@@ -58,12 +66,16 @@ loginForm?.addEventListener("submit", async (event) => {
 
 registerForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const data = new FormData(registerForm);
+  const data            = new FormData(registerForm);
   const name            = String(data.get("name") ?? "").trim();
+  const fullName        = String(data.get("fullName") ?? "").trim();
+  const email           = String(data.get("email") ?? "").trim();
   const password        = String(data.get("password") ?? "");
   const confirmPassword = String(data.get("confirmPassword") ?? "");
 
-  if (name.length < 2)             { showRegisterError("שם צריך להיות לפחות שני תווים, בכל זאת אנחנו לא מדפיסים משתמש בלי שם."); return; }
+  if (name.length < 2)             { showRegisterError("שם משתמש צריך להיות לפחות שני תווים."); return; }
+  if (fullName.length < 2)         { showRegisterError("נא להזין שם מלא."); return; }
+  if (!email.includes("@"))        { showRegisterError("נא להזין כתובת אימייל תקינה."); return; }
   if (password.length < 4)         { showRegisterError("הסיסמה צריכה להיות לפחות 4 תווים."); return; }
   if (password !== confirmPassword) { showRegisterError("הסיסמאות לא תואמות."); return; }
 
@@ -71,7 +83,7 @@ registerForm?.addEventListener("submit", async (event) => {
   try {
     result = await api("/api/auth", {
       method: "POST",
-      body: JSON.stringify({ action: "register", name, password, confirmPassword }),
+      body: JSON.stringify({ action: "register", name, fullName, email, password, confirmPassword }),
     });
   } catch (err) {
     showRegisterError(err.message);
@@ -79,15 +91,7 @@ registerForm?.addEventListener("submit", async (event) => {
   }
 
   registerForm.reset();
-
-  if (result.pending) {
-    showRegisterPending(name);
-    return;
-  }
-
-  store.currentUser = result;
-  registerError?.classList.remove("is-visible");
-  window.location.href = "welcome.html";
+  showRegisterPending(fullName, email);
 });
 
 document.querySelector("#logout-button")?.addEventListener("click", async () => {

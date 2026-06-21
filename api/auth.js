@@ -25,17 +25,23 @@ module.exports = async (req, res) => {
     const { action } = body;
 
     if (action === 'login') {
-      const name = String(body.name ?? '').trim();
+      const name     = String(body.name ?? '').trim();
       const password = String(body.password ?? '');
       try {
         const rows = await sql`
-          SELECT id, name, role, status FROM users WHERE name = ${name} AND password = ${password}
+          SELECT id, name, full_name, role, status, password AS pwd, rejection_reason
+          FROM users WHERE name = ${name}
         `;
-        if (rows.length === 0) return res.status(401).json({ error: 'שם המשתמש או הסיסמה לא נכונים.' });
+        if (rows.length === 0) return res.status(401).json({ error: 'שם המשתמש לא מוכר. בדוק שהקלדת נכון.' });
+
         const user = rows[0];
-        if (user.status === 'pending') return res.status(403).json({ error: 'הבקשה שלך עדיין ממתינה לאישור מנהל. נסה שוב אחרי שתקבל אישור.' });
-        if (user.status === 'rejected') return res.status(403).json({ error: 'הבקשה שלך לא אושרה. צור קשר עם מנהל האתר.' });
-        const token = randomUUID();
+
+        if (user.status === 'pending')  return res.json({ status: 'pending' });
+        if (user.status === 'rejected') return res.json({ status: 'rejected', reason: user.rejection_reason ?? '' });
+
+        if (user.pwd !== password) return res.status(401).json({ error: 'הסיסמה שגויה.' });
+
+        const token     = randomUUID();
         const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString();
         await sql`
           INSERT INTO sessions (token, user_id, user_name, user_role, expires_at)
@@ -49,25 +55,33 @@ module.exports = async (req, res) => {
     }
 
     if (action === 'register') {
-      const name = String(body.name ?? '').trim();
-      const password = String(body.password ?? '');
+      const name            = String(body.name ?? '').trim();
+      const fullName        = String(body.fullName ?? '').trim();
+      const email           = String(body.email ?? '').trim().toLowerCase();
+      const password        = String(body.password ?? '');
       const confirmPassword = String(body.confirmPassword ?? '');
 
-      if (name.length < 2) return res.status(400).json({ error: 'שם צריך להיות לפחות שני תווים, בכל זאת אנחנו לא מדפיסים משתמש בלי שם.' });
-      if (password.length < 4) return res.status(400).json({ error: 'הסיסמה צריכה להיות לפחות 4 תווים.' });
+      if (name.length < 2)             return res.status(400).json({ error: 'שם משתמש צריך להיות לפחות שני תווים.' });
+      if (fullName.length < 2)         return res.status(400).json({ error: 'נא להזין שם מלא.' });
+      if (!email.includes('@'))        return res.status(400).json({ error: 'נא להזין כתובת אימייל תקינה.' });
+      if (password.length < 4)         return res.status(400).json({ error: 'הסיסמה צריכה להיות לפחות 4 תווים.' });
       if (password !== confirmPassword) return res.status(400).json({ error: 'הסיסמאות לא תואמות.' });
 
       try {
         const existing = await sql`SELECT id, status FROM users WHERE name = ${name}`;
         if (existing.length > 0) {
-          if (existing[0].status === 'pending') return res.status(400).json({ error: 'הבקשה שלך כבר נמצאת אצלנו ומחכה לאישור. ניצור איתך קשר בקרוב.' });
-          return res.status(400).json({ error: 'כבר יש משתמש בשם הזה. נסה שם קצת יותר ספציפי.' });
+          if (existing[0].status === 'pending')  return res.status(400).json({ error: 'הבקשה שלך כבר נמצאת אצלנו ומחכה לאישור.' });
+          if (existing[0].status === 'rejected') return res.status(400).json({ error: 'שם המשתמש הזה נדחה בעבר. אנא צור קשר עם המנהל.' });
+          return res.status(400).json({ error: 'שם המשתמש הזה תפוס. נסה שם אחר.' });
         }
 
         const userId = `friend-${randomUUID()}`;
-        await sql`INSERT INTO users (id, name, role, password, status) VALUES (${userId}, ${name}, 'friend', ${password}, 'pending')`;
+        await sql`
+          INSERT INTO users (id, name, full_name, email, role, password, status)
+          VALUES (${userId}, ${name}, ${fullName}, ${email}, 'friend', ${password}, 'pending')
+        `;
 
-        return res.json({ pending: true, name });
+        return res.json({ pending: true, name, fullName });
       } catch (err) {
         return res.status(500).json({ error: err.message });
       }

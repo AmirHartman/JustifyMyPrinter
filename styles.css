@@ -601,6 +601,34 @@ body[data-mode="friend"] .admin-tabs {
   display: block;
 }
 
+.auth-status-message {
+  display: none;
+  padding: 16px 18px;
+  border-radius: 8px;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  background: #d4f0ee;
+  color: var(--teal-dark);
+  border: 1px solid rgba(15, 127, 122, 0.2);
+}
+
+.auth-status-message.is-visible {
+  display: block;
+}
+
+.auth-status-message.is-rejected {
+  background: #fde8e8;
+  color: var(--danger);
+  border-color: rgba(184, 62, 66, 0.2);
+}
+
+.rejection-reason {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 .status-badge {
   display: inline-block;
   padding: 2px 10px;

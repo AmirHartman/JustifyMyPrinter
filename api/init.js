@@ -11,14 +11,20 @@ module.exports = async (req, res) => {
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        full_name TEXT NOT NULL DEFAULT '',
+        email TEXT NOT NULL DEFAULT '',
         role TEXT NOT NULL DEFAULT 'friend',
         password TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
+        rejection_reason TEXT DEFAULT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
 
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT NULL`;
     await sql`UPDATE users SET status = 'approved' WHERE status = 'pending'`;
 
     await sql`
@@ -59,8 +65,8 @@ module.exports = async (req, res) => {
 
     for (const u of SEED_USERS) {
       await sql`
-        INSERT INTO users (id, name, role, password, status)
-        VALUES (${u.id}, ${u.name}, ${u.role}, ${u.password}, ${u.status})
+        INSERT INTO users (id, name, full_name, email, role, password, status)
+        VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.email}, ${u.role}, ${u.password}, ${u.status})
         ON CONFLICT (id) DO NOTHING
       `;
     }

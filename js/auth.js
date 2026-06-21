@@ -9,6 +9,8 @@ export function setAuthPanel(panelName) {
   });
   document.querySelector("#login-error")?.classList.remove("is-visible");
   document.querySelector("#register-error")?.classList.remove("is-visible");
+  document.querySelector("#login-status")?.classList.remove("is-visible");
+  document.querySelector("#register-pending")?.classList.remove("is-visible");
 }
 
 export function showRegisterError(message) {
@@ -18,13 +20,40 @@ export function showRegisterError(message) {
   el.classList.add("is-visible");
 }
 
-export function showRegisterPending(name) {
+export function showRegisterPending(fullName, email) {
   const el = document.querySelector("#register-pending");
   if (!el) return;
-  el.textContent = `תודה ${name}! הבקשה שלך נשלחה ומחכה לאישור. נסה להתחבר שוב לאחר שתקבל אישור.`;
+  el.innerHTML = `
+    <strong>תודה ${fullName}!</strong><br>
+    הבקשה שלך נשלחה בהצלחה ומחכה לאישור המנהל.<br>
+    תקבל עדכון לכתובת <strong>${email}</strong> כשהחשבון שלך יאושר.
+  `;
   el.classList.add("is-visible");
   document.querySelector("#register-form")?.classList.remove("is-active");
   document.querySelector(".auth-mode-button[data-auth-target='register']")?.classList.remove("is-active");
+}
+
+export function showLoginStatus(status, reason) {
+  const el = document.querySelector("#login-status");
+  if (!el) return;
+
+  if (status === 'pending') {
+    el.innerHTML = `
+      <strong>הבקשה שלך בטיפול</strong><br>
+      החשבון שלך עדיין ממתין לאישור המנהל.<br>
+      תקבל הודעה כשהכל יהיה מוכן — אפשר לנסות להתחבר שוב אחרי שתקבל אישור.
+    `;
+  } else if (status === 'rejected') {
+    el.innerHTML = `
+      <strong>הבקשה לא אושרה</strong><br>
+      ${reason ? `סיבה: ${reason}` : 'צור קשר עם המנהל לפרטים נוספים.'}
+    `;
+    el.classList.add("is-rejected");
+  }
+
+  el.classList.add("is-visible");
+  document.querySelector("#login-form")?.classList.remove("is-active");
+  document.querySelector(".auth-mode-button[data-auth-target='login']")?.classList.remove("is-active");
 }
 
 export function applyAuth() {

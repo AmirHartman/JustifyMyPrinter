@@ -222,13 +222,18 @@ function renderUsers() {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${escapeHtml(user.name)}</td>
-      <td><span class="status-badge status-${user.status}">${USER_STATUS_LABELS[user.status] ?? user.status}</span></td>
+      <td>${escapeHtml(user.fullName ?? "")}</td>
+      <td>${escapeHtml(user.email ?? "")}</td>
+      <td>
+        <span class="status-badge status-${user.status}">${USER_STATUS_LABELS[user.status] ?? user.status}</span>
+        ${user.status === "rejected" && user.rejectionReason ? `<br><small class="rejection-reason">${escapeHtml(user.rejectionReason)}</small>` : ""}
+      </td>
       <td>${new Date(user.createdAt).toLocaleDateString("he-IL")}</td>
       <td></td>
     `;
 
     if (user.status === "pending") {
-      const actionsCell = row.children[3];
+      const actionsCell = row.children[5];
       const approveBtn = document.createElement("button");
       approveBtn.className = "primary-button";
       approveBtn.type = "button";
@@ -239,7 +244,7 @@ function renderUsers() {
       rejectBtn.className = "ghost-button";
       rejectBtn.type = "button";
       rejectBtn.textContent = "דחה";
-      rejectBtn.addEventListener("click", () => updateUserStatus(user.id, "rejected"));
+      rejectBtn.addEventListener("click", () => promptReject(user.id));
 
       actionsCell.append(approveBtn, " ", rejectBtn);
     }
@@ -248,14 +253,20 @@ function renderUsers() {
   });
 }
 
-async function updateUserStatus(userId, status) {
+async function promptReject(userId) {
+  const reason = window.prompt("סיבת הדחייה (תוצג למשתמש):");
+  if (reason === null) return;
+  await updateUserStatus(userId, "rejected", reason.trim());
+}
+
+async function updateUserStatus(userId, status, rejectionReason = "") {
   try {
-    await api(`/api/users/${userId}`, {
+    const updated = await api(`/api/users/${userId}`, {
       method: "PUT",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, rejectionReason }),
     });
-    const user = store.users.find((u) => u.id === userId);
-    if (user) user.status = status;
+    const idx = store.users.findIndex((u) => u.id === userId);
+    if (idx !== -1) store.users[idx] = updated;
     render();
   } catch (err) {
     alert(`שגיאה בעדכון משתמש: ${err.message}`);

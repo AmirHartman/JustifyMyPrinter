@@ -84,10 +84,10 @@ const SEED_PRODUCTS = RAW_PRODUCTS.map((p) => ({
 }));
 
 const SEED_USERS = [
-  { id: 'admin', name: 'אמיר', role: 'admin', password: '1236', status: 'approved' },
-  { id: 'friend-daniel', name: 'דניאל', role: 'friend', password: '1234', status: 'approved' },
-  { id: 'friend-noa', name: 'נועה', role: 'friend', password: '1234', status: 'approved' },
-  { id: 'friend-neomi', name: 'נעמיקי', role: 'friend', password: '1234', status: 'approved' },
+  { id: 'admin',         name: 'אמיר',    fullName: 'אמיר הרטמן',   email: 'admin@justifymyprinter.com', role: 'admin',  password: '1236', status: 'approved' },
+  { id: 'friend-daniel', name: 'דניאל',   fullName: 'דניאל כהן',    email: 'daniel@example.com',         role: 'friend', password: '1234', status: 'approved' },
+  { id: 'friend-noa',    name: 'נועה',    fullName: 'נועה לוי',     email: 'noa@example.com',            role: 'friend', password: '1234', status: 'approved' },
+  { id: 'friend-neomi',  name: 'נעמיקי',  fullName: 'נעמי גולדברג', email: 'neomi@example.com',          role: 'friend', password: '1234', status: 'approved' },
 ];
 
 const SEED_ORDERS = [

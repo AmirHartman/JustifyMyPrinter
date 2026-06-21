@@ -50,11 +50,19 @@
           <form class="auth-form" id="register-form" data-auth-form="register">
             <div>
               <h2>מצטרפים לחבורה</h2>
-              <p>הרשמה קצרה יוצרת משתמש חבר ושומרת אותו בדפדפן הזה.</p>
+              <p>הגשת בקשה תשלח לאישור המנהל. תקבל עדכון במייל.</p>
             </div>
             <label>
-              שם
-              <input name="name" required autocomplete="name" placeholder="איך לקרוא לך?" />
+              שם משתמש
+              <input name="name" required autocomplete="username" placeholder="שם כניסה לאתר" />
+            </label>
+            <label>
+              שם מלא
+              <input name="fullName" required autocomplete="name" placeholder="השם המלא שלך" />
+            </label>
+            <label>
+              אימייל
+              <input name="email" type="email" required autocomplete="email" placeholder="לשם קבלת עדכון אישור" />
             </label>
             <label>
               סיסמה
@@ -65,10 +73,11 @@
               <input name="confirmPassword" type="password" required autocomplete="new-password" placeholder="אותה סיסמה שוב" />
             </label>
             <p class="form-error" id="register-error"></p>
-            <button class="primary-button wide-button" type="submit">יצירת משתמש</button>
+            <button class="primary-button wide-button" type="submit">שליחת בקשה</button>
           </form>
 
-          <p class="form-success" id="register-pending"></p>
+          <div class="auth-status-message form-success" id="register-pending"></div>
+          <div class="auth-status-message" id="login-status"></div>
         </section>
       </section>
     </main>
@@ -231,7 +240,9 @@
           <table>
             <thead>
               <tr>
-                <th>שם</th>
+                <th>שם משתמש</th>
+                <th>שם מלא</th>
+                <th>אימייל</th>
                 <th>סטטוס</th>
                 <th>תאריך הצטרפות</th>
                 <th>פעולות</th>

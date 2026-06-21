@@ -10,14 +10,18 @@ module.exports = async (req, res) => {
     try {
       const sql = getSql();
       const rows = await sql`
-        SELECT id, name, role, status, created_at FROM users ORDER BY created_at DESC
+        SELECT id, name, full_name, email, role, status, rejection_reason, created_at
+        FROM users ORDER BY created_at DESC
       `;
       return res.json(rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        role: r.role,
-        status: r.status,
-        createdAt: r.created_at,
+        id:              r.id,
+        name:            r.name,
+        fullName:        r.full_name,
+        email:           r.email,
+        role:            r.role,
+        status:          r.status,
+        rejectionReason: r.rejection_reason,
+        createdAt:       r.created_at,
       })));
     } catch (err) {
       return res.status(500).json({ error: err.message });

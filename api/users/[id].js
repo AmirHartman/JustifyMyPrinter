@@ -11,17 +11,31 @@ module.exports = async (req, res) => {
     const admin = await requireAdmin(req, res);
     if (!admin) return;
     try {
-      const body = await parseBody(req);
-      const status = String(body.status ?? '');
+      const body            = await parseBody(req);
+      const status          = String(body.status ?? '');
+      const rejectionReason = status === 'rejected' ? String(body.rejectionReason ?? '').trim() : null;
+
       if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
       const sql = getSql();
-      await sql`UPDATE users SET status = ${status} WHERE id = ${id}`;
+      await sql`UPDATE users SET status = ${status}, rejection_reason = ${rejectionReason} WHERE id = ${id}`;
 
-      const rows = await sql`SELECT id, name, role, status, created_at FROM users WHERE id = ${id}`;
+      const rows = await sql`
+        SELECT id, name, full_name, email, role, status, rejection_reason, created_at
+        FROM users WHERE id = ${id}
+      `;
       if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
       const r = rows[0];
-      return res.json({ id: r.id, name: r.name, role: r.role, status: r.status, createdAt: r.created_at });
+      return res.json({
+        id:              r.id,
+        name:            r.name,
+        fullName:        r.full_name,
+        email:           r.email,
+        role:            r.role,
+        status:          r.status,
+        rejectionReason: r.rejection_reason,
+        createdAt:       r.created_at,
+      });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
