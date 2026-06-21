@@ -22,7 +22,13 @@ document.querySelectorAll(".auth-mode-button").forEach((button) => {
 
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const data = new FormData(loginForm);
+  const data       = new FormData(loginForm);
+  const submitBtn  = loginForm.querySelector("[type=submit]");
+  const origLabel  = submitBtn.textContent;
+
+  loginError.classList.remove("is-visible");
+  submitBtn.disabled    = true;
+  submitBtn.textContent = "מתחבר...";
 
   let result;
   try {
@@ -37,6 +43,8 @@ loginForm?.addEventListener("submit", async (event) => {
   } catch (err) {
     loginError.textContent = err.message;
     loginError.classList.add("is-visible");
+    submitBtn.disabled    = false;
+    submitBtn.textContent = origLabel;
     return;
   }
 
@@ -79,6 +87,11 @@ registerForm?.addEventListener("submit", async (event) => {
   if (password.length < 4)         { showRegisterError("הסיסמה צריכה להיות לפחות 4 תווים."); return; }
   if (password !== confirmPassword) { showRegisterError("הסיסמאות לא תואמות."); return; }
 
+  const submitBtn = registerForm.querySelector("[type=submit]");
+  const origLabel = submitBtn.textContent;
+  submitBtn.disabled    = true;
+  submitBtn.textContent = "שולח...";
+
   let result;
   try {
     result = await api("/api/auth", {
@@ -87,6 +100,8 @@ registerForm?.addEventListener("submit", async (event) => {
     });
   } catch (err) {
     showRegisterError(err.message);
+    submitBtn.disabled    = false;
+    submitBtn.textContent = origLabel;
     return;
   }
 
