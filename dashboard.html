@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מדפסת לחברים - כניסה</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-auth="signed-out" data-entry="login" data-role="friend" data-mode="friend">
+    <main class="login-screen" id="login-screen" aria-labelledby="login-title">
+      <section class="auth-shell">
+        <div class="auth-story">
+          <a class="back-link" href="index.html">חזרה לעמוד ההסבר</a>
+          <p class="eyebrow">כניסה קטנה לפרויקט קטן</p>
+          <h1 id="login-title">בואו נראה מה אפשר להדפיס לכם</h1>
+          <p>
+            זה המקום של החברים והמשפחה להזמין הדפסות שימושיות, מצחיקות, חמודות
+            או כאלה שפשוט פותרות בעיה קטנה בבית.
+          </p>
+          <div class="auth-note-grid" aria-label="מה מחכה בפנים">
+            <span>מחיר עלות</span>
+            <span>בקשות אישיות</span>
+            <span>מעקב הזמנות</span>
+          </div>
+        </div>
+
+        <section class="auth-card" aria-label="כניסה והרשמה">
+          <div class="auth-switch" role="tablist" aria-label="בחירת פעולה">
+            <button class="auth-mode-button is-active" type="button" data-auth-target="login">כניסה</button>
+            <button class="auth-mode-button" type="button" data-auth-target="register">הרשמה</button>
+          </div>
+
+          <form class="auth-form is-active" id="login-form" data-auth-form="login">
+            <div>
+              <h2>טוב לראות אותך</h2>
+              <p>הקלידו שם משתמש, הכניסו סיסמה, וממשיכים פנימה.</p>
+            </div>
+            <label>
+              שם משתמש
+              <input name="loginName" id="login-name" required autocomplete="username" placeholder="השם שלך" />
+            </label>
+            <label>
+              סיסמה
+              <input name="password" type="password" required autocomplete="current-password" placeholder="הסיסמה שלך" />
+            </label>
+            <p class="form-error" id="login-error"></p>
+            <button class="primary-button wide-button" type="submit">כניסה</button>
+          </form>
+
+          <form class="auth-form" id="register-form" data-auth-form="register">
+            <div>
+              <h2>מצטרפים לחבורה</h2>
+              <p>הרשמה קצרה יוצרת משתמש חבר ושומרת אותו בדפדפן הזה.</p>
+            </div>
+            <label>
+              שם
+              <input name="name" required autocomplete="name" placeholder="איך לקרוא לך?" />
+            </label>
+            <label>
+              סיסמה
+              <input name="password" type="password" required autocomplete="new-password" placeholder="לפחות 4 תווים" />
+            </label>
+            <label>
+              אימות סיסמה
+              <input name="confirmPassword" type="password" required autocomplete="new-password" placeholder="אותה סיסמה שוב" />
+            </label>
+            <p class="form-error" id="register-error"></p>
+            <button class="primary-button wide-button" type="submit">יצירת משתמש</button>
+          </form>
+
+          <p class="form-success" id="register-pending"></p>
+        </section>
+      </section>
+    </main>
+
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ניהול ההדפסות</p>
+        <h1>מדפסת לחברים</h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="user-bar" aria-label="משתמש מחובר">
+          <a class="primary-button admin-only" href="catalog.html">צפייה כלקוח</a>
+          <span id="current-user"></span>
+          <button class="ghost-button" id="logout-button" type="button">יציאה</button>
+        </div>
+        <div class="summary-strip admin-only" aria-label="סיכום מערכת">
+          <div>
+            <span id="summary-orders">0</span>
+            <small>הזמנות פתוחות</small>
+          </div>
+          <div>
+            <span id="summary-debt">₪0</span>
+            <small>חוב כולל</small>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <nav class="tabs admin-tabs" aria-label="ניווט מנהל">
+        <button class="tab admin-tab" data-view="product-list">מוצרים</button>
+        <button class="tab admin-tab" data-view="orders">הזמנות</button>
+        <button class="tab admin-tab" data-view="debts">חובות</button>
+        <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
+        <button class="tab admin-tab" data-view="users">משתמשים</button>
+      </nav>
+
+      <section class="view" id="product-list-view" aria-labelledby="products-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="products-title">ניהול מוצרים</h2>
+            <p>כל המוצרים שמופיעים לחברים, כולל תמונה, עלות, חומר וקישור מקור.</p>
+          </div>
+        </div>
+        <div class="products-manager">
+          <div class="table-wrap products-table-wrap">
+            <table class="products-table">
+              <thead>
+                <tr>
+                  <th>תמונה</th>
+                  <th>שם</th>
+                  <th>הוזמן</th>
+                  <th>עלות</th>
+                  <th>גרם חומר</th>
+                  <th>תיאור</th>
+                  <th>לינק תמונה</th>
+                  <th>STL</th>
+                  <th>פעולות</th>
+                </tr>
+              </thead>
+              <tbody id="products-table"></tbody>
+            </table>
+          </div>
+          <p class="empty-state" id="products-empty">אין מוצרים בקטלוג.</p>
+        </div>
+      </section>
+
+      <section class="view" id="orders-view" aria-labelledby="orders-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="orders-title">ניהול הזמנות</h2>
+            <p>עדכון סטטוס, סימון תשלום ומעקב אחרי מה שעדיין פתוח.</p>
+          </div>
+          <button class="ghost-button" id="reset-demo">איפוס דמו</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>חבר</th>
+                <th>מוצר</th>
+                <th>כמות</th>
+                <th>סכום</th>
+                <th>סטטוס</th>
+                <th>תשלום</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
+      </section>
+
+      <section class="view" id="debts-view" aria-labelledby="debts-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="debts-title">חובות לפי חבר</h2>
+            <p>החוב מחושב מכל הזמנה שעדיין לא סומנה כשולמה.</p>
+          </div>
+        </div>
+        <div class="debt-grid" id="debt-grid"></div>
+        <p class="empty-state" id="debts-empty">אין חובות פתוחים כרגע.</p>
+      </section>
+
+      <section class="view" id="product-add-view" aria-labelledby="product-add-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="product-add-title">הוספת מוצר</h2>
+            <p>מוסיפים מוצר חדש לחנות, עם תמונה וקישור למודל.</p>
+          </div>
+        </div>
+        <div class="ai-product-panel">
+          <div>
+            <h3>טיוטת מוצר מהירה</h3>
+            <p>רעיון קצר למוצר, לפני עריכה ושמירה.</p>
+          </div>
+          <label>
+            רעיון למוצר
+            <textarea id="ai-product-idea" rows="2" placeholder="למשל: פתרון קטן לסידור כבלים ליד מיטה"></textarea>
+          </label>
+          <button class="ghost-button" id="ai-draft-button" type="button">מילוי טיוטה</button>
+        </div>
+        <form class="product-form" id="product-form">
+          <label>
+            שם מוצר
+            <input name="name" required placeholder="למשל: מחזיק מפתחות לקיר" />
+          </label>
+          <label>
+            עלות הדפסה מינימלית
+            <input name="cost" required type="number" min="0.01" step="0.01" placeholder="₪" />
+          </label>
+          <label>
+            גרם חומר להדפסה
+            <input name="grams" required type="number" min="1" step="1" value="1" />
+          </label>
+          <label>
+            תיאור קצר
+            <textarea name="description" required rows="3" placeholder="מה זה, למי זה מתאים, צבעים זמינים"></textarea>
+          </label>
+          <label>
+            לינק לתמונה
+            <input name="image" type="url" placeholder="https://example.com/product-image.jpg" />
+          </label>
+          <label>
+            לינק לקובץ STL
+            <input name="stlUrl" type="url" placeholder="https://example.com/model.stl או קישור מקור" />
+          </label>
+          <button class="primary-button" type="submit">הוספת מוצר</button>
+        </form>
+      </section>
+
+      <section class="view" id="users-view" aria-labelledby="users-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="users-title">ניהול משתמשים</h2>
+            <p>אישור או דחיית בקשות הצטרפות של משתמשים חדשים.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>שם</th>
+                <th>סטטוס</th>
+                <th>תאריך הצטרפות</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="users-empty">אין משתמשים רשומים.</p>
+      </section>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

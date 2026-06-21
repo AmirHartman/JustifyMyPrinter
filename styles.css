@@ -589,6 +589,30 @@ body[data-mode="friend"] .admin-tabs {
   display: block;
 }
 
+.form-success {
+  display: none;
+  margin-bottom: 0;
+  color: var(--teal-dark);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.form-success.is-visible {
+  display: block;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.status-badge.status-pending  { background: #fdf3d0; color: #8a6000; }
+.status-badge.status-approved { background: #d4f0ee; color: var(--teal-dark); }
+.status-badge.status-rejected { background: #fde8e8; color: var(--danger); }
+
 /* ============================================================
    TOPBAR
    ============================================================ */
