@@ -1,4 +1,4 @@
-import { store, loadData, findProduct, getProductOrderedQuantity } from "./state.js";
+import { store, loadData, findProduct } from "./state.js";
 import { formatCurrency, escapeHtml } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog } from "./orders.js";
@@ -10,14 +10,20 @@ const STATUS_LABELS = {
   delivered: "נמסר",
 };
 
+const USER_STATUS_LABELS = {
+  pending:  "ממתין לאישור",
+  approved: "מאושר",
+  rejected: "נדחה",
+};
+
 // ── Public entry point ────────────────────────────────────────
 
 export function render() {
   renderCatalog();
   renderOrders();
-  renderDebts();
-  renderProducts();
-  renderUsers();
+  renderItemStats();
+  renderUsersAdmin();
+  renderStoreEdit();
   renderSummary();
 }
 
@@ -102,90 +108,266 @@ function renderOrders() {
   });
 }
 
-// ── Debts grid (admin view) ───────────────────────────────────
+// ── Items stats table (admin view) ───────────────────────────
 
-function renderDebts() {
-  const debtGrid = document.querySelector("#debt-grid");
-  if (!debtGrid) return;
+function renderItemStats() {
+  const tbody = document.querySelector("#items-table-body");
+  if (!tbody) return;
 
-  debtGrid.replaceChildren();
-  const debts = store.orders.reduce((totals, order) => {
-    if (!order.paid) {
-      totals[order.friendName] = (totals[order.friendName] ?? 0) + order.price;
-    }
-    return totals;
-  }, {});
-
-  const entries = Object.entries(debts).sort((a, b) => b[1] - a[1]);
-  document.querySelector("#debts-empty")
-    ?.classList.toggle("is-visible", entries.length === 0);
-
-  entries.forEach(([friendName, total]) => {
-    const card = document.createElement("article");
-    card.className = "debt-card";
-    card.innerHTML = `<strong>${escapeHtml(friendName)}</strong><span>${formatCurrency(total)}</span>`;
-    debtGrid.append(card);
-  });
-}
-
-// ── Products table (admin view) ───────────────────────────────
-
-function renderProducts() {
-  const productsTable = document.querySelector("#products-table");
-  if (!productsTable) return;
-
-  productsTable.replaceChildren();
-  document.querySelector("#products-empty")
+  tbody.replaceChildren();
+  document.querySelector("#items-empty")
     ?.classList.toggle("is-visible", store.products.length === 0);
 
   store.products.forEach((product) => {
-    const row = document.createElement("tr");
-    row.className = "product-edit-row";
+    const orders    = store.orders.filter((o) => o.productId === product.id);
+    const completed = orders.filter((o) => o.status === "delivered").length;
+    const revenue   = orders.reduce((s, o) => s + o.price, 0);
+    const cogs      = orders.reduce((s, o) => s + Number(product.cost) * o.quantity, 0);
+    const profit    = revenue - cogs;
 
-    const imageCell = document.createElement("td");
-    const thumb = document.createElement("div");
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td></td>
+      <td>${escapeHtml(product.name)}</td>
+      <td class="stat-cell">${formatCurrency(product.cost)}</td>
+      <td class="stat-cell stat-muted">${product.grams}g</td>
+      <td class="stat-cell">${orders.length}</td>
+      <td class="stat-cell stat-completed">${completed}</td>
+      <td class="stat-cell stat-revenue">${formatCurrency(revenue)}</td>
+      <td class="stat-cell stat-muted">${formatCurrency(cogs)}</td>
+      <td class="stat-cell ${profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(profit)}</td>
+    `;
+
+    const imgCell = document.createElement("td");
+    const thumb   = document.createElement("div");
     thumb.className = "product-thumb";
     renderProductImage(thumb, product);
-    imageCell.append(thumb);
+    imgCell.append(thumb);
+    row.children[0].replaceWith(imgCell);
 
-    const nameCell = document.createElement("td");
-    nameCell.append(createEditableInput(product, "name", "text"));
+    tbody.append(row);
+  });
+}
 
-    const orderedCell = document.createElement("td");
-    orderedCell.className = "ordered-count";
-    orderedCell.textContent = getProductOrderedQuantity(product.id);
+// ── Users admin view (active + pending sub-tabs) ──────────────
 
-    const costCell = document.createElement("td");
-    costCell.append(createEditableInput(product, "cost", "number"));
+function getUserOrderStats(userName) {
+  const orders  = store.orders.filter((o) => o.friendName === userName);
+  const revenue = orders.reduce((s, o) => s + o.price, 0);
+  const paid    = orders.reduce((s, o) => (o.paid ? s + o.price : s), 0);
+  const cogs    = orders.reduce((s, o) => {
+    const p = findProduct(o.productId);
+    return s + (p ? Number(p.cost) * o.quantity : 0);
+  }, 0);
+  return { count: orders.length, revenue, paid, debt: revenue - paid, profit: revenue - cogs };
+}
 
-    const gramsCell = document.createElement("td");
-    gramsCell.append(createEditableInput(product, "grams", "number"));
+function renderUsersAdmin() {
+  const approved = store.users.filter((u) => u.status === "approved");
+  const pending  = store.users.filter((u) => u.status === "pending");
+  const rejected = store.users.filter((u) => u.status === "rejected");
 
-    const descriptionCell = document.createElement("td");
-    const descriptionInput = document.createElement("textarea");
-    descriptionInput.value = product.description;
-    descriptionInput.rows = 3;
-    descriptionInput.addEventListener("change", () =>
-      updateProduct(product.id, { description: descriptionInput.value.trim() })
-    );
-    descriptionCell.append(descriptionInput);
+  // Update both pending badges
+  const count = pending.length;
+  [document.querySelector("#pending-tab-badge"), document.querySelector("#pending-sub-badge")]
+    .forEach((el) => { if (el) el.textContent = count || ""; });
 
-    const imageUrlCell = document.createElement("td");
-    imageUrlCell.append(createEditableInput(product, "image", "text"));
+  // ── Active users ──────────────────────────────────────────
+  const activeTable = document.querySelector("#active-users-table");
+  if (activeTable) {
+    activeTable.replaceChildren();
+    const activeList = [...approved, ...rejected];
+    document.querySelector("#active-users-empty")
+      ?.classList.toggle("is-visible", activeList.length === 0);
 
-    const stlCell = document.createElement("td");
-    stlCell.append(createEditableInput(product, "stlUrl", "url"));
+    activeList.forEach((user) => {
+      const stats = getUserOrderStats(user.name);
+      const row   = document.createElement("tr");
 
-    const actionsCell = document.createElement("td");
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "ghost-button";
-    deleteButton.type = "button";
-    deleteButton.textContent = "מחיקה";
-    deleteButton.addEventListener("click", () => deleteProduct(product.id));
-    actionsCell.append(deleteButton);
+      row.innerHTML = `
+        <td>
+          ${escapeHtml(user.name)}
+          ${user.status === "rejected" ? `<span class="status-badge status-rejected">${USER_STATUS_LABELS.rejected}</span>` : ""}
+        </td>
+        <td>${escapeHtml(user.fullName ?? "")}</td>
+        <td>${escapeHtml(user.email ?? "")}</td>
+        <td class="pwd-cell">
+          <div class="pwd-cell-inner">
+            <span class="pwd-dots">••••••</span>
+            <span class="pwd-text" hidden>${escapeHtml(user.password ?? "")}</span>
+            <button class="ghost-button pwd-toggle" type="button">הצג</button>
+          </div>
+        </td>
+        <td class="stat-cell">${stats.count}</td>
+        <td class="stat-cell stat-revenue">${formatCurrency(stats.revenue)}</td>
+        <td class="stat-cell">${formatCurrency(stats.paid)}</td>
+        <td class="stat-cell ${stats.debt > 0 ? "stat-negative" : "stat-muted"}">${formatCurrency(stats.debt)}</td>
+        <td class="stat-cell ${stats.profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.profit)}</td>
+      `;
 
-    row.append(imageCell, nameCell, orderedCell, costCell, gramsCell, descriptionCell, imageUrlCell, stlCell, actionsCell);
-    productsTable.append(row);
+      const toggle = row.querySelector(".pwd-toggle");
+      const dots   = row.querySelector(".pwd-dots");
+      const text   = row.querySelector(".pwd-text");
+      toggle?.addEventListener("click", () => {
+        const showing = !text.hidden;
+        dots.hidden   = !showing;
+        text.hidden   = showing;
+        toggle.textContent = showing ? "הצג" : "הסתר";
+      });
+
+      activeTable.append(row);
+    });
+  }
+
+  // ── Pending users ──────────────────────────────────────────
+  const pendingTable = document.querySelector("#pending-users-table");
+  if (pendingTable) {
+    pendingTable.replaceChildren();
+    document.querySelector("#pending-users-empty")
+      ?.classList.toggle("is-visible", pending.length === 0);
+
+    pending.forEach((user) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${escapeHtml(user.name)}</td>
+        <td>${escapeHtml(user.fullName ?? "")}</td>
+        <td>${escapeHtml(user.email ?? "")}</td>
+        <td>${new Date(user.createdAt).toLocaleDateString("he-IL")}</td>
+        <td class="actions-cell"></td>
+      `;
+
+      const cell = row.querySelector(".actions-cell");
+
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "primary-button btn-sm";
+      approveBtn.type = "button";
+      approveBtn.textContent = "אשר";
+      approveBtn.addEventListener("click", () => updateUserStatus(user.id, "approved"));
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.className = "ghost-button btn-sm";
+      rejectBtn.type = "button";
+      rejectBtn.textContent = "דחה";
+      rejectBtn.addEventListener("click", () => promptReject(user.id));
+
+      cell.append(approveBtn, " ", rejectBtn);
+      pendingTable.append(row);
+    });
+  }
+}
+
+// ── Store edit grid (admin view) ──────────────────────────────
+
+function renderStoreEdit() {
+  const grid = document.querySelector("#store-edit-grid");
+  if (!grid) return;
+
+  grid.replaceChildren();
+  document.querySelector("#store-edit-empty")
+    ?.classList.toggle("is-visible", store.products.length === 0);
+
+  store.products.forEach((product) => {
+    const card = document.createElement("article");
+    card.className = "store-edit-card";
+
+    // ── Image section ──────────────────────────────────────
+    const imageWrap = document.createElement("div");
+    imageWrap.className = "store-edit-image";
+
+    if (product.image) {
+      const img = document.createElement("img");
+      img.src = product.image;
+      img.alt = product.name;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      imageWrap.append(img);
+    } else {
+      const placeholder = document.createElement("span");
+      placeholder.className = "store-edit-placeholder";
+      placeholder.textContent = "אין תמונה";
+      imageWrap.append(placeholder);
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "store-edit-image-overlay";
+    const changeImgBtn = document.createElement("button");
+    changeImgBtn.className = "ghost-button";
+    changeImgBtn.type = "button";
+    changeImgBtn.textContent = "שנה תמונה";
+    changeImgBtn.addEventListener("click", () => {
+      const url = window.prompt("קישור לתמונה:", product.image ?? "");
+      if (url !== null) updateProduct(product.id, { image: url.trim() });
+    });
+    overlay.append(changeImgBtn);
+    imageWrap.append(overlay);
+
+    // ── Card body ──────────────────────────────────────────
+    const body = document.createElement("div");
+    body.className = "store-edit-body";
+
+    const nameInput = document.createElement("input");
+    nameInput.className = "store-edit-name";
+    nameInput.value = product.name;
+    nameInput.placeholder = "שם מוצר";
+    nameInput.addEventListener("change", () => updateProduct(product.id, { name: nameInput.value.trim() }));
+    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") nameInput.blur(); });
+
+    const costRow = document.createElement("div");
+    costRow.className = "store-edit-row";
+    const costInput = document.createElement("input");
+    costInput.type = "number"; costInput.min = "0.01"; costInput.step = "0.01";
+    costInput.value = product.cost;
+    costInput.addEventListener("change", () => {
+      const val = Math.max(Number(costInput.value) || 0.01, 0.01);
+      updateProduct(product.id, { cost: val });
+    });
+    costInput.addEventListener("keydown", (e) => { if (e.key === "Enter") costInput.blur(); });
+    const costLabel = document.createElement("span");
+    costLabel.textContent = "עלות: ₪";
+    costRow.append(costLabel, costInput);
+
+    const gramsRow = document.createElement("div");
+    gramsRow.className = "store-edit-row";
+    const gramsInput = document.createElement("input");
+    gramsInput.type = "number"; gramsInput.min = "1"; gramsInput.step = "1";
+    gramsInput.value = product.grams;
+    gramsInput.addEventListener("change", () => {
+      const val = Math.max(Number(gramsInput.value) || 1, 1);
+      updateProduct(product.id, { grams: val });
+    });
+    gramsInput.addEventListener("keydown", (e) => { if (e.key === "Enter") gramsInput.blur(); });
+    const gramsLabel = document.createElement("span");
+    gramsLabel.textContent = "גרם: ";
+    gramsRow.append(gramsLabel, gramsInput);
+
+    const descInput = document.createElement("textarea");
+    descInput.className = "store-edit-desc";
+    descInput.value = product.description;
+    descInput.rows = 3;
+    descInput.placeholder = "תיאור המוצר";
+    descInput.addEventListener("change", () => updateProduct(product.id, { description: descInput.value.trim() }));
+
+    // ── Card footer ────────────────────────────────────────
+    const footer = document.createElement("div");
+    footer.className = "store-edit-footer";
+
+    const stlInput = document.createElement("input");
+    stlInput.type = "url";
+    stlInput.className = "store-edit-stl";
+    stlInput.value = product.stlUrl ?? "";
+    stlInput.placeholder = "קישור STL";
+    stlInput.addEventListener("change", () => updateProduct(product.id, { stlUrl: stlInput.value.trim() }));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "ghost-button";
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "מחיקה";
+    deleteBtn.addEventListener("click", () => deleteProduct(product.id));
+
+    footer.append(stlInput, deleteBtn);
+    body.append(nameInput, costRow, gramsRow, descInput, footer);
+    card.append(imageWrap, body);
+    grid.append(card);
   });
 }
 
@@ -200,77 +382,6 @@ function renderSummary() {
   const totalDebt  = store.orders.reduce((sum, o) => sum + (o.paid ? 0 : o.price), 0);
   summaryOrders.textContent = openOrders;
   summaryDebt.textContent   = formatCurrency(totalDebt);
-}
-
-// ── Users table (admin view) ──────────────────────────────────
-
-const USER_STATUS_LABELS = {
-  pending:  "ממתין לאישור",
-  approved: "מאושר",
-  rejected: "נדחה",
-};
-
-function renderUsers() {
-  const usersTable = document.querySelector("#users-table");
-  if (!usersTable) return;
-
-  usersTable.replaceChildren();
-  document.querySelector("#users-empty")
-    ?.classList.toggle("is-visible", store.users.length === 0);
-
-  store.users.forEach((user) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${escapeHtml(user.name)}</td>
-      <td>${escapeHtml(user.fullName ?? "")}</td>
-      <td>${escapeHtml(user.email ?? "")}</td>
-      <td>
-        <span class="status-badge status-${user.status}">${USER_STATUS_LABELS[user.status] ?? user.status}</span>
-        ${user.status === "rejected" && user.rejectionReason ? `<br><small class="rejection-reason">${escapeHtml(user.rejectionReason)}</small>` : ""}
-      </td>
-      <td>${new Date(user.createdAt).toLocaleDateString("he-IL")}</td>
-      <td></td>
-    `;
-
-    if (user.status === "pending") {
-      const actionsCell = row.children[5];
-      const approveBtn = document.createElement("button");
-      approveBtn.className = "primary-button";
-      approveBtn.type = "button";
-      approveBtn.textContent = "אשר";
-      approveBtn.addEventListener("click", () => updateUserStatus(user.id, "approved"));
-
-      const rejectBtn = document.createElement("button");
-      rejectBtn.className = "ghost-button";
-      rejectBtn.type = "button";
-      rejectBtn.textContent = "דחה";
-      rejectBtn.addEventListener("click", () => promptReject(user.id));
-
-      actionsCell.append(approveBtn, " ", rejectBtn);
-    }
-
-    usersTable.append(row);
-  });
-}
-
-async function promptReject(userId) {
-  const reason = window.prompt("סיבת הדחייה (תוצג למשתמש):");
-  if (reason === null) return;
-  await updateUserStatus(userId, "rejected", reason.trim());
-}
-
-async function updateUserStatus(userId, status, rejectionReason = "") {
-  try {
-    const updated = await api(`/api/users/${userId}`, {
-      method: "PUT",
-      body: JSON.stringify({ status, rejectionReason }),
-    });
-    const idx = store.users.findIndex((u) => u.id === userId);
-    if (idx !== -1) store.users[idx] = updated;
-    render();
-  } catch (err) {
-    alert(`שגיאה בעדכון משתמש: ${err.message}`);
-  }
 }
 
 // ── Shared rendering helpers ──────────────────────────────────
@@ -289,32 +400,11 @@ function renderProductImage(container, product) {
 
 function renderStlLink(card, product) {
   const stlLink = card.querySelector(".stl-link");
-  if (!product.stlUrl) { stlLink.remove(); return; }
-  stlLink.href = product.stlUrl;
+  if (!product.stlUrl) { stlLink?.remove(); return; }
+  if (stlLink) stlLink.href = product.stlUrl;
 }
 
-// ── Product table interactions ────────────────────────────────
-
-function createEditableInput(product, field, type) {
-  const input = document.createElement("input");
-  input.type  = type;
-  input.value = product[field] ?? "";
-
-  if (field === "cost")  { input.min = 0.01; input.step = 0.01; }
-  if (field === "grams") { input.min = 1;    input.step = 1;    }
-
-  input.addEventListener("change", () => {
-    const value =
-      field === "cost"  ? Math.max(Number(input.value) || 0.01, 0.01) :
-      field === "grams" ? Math.max(Number(input.value) || 1, 1) :
-      input.value.trim();
-    updateProduct(product.id, { [field]: value });
-  });
-
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
-
-  return input;
-}
+// ── Product interactions ──────────────────────────────────────
 
 async function updateProduct(productId, updates) {
   const product = findProduct(productId);
@@ -347,5 +437,27 @@ async function deleteProduct(productId) {
     alert(`שגיאה במחיקת מוצר: ${err.message}`);
     await loadData();
     render();
+  }
+}
+
+// ── User status interactions ──────────────────────────────────
+
+async function promptReject(userId) {
+  const reason = window.prompt("סיבת הדחייה (תוצג למשתמש):");
+  if (reason === null) return;
+  await updateUserStatus(userId, "rejected", reason.trim());
+}
+
+async function updateUserStatus(userId, status, rejectionReason = "") {
+  try {
+    const updated = await api(`/api/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status, rejectionReason }),
+    });
+    const idx = store.users.findIndex((u) => u.id === userId);
+    if (idx !== -1) store.users[idx] = updated;
+    render();
+  } catch (err) {
+    alert(`שגיאה בעדכון משתמש: ${err.message}`);
   }
 }

@@ -106,7 +106,7 @@ export function setView(viewName) {
   const nextView =
     store.appMode === "friend"
       ? (friendViews.includes(viewName) ? viewName : "landing")
-      : (friendViews.includes(viewName) ? "product-list" : viewName);
+      : (friendViews.includes(viewName) ? "items" : viewName);
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("is-active", tab.dataset.view === nextView);

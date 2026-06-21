@@ -108,50 +108,123 @@
 
     <main class="app-shell">
       <nav class="tabs admin-tabs" aria-label="ניווט מנהל">
-        <button class="tab admin-tab" data-view="product-list">מוצרים</button>
+        <button class="tab admin-tab" data-view="items">ניהול פריטים</button>
+        <button class="tab admin-tab" data-view="users">
+          ניהול משתמשים
+          <span class="tab-badge" id="pending-tab-badge"></span>
+        </button>
+        <button class="tab admin-tab" data-view="store-edit">ניהול חנות</button>
         <button class="tab admin-tab" data-view="orders">הזמנות</button>
-        <button class="tab admin-tab" data-view="debts">חובות</button>
         <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
-        <button class="tab admin-tab" data-view="users">משתמשים</button>
       </nav>
 
-      <section class="view" id="product-list-view" aria-labelledby="products-title">
+      <!-- ── Items stats view ── -->
+      <section class="view" id="items-view" aria-labelledby="items-title">
         <div class="section-heading">
           <div>
-            <h2 id="products-title">ניהול מוצרים</h2>
-            <p>כל המוצרים שמופיעים לחברים, כולל תמונה, עלות, חומר וקישור מקור.</p>
+            <h2 id="items-title">ניהול פריטים</h2>
+            <p>סטטיסטיקות ביצוע לכל פריט בחנות.</p>
           </div>
         </div>
-        <div class="products-manager">
-          <div class="table-wrap products-table-wrap">
-            <table class="products-table">
+        <div class="table-wrap">
+          <table class="items-stats-table">
+            <thead>
+              <tr>
+                <th>תמונה</th>
+                <th>שם מוצר</th>
+                <th>עלות ייצור</th>
+                <th>גרם</th>
+                <th>הזמנות</th>
+                <th>הושלמו</th>
+                <th>הכנסה</th>
+                <th>עלות כוללת</th>
+                <th>רווח</th>
+              </tr>
+            </thead>
+            <tbody id="items-table-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="items-empty">אין מוצרים בקטלוג.</p>
+      </section>
+
+      <!-- ── Users management view ── -->
+      <section class="view" id="users-view" aria-labelledby="users-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="users-title">ניהול משתמשים</h2>
+            <p>פרטי משתמשים, נתוני הזמנות ואישור הרשמות חדשות.</p>
+          </div>
+        </div>
+
+        <div class="admin-sub-tabs">
+          <button class="sub-tab is-active" data-sub="active-users">משתמשים פעילים</button>
+          <button class="sub-tab" data-sub="pending-users">
+            ממתינים לאישור
+            <span class="tab-badge" id="pending-sub-badge"></span>
+          </button>
+        </div>
+
+        <div class="sub-view is-active" id="active-users-sub">
+          <div class="table-wrap">
+            <table class="users-stats-table">
               <thead>
                 <tr>
-                  <th>תמונה</th>
-                  <th>שם</th>
-                  <th>הוזמן</th>
-                  <th>עלות</th>
-                  <th>גרם חומר</th>
-                  <th>תיאור</th>
-                  <th>לינק תמונה</th>
-                  <th>STL</th>
+                  <th>שם משתמש</th>
+                  <th>שם מלא</th>
+                  <th>אימייל</th>
+                  <th>סיסמה</th>
+                  <th>הזמנות</th>
+                  <th>הכנסה</th>
+                  <th>שולם</th>
+                  <th>חוב</th>
+                  <th>רווח</th>
+                </tr>
+              </thead>
+              <tbody id="active-users-table"></tbody>
+            </table>
+          </div>
+          <p class="empty-state" id="active-users-empty">אין משתמשים פעילים.</p>
+        </div>
+
+        <div class="sub-view" id="pending-users-sub">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>שם משתמש</th>
+                  <th>שם מלא</th>
+                  <th>אימייל</th>
+                  <th>תאריך הרשמה</th>
                   <th>פעולות</th>
                 </tr>
               </thead>
-              <tbody id="products-table"></tbody>
+              <tbody id="pending-users-table"></tbody>
             </table>
           </div>
-          <p class="empty-state" id="products-empty">אין מוצרים בקטלוג.</p>
+          <p class="empty-state" id="pending-users-empty">אין בקשות ממתינות לאישור.</p>
         </div>
       </section>
 
+      <!-- ── Store edit view ── -->
+      <section class="view" id="store-edit-view" aria-labelledby="store-edit-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="store-edit-title">ניהול חנות</h2>
+            <p>עריכה ישירה של מוצרים כפי שהם מופיעים ללקוחות.</p>
+          </div>
+        </div>
+        <div class="store-edit-grid" id="store-edit-grid"></div>
+        <p class="empty-state" id="store-edit-empty">אין מוצרים בקטלוג.</p>
+      </section>
+
+      <!-- ── Orders view ── -->
       <section class="view" id="orders-view" aria-labelledby="orders-title">
         <div class="section-heading">
           <div>
             <h2 id="orders-title">ניהול הזמנות</h2>
             <p>עדכון סטטוס, סימון תשלום ומעקב אחרי מה שעדיין פתוח.</p>
           </div>
-          <button class="ghost-button" id="reset-demo">איפוס דמו</button>
+          <button class="ghost-button" id="reset-demo">רענן נתונים</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -171,17 +244,7 @@
         <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
       </section>
 
-      <section class="view" id="debts-view" aria-labelledby="debts-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="debts-title">חובות לפי חבר</h2>
-            <p>החוב מחושב מכל הזמנה שעדיין לא סומנה כשולמה.</p>
-          </div>
-        </div>
-        <div class="debt-grid" id="debt-grid"></div>
-        <p class="empty-state" id="debts-empty">אין חובות פתוחים כרגע.</p>
-      </section>
-
+      <!-- ── Product add view ── -->
       <section class="view" id="product-add-view" aria-labelledby="product-add-title">
         <div class="section-heading">
           <div>
@@ -227,31 +290,6 @@
           </label>
           <button class="primary-button" type="submit">הוספת מוצר</button>
         </form>
-      </section>
-
-      <section class="view" id="users-view" aria-labelledby="users-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="users-title">ניהול משתמשים</h2>
-            <p>אישור או דחיית בקשות הצטרפות של משתמשים חדשים.</p>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>שם משתמש</th>
-                <th>שם מלא</th>
-                <th>אימייל</th>
-                <th>סטטוס</th>
-                <th>תאריך הצטרפות</th>
-                <th>פעולות</th>
-              </tr>
-            </thead>
-            <tbody id="users-table"></tbody>
-          </table>
-        </div>
-        <p class="empty-state" id="users-empty">אין משתמשים רשומים.</p>
       </section>
     </main>
 

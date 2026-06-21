@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
     try {
       const sql = getSql();
       const rows = await sql`
-        SELECT id, name, full_name, email, role, status, rejection_reason, created_at
+        SELECT id, name, full_name, email, role, status, rejection_reason, password, created_at
         FROM users ORDER BY created_at DESC
       `;
       return res.json(rows.map((r) => ({
@@ -21,6 +21,7 @@ module.exports = async (req, res) => {
         role:            r.role,
         status:          r.status,
         rejectionReason: r.rejection_reason,
+        password:        r.password,
         createdAt:       r.created_at,
       })));
     } catch (err) {

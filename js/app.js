@@ -60,7 +60,7 @@ loginForm?.addEventListener("submit", async (event) => {
   applyAuth();
   applyMode();
   await loadData();
-  setView("product-list");
+  setView("items");
   render();
 });
 
@@ -117,6 +117,15 @@ document.querySelector("#logout-button")?.addEventListener("click", async () => 
 // ── Admin tabs ────────────────────────────────────────────────
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => setView(tab.dataset.view));
+});
+
+// ── Users sub-tabs ────────────────────────────────────────────
+document.querySelectorAll(".sub-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.sub;
+    document.querySelectorAll(".sub-tab").forEach((t) => t.classList.toggle("is-active", t === btn));
+    document.querySelectorAll(".sub-view").forEach((v) => v.classList.toggle("is-active", v.id === `${target}-sub`));
+  });
 });
 
 document.querySelector("#reset-demo")?.addEventListener("click", async () => {
@@ -195,7 +204,7 @@ productForm?.addEventListener("submit", async (event) => {
     store.products.push(product);
     productForm.reset();
     render();
-    setView("product-list");
+    setView("items");
   } catch (err) {
     alert(`שגיאה בהוספת מוצר: ${err.message}`);
   }
@@ -246,6 +255,6 @@ productForm?.addEventListener("submit", async (event) => {
     document.body.dataset.entry = "app";
   }
 
-  setView(store.appMode === "admin" ? "product-list" : "catalog");
+  setView(store.appMode === "admin" ? "items" : "catalog");
   render();
 })();

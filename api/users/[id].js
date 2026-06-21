@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
       await sql`UPDATE users SET status = ${status}, rejection_reason = ${rejectionReason} WHERE id = ${id}`;
 
       const rows = await sql`
-        SELECT id, name, full_name, email, role, status, rejection_reason, created_at
+        SELECT id, name, full_name, email, role, status, rejection_reason, password, created_at
         FROM users WHERE id = ${id}
       `;
       if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
@@ -34,6 +34,7 @@ module.exports = async (req, res) => {
         role:            r.role,
         status:          r.status,
         rejectionReason: r.rejection_reason,
+        password:        r.password,
         createdAt:       r.created_at,
       });
     } catch (err) {

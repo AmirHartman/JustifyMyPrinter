@@ -1441,3 +1441,249 @@ menu {
     flex: 1 1 calc(50% - 8px);
   }
 }
+
+/* ============================================================
+   TAB BADGE (notification dot on admin tabs)
+   ============================================================ */
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.tab-badge:empty {
+  display: none;
+}
+
+/* ============================================================
+   SUB-TABS (users view: active / pending)
+   ============================================================ */
+.admin-sub-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.sub-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sub-tab.is-active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.sub-view {
+  display: none;
+}
+
+.sub-view.is-active {
+  display: block;
+}
+
+/* ============================================================
+   STAT CELLS (items + users tables)
+   ============================================================ */
+.stat-cell {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.stat-positive   { color: #1a7a3a; }
+.stat-negative   { color: var(--danger); }
+.stat-muted      { color: var(--muted); }
+.stat-revenue    { color: var(--teal-dark); }
+.stat-completed  { color: var(--plum); }
+
+/* ============================================================
+   PASSWORD CELL (active users table)
+   ============================================================ */
+.pwd-cell-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pwd-dots,
+.pwd-text {
+  font-size: var(--text-sm);
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: var(--text-xs);
+}
+
+/* ============================================================
+   STORE EDIT GRID
+   ============================================================ */
+.store-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.store-edit-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(23, 33, 38, 0.07);
+}
+
+.store-edit-image {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #eef3f1;
+  display: grid;
+  place-items: center;
+}
+
+.store-edit-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #fff;
+}
+
+.store-edit-placeholder {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.store-edit-image-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  background: rgba(23, 33, 38, 0.0);
+  opacity: 0;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+
+.store-edit-card:hover .store-edit-image-overlay {
+  opacity: 1;
+  background: rgba(23, 33, 38, 0.3);
+}
+
+.store-edit-image-overlay .ghost-button {
+  background: rgba(255, 255, 255, 0.9);
+  font-size: var(--text-xs);
+}
+
+.store-edit-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.store-edit-name {
+  width: 100%;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 6px;
+  color: var(--ink);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.store-edit-name:hover,
+.store-edit-name:focus {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+
+.store-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.store-edit-row input {
+  width: 90px;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  font-size: var(--text-sm);
+  border-radius: 6px;
+}
+
+.store-edit-desc {
+  resize: vertical;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 7px 10px;
+  line-height: 1.55;
+}
+
+.store-edit-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  margin-top: auto;
+}
+
+.store-edit-stl {
+  flex: 1;
+  font-size: var(--text-xs);
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+.store-edit-footer .ghost-button {
+  color: var(--danger);
+  border-color: rgba(184, 62, 66, 0.28);
+  background: #fff7f7;
+  font-size: var(--text-xs);
+}
+
+.store-edit-footer .ghost-button:hover {
+  background: #fde8e8;
+  border-color: var(--danger);
+}
