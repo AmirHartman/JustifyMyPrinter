@@ -18,6 +18,18 @@
           <span id="current-user">תצוגת חבר</span>
           <a class="ghost-button" href="index.html">חזרה להסבר</a>
           <a class="primary-button" href="welcome.html">לאזור האישי</a>
+          <div class="inbox-wrap" id="inbox-wrap">
+            <button class="ghost-button inbox-bell" id="inbox-bell" type="button" aria-label="עדכונים">
+              🔔<span class="inbox-badge" id="inbox-badge" hidden></span>
+            </button>
+            <div class="inbox-dropdown" id="inbox-dropdown" hidden>
+              <div class="inbox-header">
+                <strong>עדכונים</strong>
+                <button class="ghost-button btn-sm" id="inbox-mark-read" type="button">סמן הכל כנקרא</button>
+              </div>
+              <ul class="inbox-list" id="inbox-list"></ul>
+            </div>
+          </div>
           <button class="ghost-button" id="logout-button" type="button">יציאה</button>
         </div>
       </div>

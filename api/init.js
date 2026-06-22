@@ -63,6 +63,17 @@ module.exports = async (req, res) => {
       )
     `;
 
+    await sql`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_name TEXT NOT NULL,
+        message TEXT NOT NULL,
+        order_id TEXT,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+
     for (const u of SEED_USERS) {
       await sql`
         INSERT INTO users (id, name, full_name, email, role, password, status)

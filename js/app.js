@@ -148,6 +148,29 @@ document.querySelector("#reset-demo")?.addEventListener("click", async () => {
   render();
 });
 
+// ── Inbox ─────────────────────────────────────────────────────
+const inboxBell     = document.querySelector("#inbox-bell");
+const inboxDropdown = document.querySelector("#inbox-dropdown");
+
+inboxBell?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  inboxDropdown.hidden = !inboxDropdown.hidden;
+});
+
+document.querySelector("#inbox-mark-read")?.addEventListener("click", async () => {
+  try {
+    await api("/api/notifications", { method: "PUT" });
+    store.notifications.forEach((n) => { n.read = true; });
+    render();
+  } catch { /* ignore */ }
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#inbox-wrap")) {
+    if (inboxDropdown) inboxDropdown.hidden = true;
+  }
+});
+
 // ── Order dialog ──────────────────────────────────────────────
 document.querySelector(".close-button")?.addEventListener("click", () => orderDialog?.close());
 document.querySelector("#cancel-order")?.addEventListener("click", () => orderDialog?.close());
@@ -258,7 +281,7 @@ productForm?.addEventListener("submit", async (event) => {
     applyMode();
   }
 
-  if (store.currentUser && ["app", "catalog"].includes(pageName)) {
+  if (store.currentUser && ["app", "catalog", "welcome"].includes(pageName)) {
     try {
       await loadData();
     } catch (err) {

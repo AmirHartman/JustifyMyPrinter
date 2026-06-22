@@ -8,19 +8,23 @@ export const store = {
   products: [],
   orders: [],
   users: [],
+  notifications: [],
 };
 
 export const pageName = document.body.dataset.page || "app";
 
 export async function loadData() {
-  const [products, orders, users] = await Promise.all([
+  const isAdmin = store.appMode === "admin";
+  const [products, orders, users, notifications] = await Promise.all([
     api("/api/products"),
-    store.appMode === "admin" ? api("/api/orders") : Promise.resolve([]),
-    store.appMode === "admin" ? api("/api/users") : Promise.resolve([]),
+    isAdmin ? api("/api/orders")        : Promise.resolve([]),
+    isAdmin ? api("/api/users")         : Promise.resolve([]),
+    store.currentUser ? api("/api/notifications") : Promise.resolve([]),
   ]);
-  store.products = products;
-  store.orders = orders;
-  store.users = users;
+  store.products      = products;
+  store.orders        = orders;
+  store.users         = users;
+  store.notifications = notifications;
 }
 
 export function findProduct(productId) {

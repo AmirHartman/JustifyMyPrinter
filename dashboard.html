@@ -91,6 +91,18 @@
         <div class="user-bar" aria-label="משתמש מחובר">
           <a class="primary-button admin-only" href="catalog.html">צפייה כלקוח</a>
           <span id="current-user"></span>
+          <div class="inbox-wrap" id="inbox-wrap">
+            <button class="ghost-button inbox-bell" id="inbox-bell" type="button" aria-label="עדכונים">
+              🔔<span class="inbox-badge" id="inbox-badge" hidden></span>
+            </button>
+            <div class="inbox-dropdown" id="inbox-dropdown" hidden>
+              <div class="inbox-header">
+                <strong>עדכונים</strong>
+                <button class="ghost-button btn-sm" id="inbox-mark-read" type="button">סמן הכל כנקרא</button>
+              </div>
+              <ul class="inbox-list" id="inbox-list"></ul>
+            </div>
+          </div>
           <button class="ghost-button" id="logout-button" type="button">יציאה</button>
         </div>
         <div class="summary-strip admin-only" aria-label="סיכום מערכת">
@@ -114,7 +126,10 @@
           <span class="tab-badge" id="pending-tab-badge"></span>
         </button>
         <button class="tab admin-tab" data-view="store-edit">ניהול חנות</button>
-        <button class="tab admin-tab" data-view="orders">הזמנות</button>
+        <button class="tab admin-tab" data-view="orders">
+          הזמנות
+          <span class="tab-badge" id="new-orders-badge" hidden></span>
+        </button>
         <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>

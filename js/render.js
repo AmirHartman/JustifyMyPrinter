@@ -8,6 +8,7 @@ const STATUS_LABELS = {
   printing:  "בהדפסה",
   ready:     "מוכן",
   delivered: "נמסר",
+  rejected:  "נדחה",
 };
 
 const USER_STATUS_LABELS = {
@@ -25,6 +26,7 @@ export function render() {
   renderUsersAdmin();
   renderStoreEdit();
   renderSummary();
+  renderInbox();
 }
 
 // ── Catalog (friend view) ─────────────────────────────────────
@@ -52,6 +54,14 @@ function renderCatalog() {
 function renderOrders() {
   const ordersTable = document.querySelector("#orders-table");
   if (!ordersTable) return;
+
+  // Badge on the orders tab for unreviewed (new) orders
+  const newOrdersBadge = document.querySelector("#new-orders-badge");
+  if (newOrdersBadge) {
+    const count = store.orders.filter((o) => o.status === "new").length;
+    newOrdersBadge.textContent = count || "";
+    newOrdersBadge.hidden = count === 0;
+  }
 
   ordersTable.replaceChildren();
   document.querySelector("#orders-empty")
@@ -592,4 +602,41 @@ async function updateUserStatus(userId, status, rejectionReason = "") {
   } catch (err) {
     alert(`שגיאה בעדכון משתמש: ${err.message}`);
   }
+}
+
+// ── Inbox / notifications ─────────────────────────────────────
+
+function renderInbox() {
+  const unread = store.notifications.filter((n) => !n.read).length;
+
+  const badge = document.querySelector("#inbox-badge");
+  if (badge) {
+    badge.textContent = unread || "";
+    badge.hidden = unread === 0;
+  }
+
+  const list = document.querySelector("#inbox-list");
+  if (!list) return;
+  list.replaceChildren();
+
+  if (store.notifications.length === 0) {
+    const li = document.createElement("li");
+    li.className = "inbox-empty";
+    li.textContent = "אין עדכונים להצגה";
+    list.append(li);
+    return;
+  }
+
+  store.notifications.forEach((notif) => {
+    const li = document.createElement("li");
+    li.className = `inbox-item${notif.read ? "" : " unread"}`;
+    const msg = document.createElement("span");
+    msg.className = "inbox-msg";
+    msg.textContent = notif.message;
+    const time = document.createElement("span");
+    time.className = "inbox-time";
+    time.textContent = new Date(notif.createdAt).toLocaleDateString("he-IL");
+    li.append(msg, time);
+    list.append(li);
+  });
 }
