@@ -36,16 +36,20 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'No valid fields to update' });
       }
 
-      // Build dynamic SET clause
-      const setClauses = Object.entries(updates).map(([col, val]) =>
-        sql`${sql(col)} = ${val}`
+      // Build dynamic SET clause — columns are whitelisted above so safe to interpolate
+      const cols = Object.keys(updates);
+      const vals = Object.values(updates);
+      const setClause = cols.map((col, i) => `${col} = $${i + 1}`).join(', ');
+      await sql.query(
+        `UPDATE users SET ${setClause} WHERE id = $${vals.length + 1}`,
+        [...vals, id]
       );
-      await sql`UPDATE users SET ${sql.join(setClauses, sql`, `)} WHERE id = ${id}`;
 
-      const rows = await sql`
-        SELECT id, name, full_name, email, role, status, rejection_reason, password, created_at
-        FROM users WHERE id = ${id}
-      `;
+      const result = await sql.query(
+        `SELECT id, name, full_name, email, role, status, rejection_reason, password, created_at FROM users WHERE id = $1`,
+        [id]
+      );
+      const rows = result.rows ?? result;
       if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
       const r = rows[0];
       return res.json({
