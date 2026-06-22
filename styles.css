@@ -804,6 +804,11 @@ body[data-mode="admin"] .app-shell {
   border-color: var(--danger);
 }
 
+.tabs-refresh {
+  margin-right: auto;
+  font-size: var(--text-xs);
+}
+
 .view {
   display: none;
 }
