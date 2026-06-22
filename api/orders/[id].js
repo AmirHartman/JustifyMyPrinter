@@ -2,9 +2,10 @@ const { randomUUID } = require('crypto');
 const { getSql } = require('../_db');
 const { parseBody, requireAdmin } = require('../_middleware');
 
-const VALID_STATUSES = ['new', 'printing', 'ready', 'delivered', 'rejected'];
+const VALID_STATUSES = ['new', 'approved', 'printing', 'ready', 'delivered', 'rejected'];
 
 const STATUS_NOTIFICATION = {
+  approved:  (p) => `ההזמנה שלך ל${p} אושרה ועומדת בתור להדפסה ✔️`,
   printing:  (p) => `ההזמנה שלך ל${p} נמצאת כרגע בהדפסה 🖨️`,
   ready:     (p) => `ההזמנה שלך ל${p} מוכנה ומחכה לך! 📦`,
   delivered: (p) => `ההזמנה שלך ל${p} נמסרה — תהנה! ✅`,

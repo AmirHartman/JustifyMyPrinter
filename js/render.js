@@ -5,6 +5,7 @@ import { openOrderDialog } from "./orders.js";
 
 const STATUS_LABELS = {
   new:       "חדש",
+  approved:  "אושר - ממתין להדפסה",
   printing:  "בהדפסה",
   ready:     "מוכן",
   delivered: "נמסר",
