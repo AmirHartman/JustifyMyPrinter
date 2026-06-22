@@ -157,18 +157,50 @@ inboxBell?.addEventListener("click", (e) => {
   inboxDropdown.hidden = !inboxDropdown.hidden;
 });
 
-document.querySelector("#inbox-mark-read")?.addEventListener("click", async () => {
+async function markAllNotificationsRead() {
   try {
     await api("/api/notifications", { method: "PUT" });
     store.notifications.forEach((n) => { n.read = true; });
     render();
   } catch { /* ignore */ }
-});
+}
+
+document.querySelector("#inbox-mark-read")?.addEventListener("click", markAllNotificationsRead);
+document.querySelector("#ws-mark-read")?.addEventListener("click", markAllNotificationsRead);
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#inbox-wrap")) {
     if (inboxDropdown) inboxDropdown.hidden = true;
   }
+});
+
+// ── Personal workspace ────────────────────────────────────────
+document.querySelector("#ws-chat-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const textarea = e.target.elements.content;
+  const content  = textarea.value.trim();
+  if (!content) return;
+  const btn = e.target.querySelector("[type=submit]");
+  btn.disabled = true;
+  try {
+    const msg = await api("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+    store.messages.push(msg);
+    textarea.value = "";
+    render();
+    document.querySelector("#ws-chat-thread")?.scrollTo({ top: 99999, behavior: "smooth" });
+  } catch (err) {
+    alert(`שגיאה בשליחת הודעה: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Admin messages ────────────────────────────────────────────
+document.querySelector("#thread-back")?.addEventListener("click", () => {
+  document.querySelector("#admin-thread-panel")?.setAttribute("hidden", "");
 });
 
 // ── Order dialog ──────────────────────────────────────────────

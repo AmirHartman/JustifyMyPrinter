@@ -28,6 +28,8 @@ export function render() {
   renderStoreEdit();
   renderSummary();
   renderInbox();
+  renderWelcome();
+  renderAdminMessages();
 }
 
 // ── Catalog (friend view) ─────────────────────────────────────
@@ -603,6 +605,210 @@ async function updateUserStatus(userId, status, rejectionReason = "") {
   } catch (err) {
     alert(`שגיאה בעדכון משתמש: ${err.message}`);
   }
+}
+
+// ── Personal workspace (welcome.html) ────────────────────────
+
+function renderWelcome() {
+  if (!document.querySelector("#ws-open-orders")) return;
+
+  const nameEl = document.querySelector("#ws-user-name");
+  if (nameEl && store.currentUser) nameEl.textContent = store.currentUser.name;
+
+  const open = store.myOrders.filter((o) => !["delivered", "rejected"].includes(o.status));
+  const past = store.myOrders.filter((o) => ["delivered", "rejected"].includes(o.status));
+
+  const openCount = document.querySelector("#ws-open-count");
+  if (openCount) {
+    openCount.textContent = open.length || "";
+    openCount.hidden = open.length === 0;
+  }
+
+  renderWsOrderList(document.querySelector("#ws-open-orders"), open, "אין לך הזמנות פתוחות כרגע");
+  renderWsOrderList(document.querySelector("#ws-past-orders"), past, "אין לך הזמנות שהסתיימו עדיין");
+  renderWsNotifications();
+  renderWsChat();
+}
+
+function renderWsOrderList(container, orders, emptyMsg) {
+  if (!container) return;
+  container.replaceChildren();
+  if (orders.length === 0) {
+    const p = document.createElement("p");
+    p.className = "ws-empty";
+    p.textContent = emptyMsg;
+    container.append(p);
+    return;
+  }
+  orders.forEach((order) => {
+    const product = store.products.find((p) => p.id === order.productId);
+    const div = document.createElement("div");
+    div.className = "ws-order-card";
+    div.innerHTML = `
+      <div class="ws-order-info">
+        <span class="ws-order-product">${escapeHtml(product?.name ?? "מוצר")}</span>
+        <span class="ws-order-meta">כמות ${order.quantity} · ₪${order.price}</span>
+      </div>
+      <div class="ws-order-right">
+        <span class="ws-status-chip ws-status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] ?? order.status)}</span>
+        ${order.paid
+          ? '<span class="ws-paid-chip">שולם ✓</span>'
+          : '<span class="ws-unpaid-chip">ממתין לתשלום</span>'}
+      </div>
+    `;
+    container.append(div);
+  });
+}
+
+function renderWsNotifications() {
+  const list = document.querySelector("#ws-notif-list");
+  if (!list) return;
+  list.replaceChildren();
+  if (store.notifications.length === 0) {
+    const li = document.createElement("li");
+    li.className = "ws-notif-empty";
+    li.textContent = "אין עדכונים";
+    list.append(li);
+    return;
+  }
+  store.notifications.slice(0, 15).forEach((n) => {
+    const li = document.createElement("li");
+    li.className = `ws-notif-item${n.read ? "" : " unread"}`;
+    const msg = document.createElement("span");
+    msg.textContent = n.message;
+    const time = document.createElement("time");
+    time.textContent = new Date(n.createdAt).toLocaleDateString("he-IL");
+    li.append(msg, time);
+    list.append(li);
+  });
+}
+
+function renderWsChat() {
+  const thread = document.querySelector("#ws-chat-thread");
+  if (!thread) return;
+  thread.replaceChildren();
+  if (store.messages.length === 0) {
+    const p = document.createElement("p");
+    p.className = "ws-empty";
+    p.textContent = "עדיין אין הודעות — שלח משהו 👋";
+    thread.append(p);
+  } else {
+    store.messages.forEach((msg) => buildChatBubble(thread, msg.sender, msg.content, msg.createdAt));
+    thread.scrollTop = thread.scrollHeight;
+  }
+}
+
+function buildChatBubble(container, sender, content, createdAt) {
+  const isAdmin = sender === "admin";
+  const div = document.createElement("div");
+  div.className = `chat-bubble ${isAdmin ? "chat-bubble-admin" : "chat-bubble-user"}`;
+  const p = document.createElement("p");
+  p.textContent = content;
+  const time = document.createElement("time");
+  time.className = "chat-time";
+  time.textContent = new Date(createdAt).toLocaleString("he-IL", {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+  div.append(p, time);
+  container.append(div);
+}
+
+// ── Admin messages view ───────────────────────────────────────
+
+function renderAdminMessages() {
+  const convList = document.querySelector("#conversations-list");
+  if (!convList) return;
+
+  document.querySelector("#messages-empty")
+    ?.classList.toggle("is-visible", store.conversations.length === 0);
+
+  const unreadTotal = store.conversations.filter((c) => c.unreadCount > 0).length;
+  const badge = document.querySelector("#messages-badge");
+  if (badge) {
+    badge.textContent = unreadTotal || "";
+    badge.hidden = unreadTotal === 0;
+  }
+
+  convList.replaceChildren();
+  store.conversations.forEach((conv) => {
+    const card = document.createElement("div");
+    card.className = `conv-card${conv.unreadCount > 0 ? " conv-unread" : ""}`;
+    card.innerHTML = `
+      <div class="conv-info">
+        <strong class="conv-user">${escapeHtml(conv.userName)}</strong>
+        <span class="conv-preview">${escapeHtml(conv.latestMessage)}</span>
+      </div>
+      <div class="conv-meta">
+        ${conv.unreadCount > 0 ? `<span class="conv-badge">${conv.unreadCount}</span>` : ""}
+        <span class="conv-time">${new Date(conv.createdAt).toLocaleDateString("he-IL")}</span>
+      </div>
+    `;
+    card.addEventListener("click", () => openAdminConversation(conv.userName));
+    convList.append(card);
+  });
+}
+
+async function openAdminConversation(userName) {
+  const threadPanel = document.querySelector("#admin-thread-panel");
+  const threadEl    = document.querySelector("#admin-chat-thread");
+  const nameEl      = document.querySelector("#thread-user-name");
+  if (!threadPanel || !threadEl) return;
+
+  if (nameEl) nameEl.textContent = userName;
+  threadPanel.hidden = false;
+
+  try {
+    const messages = await api(`/api/messages?user=${encodeURIComponent(userName)}`);
+    const conv = store.conversations.find((c) => c.userName === userName);
+    if (conv) conv.unreadCount = 0;
+    renderAdminMessages();
+
+    store._activeThread = { userName, messages };
+    refreshAdminThread(threadEl, messages);
+
+    // Wire reply form fresh each time (clone removes old listeners)
+    const oldForm = document.querySelector("#admin-chat-form");
+    if (oldForm) {
+      const newForm = oldForm.cloneNode(true);
+      oldForm.parentNode.replaceChild(newForm, oldForm);
+      newForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const textarea = e.target.elements.content;
+        const content  = textarea.value.trim();
+        if (!content) return;
+        const btn = e.target.querySelector("[type=submit]");
+        btn.disabled = true;
+        try {
+          const msg = await api("/api/messages", {
+            method: "POST",
+            body: JSON.stringify({ content, userName }),
+          });
+          store._activeThread.messages.push(msg);
+          textarea.value = "";
+          refreshAdminThread(threadEl, store._activeThread.messages);
+        } catch (err) {
+          alert(`שגיאה: ${err.message}`);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+  } catch (err) {
+    alert(`שגיאה בטעינת השיחה: ${err.message}`);
+  }
+}
+
+function refreshAdminThread(container, messages) {
+  container.replaceChildren();
+  if (messages.length === 0) {
+    const p = document.createElement("p");
+    p.className = "ws-empty";
+    p.textContent = "עדיין אין הודעות בשיחה זו.";
+    container.append(p);
+    return;
+  }
+  messages.forEach((msg) => buildChatBubble(container, msg.sender, msg.content, msg.createdAt));
+  container.scrollTop = container.scrollHeight;
 }
 
 // ── Inbox / notifications ─────────────────────────────────────

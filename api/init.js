@@ -64,6 +64,18 @@ module.exports = async (req, res) => {
     `;
 
     await sql`
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        user_name TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        content TEXT NOT NULL,
+        read_by_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        read_by_user  BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+
+    await sql`
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
         user_name TEXT NOT NULL,

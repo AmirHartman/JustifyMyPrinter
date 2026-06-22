@@ -131,6 +131,10 @@
           <span class="tab-badge" id="new-orders-badge" hidden></span>
         </button>
         <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
+        <button class="tab admin-tab" data-view="messages">
+          הודעות
+          <span class="tab-badge" id="messages-badge" hidden></span>
+        </button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>
 
@@ -306,6 +310,31 @@
           </label>
           <button class="primary-button" type="submit">הוספת מוצר</button>
         </form>
+      </section>
+
+      <!-- ── Messages view ── -->
+      <section class="view" id="messages-view" aria-labelledby="messages-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="messages-title">הודעות</h2>
+            <p>שיחות אישיות עם חברים — שאלות, בקשות ופרויקטים.</p>
+          </div>
+        </div>
+        <div class="messages-layout" id="messages-layout">
+          <div class="conv-list" id="conversations-list"></div>
+          <div class="admin-thread-panel" id="admin-thread-panel" hidden>
+            <div class="thread-topbar">
+              <button class="ghost-button btn-sm" id="thread-back" type="button">← חזרה</button>
+              <strong id="thread-user-name"></strong>
+            </div>
+            <div class="ws-chat-thread" id="admin-chat-thread"></div>
+            <form class="ws-chat-form" id="admin-chat-form">
+              <textarea name="content" placeholder="כתוב תשובה..." rows="2" required></textarea>
+              <button class="primary-button btn-sm" type="submit">שלח</button>
+            </form>
+          </div>
+        </div>
+        <p class="empty-state" id="messages-empty">אין שיחות עדיין.</p>
       </section>
     </main>
 
