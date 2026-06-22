@@ -167,7 +167,6 @@ function renderUsersAdmin() {
   const pending  = store.users.filter((u) => u.status === "pending");
   const rejected = store.users.filter((u) => u.status === "rejected");
 
-  // Update both pending badges
   const count = pending.length;
   [document.querySelector("#pending-tab-badge"), document.querySelector("#pending-sub-badge")]
     .forEach((el) => { if (el) el.textContent = count || ""; });
@@ -182,11 +181,14 @@ function renderUsersAdmin() {
 
     activeList.forEach((user) => {
       const stats = getUserOrderStats(user.name);
-      const row   = document.createElement("tr");
 
+      // ── Display row ──────────────────────────────────────
+      const row = document.createElement("tr");
+      row.dataset.userId = user.id;
       row.innerHTML = `
         <td>
           ${escapeHtml(user.name)}
+          ${user.role === "admin" ? `<span class="status-badge status-approved">מנהל</span>` : ""}
           ${user.status === "rejected" ? `<span class="status-badge status-rejected">${USER_STATUS_LABELS.rejected}</span>` : ""}
         </td>
         <td>${escapeHtml(user.fullName ?? "")}</td>
@@ -195,7 +197,7 @@ function renderUsersAdmin() {
           <div class="pwd-cell-inner">
             <span class="pwd-dots">••••••</span>
             <span class="pwd-text" hidden>${escapeHtml(user.password ?? "")}</span>
-            <button class="ghost-button pwd-toggle" type="button">הצג</button>
+            <button class="ghost-button btn-sm pwd-toggle" type="button">הצג</button>
           </div>
         </td>
         <td class="stat-cell">${stats.count}</td>
@@ -203,19 +205,108 @@ function renderUsersAdmin() {
         <td class="stat-cell">${formatCurrency(stats.paid)}</td>
         <td class="stat-cell ${stats.debt > 0 ? "stat-negative" : "stat-muted"}">${formatCurrency(stats.debt)}</td>
         <td class="stat-cell ${stats.profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.profit)}</td>
+        <td class="actions-cell"></td>
       `;
 
+      // Password toggle
       const toggle = row.querySelector(".pwd-toggle");
       const dots   = row.querySelector(".pwd-dots");
       const text   = row.querySelector(".pwd-text");
-      toggle?.addEventListener("click", () => {
-        const showing = !text.hidden;
-        dots.hidden   = !showing;
-        text.hidden   = showing;
+      toggle.addEventListener("click", () => {
+        const showing  = !text.hidden;
+        dots.hidden    = !showing;
+        text.hidden    = showing;
         toggle.textContent = showing ? "הצג" : "הסתר";
       });
 
-      activeTable.append(row);
+      // Edit / Delete buttons
+      const actionsCell = row.querySelector(".actions-cell");
+      const editBtn = document.createElement("button");
+      editBtn.className   = "ghost-button btn-sm";
+      editBtn.type        = "button";
+      editBtn.textContent = "ערוך";
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+      deleteBtn.type        = "button";
+      deleteBtn.textContent = "מחק";
+      deleteBtn.addEventListener("click", () => deleteUser(user.id));
+
+      actionsCell.append(editBtn, " ", deleteBtn);
+
+      // ── Edit row (hidden by default) ──────────────────────
+      const editRow = document.createElement("tr");
+      editRow.className = "user-edit-row";
+      editRow.hidden    = true;
+
+      const ROLE_OPTIONS = `
+        <option value="friend">לקוח</option>
+        <option value="admin">מנהל</option>
+      `;
+      const STATUS_OPTIONS = `
+        <option value="approved">מאושר</option>
+        <option value="rejected">נדחה</option>
+      `;
+
+      const editCell = document.createElement("td");
+      editCell.colSpan = 10;
+      editCell.innerHTML = `
+        <form class="user-edit-form">
+          <div class="user-edit-fields">
+            <label>שם משתמש<input name="name" value="${escapeHtml(user.name)}" required /></label>
+            <label>שם מלא<input name="fullName" value="${escapeHtml(user.fullName ?? "")}" /></label>
+            <label>אימייל<input name="email" type="email" value="${escapeHtml(user.email ?? "")}" /></label>
+            <label>סיסמה<input name="password" value="${escapeHtml(user.password ?? "")}" /></label>
+            <label>תפקיד<select name="role">${ROLE_OPTIONS}</select></label>
+            <label>סטטוס<select name="status">${STATUS_OPTIONS}</select></label>
+          </div>
+          <div class="user-edit-actions">
+            <button class="primary-button btn-sm" type="submit">שמור</button>
+            <button class="ghost-button btn-sm" type="button" data-cancel>ביטול</button>
+          </div>
+        </form>
+      `;
+
+      // Set select values
+      editCell.querySelector("[name=role]").value   = user.role   ?? "friend";
+      editCell.querySelector("[name=status]").value = user.status ?? "approved";
+
+      const form = editCell.querySelector("form");
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        await saveUserEdit(user.id, {
+          name:     fd.get("name"),
+          fullName: fd.get("fullName"),
+          email:    fd.get("email"),
+          password: fd.get("password"),
+          role:     fd.get("role"),
+          status:   fd.get("status"),
+        });
+      });
+      editCell.querySelector("[data-cancel]").addEventListener("click", () => {
+        editRow.hidden = true;
+        editBtn.textContent = "ערוך";
+      });
+
+      editRow.append(editCell);
+
+      // Toggle edit row on edit button click
+      editBtn.addEventListener("click", () => {
+        const isOpen = !editRow.hidden;
+        // Close any other open edit rows first
+        activeTable.querySelectorAll(".user-edit-row").forEach((r) => { r.hidden = true; });
+        activeTable.querySelectorAll(".ghost-button[data-editing]").forEach((b) => {
+          b.textContent = "ערוך"; b.removeAttribute("data-editing");
+        });
+        if (!isOpen) {
+          editRow.hidden = false;
+          editBtn.textContent = "סגור";
+          editBtn.dataset.editing = "1";
+        }
+      });
+
+      activeTable.append(row, editRow);
     });
   }
 
@@ -239,18 +330,24 @@ function renderUsersAdmin() {
       const cell = row.querySelector(".actions-cell");
 
       const approveBtn = document.createElement("button");
-      approveBtn.className = "primary-button btn-sm";
-      approveBtn.type = "button";
+      approveBtn.className   = "primary-button btn-sm";
+      approveBtn.type        = "button";
       approveBtn.textContent = "אשר";
       approveBtn.addEventListener("click", () => updateUserStatus(user.id, "approved"));
 
       const rejectBtn = document.createElement("button");
-      rejectBtn.className = "ghost-button btn-sm";
-      rejectBtn.type = "button";
+      rejectBtn.className   = "ghost-button btn-sm";
+      rejectBtn.type        = "button";
       rejectBtn.textContent = "דחה";
       rejectBtn.addEventListener("click", () => promptReject(user.id));
 
-      cell.append(approveBtn, " ", rejectBtn);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+      deleteBtn.type        = "button";
+      deleteBtn.textContent = "מחק";
+      deleteBtn.addEventListener("click", () => deleteUser(user.id));
+
+      cell.append(approveBtn, " ", rejectBtn, " ", deleteBtn);
       pendingTable.append(row);
     });
   }
@@ -440,7 +537,34 @@ async function deleteProduct(productId) {
   }
 }
 
-// ── User status interactions ──────────────────────────────────
+// ── User interactions ─────────────────────────────────────────────
+
+async function saveUserEdit(userId, updates) {
+  try {
+    const updated = await api(`/api/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    });
+    const idx = store.users.findIndex((u) => u.id === userId);
+    if (idx !== -1) store.users[idx] = updated;
+    render();
+  } catch (err) {
+    alert(`שגיאה בשמירת פרטי משתמש: ${err.message}`);
+  }
+}
+
+async function deleteUser(userId) {
+  const user  = store.users.find((u) => u.id === userId);
+  const label = user ? `${user.name}${user.fullName ? ` (${user.fullName})` : ""}` : userId;
+  if (!window.confirm(`למחוק את המשתמש ${label}? פעולה זו אינה הפיכה.`)) return;
+  try {
+    await api(`/api/users/${userId}`, { method: "DELETE" });
+    store.users = store.users.filter((u) => u.id !== userId);
+    render();
+  } catch (err) {
+    alert(`שגיאה במחיקת משתמש: ${err.message}`);
+  }
+}
 
 async function promptReject(userId) {
   const reason = window.prompt("סיבת הדחייה (תוצג למשתמש):");
