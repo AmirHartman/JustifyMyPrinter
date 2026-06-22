@@ -140,8 +140,16 @@ function renderItemStats() {
 
     const imgCell = document.createElement("td");
     const thumb   = document.createElement("div");
-    thumb.className = "product-thumb";
-    renderProductImage(thumb, product);
+    thumb.className = "product-thumb items-thumb";
+    if (product.image) {
+      const img = document.createElement("img");
+      img.src             = product.image;
+      img.alt             = product.name;
+      img.loading         = "lazy";
+      img.referrerPolicy  = "no-referrer";
+      img.crossOrigin     = "anonymous";
+      thumb.append(img);
+    }
     imgCell.append(thumb);
     row.children[0].replaceWith(imgCell);
 
