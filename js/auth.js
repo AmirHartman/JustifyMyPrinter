@@ -62,7 +62,7 @@ export function applyAuth() {
 
   const userLabel = document.querySelector("#current-user");
   if (userLabel && store.currentUser) {
-    userLabel.textContent = `שלום ${store.currentUser.name}, איזה כיף שהגעת 😀`;
+    userLabel.innerHTML = `שלום <strong>${store.currentUser.name}</strong> 👋`;
   }
 
   const hero  = document.querySelector("#landing-store-button-hero");
