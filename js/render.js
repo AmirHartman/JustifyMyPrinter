@@ -2,6 +2,7 @@ import { store, loadData, findProduct } from "./state.js";
 import { formatCurrency, escapeHtml, calculateProductCost } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog } from "./orders.js";
+import { createWhatsAppLink, whatsappTemplates } from "./whatsapp.js";
 
 const STATUS_LABELS = {
   new:       "חדש",
@@ -28,9 +29,7 @@ export function render() {
   renderUsersAdmin();
   renderStoreEdit();
   renderSummary();
-  renderInbox();
   renderWelcome();
-  renderAdminMessages();
   renderFilaments();
   renderPricingForm();
 }
@@ -88,6 +87,10 @@ const PAST_STATUSES = new Set(["delivered", "rejected"]);
 
 function buildOrderRow(order) {
   const product = findProduct(order.productId);
+  const user = store.users.find((candidate) =>
+    candidate.id === order.userId || candidate.name === order.friendName);
+  const recipientName = user?.fullName || order.friendName;
+  const orderName = product?.name || order.requestDescription || "הבקשה שלך";
   const row = document.createElement("tr");
   row.innerHTML = `
     <td>${escapeHtml(order.friendName)}</td>
@@ -140,9 +143,46 @@ function buildOrderRow(order) {
   deleteBtn.setAttribute("aria-label", `מחק הזמנה של ${order.friendName}`);
   deleteBtn.addEventListener("click", () => deleteOrder(order.id));
 
+  const actions = document.createElement("div");
+  actions.className = "whatsapp-actions";
+  actions.append(createWhatsAppLink({
+    phone: user?.phone,
+    message: whatsappTemplates.status({
+      name: recipientName,
+      product: orderName,
+      status: order.status,
+    }),
+    label: "עדכון בוואטסאפ",
+    className: "btn-sm",
+  }));
+
+  const amount = Number(order.finalAmount ?? order.price);
+  if (Number.isFinite(amount) && amount > 0) {
+    actions.append(createWhatsAppLink({
+      phone: user?.phone,
+      message: whatsappTemplates.priceApproval({
+        name: recipientName,
+        product: orderName,
+        amount: amount.toFixed(2),
+      }),
+      label: "אישור מחיר",
+      className: "btn-sm",
+    }));
+  }
+
+  if (["ready", "ready_delivery"].includes(order.status)) {
+    actions.append(createWhatsAppLink({
+      phone: user?.phone,
+      message: whatsappTemplates.delivery({ name: recipientName }),
+      label: "תיאום מסירה",
+      className: "btn-sm",
+    }));
+  }
+  actions.append(deleteBtn);
+
   row.children[4].append(statusSelect);
   row.children[5].append(paidLabel);
-  row.children[6].append(deleteBtn);
+  row.children[6].append(actions);
   return row;
 }
 
@@ -277,8 +317,14 @@ function renderUsersAdmin() {
         <td class="actions-cell"></td>
       `;
 
-      // Edit / Delete buttons
+      // WhatsApp / edit / delete buttons
       const actionsCell = row.querySelector(".actions-cell");
+      const whatsappBtn = createWhatsAppLink({
+        phone: user.phone,
+        message: whatsappTemplates.general(user.fullName || user.name),
+        label: "וואטסאפ",
+        className: "btn-sm",
+      });
       const editBtn = document.createElement("button");
       editBtn.className   = "ghost-button btn-sm";
       editBtn.type        = "button";
@@ -290,7 +336,19 @@ function renderUsersAdmin() {
       deleteBtn.textContent = "מחק";
       deleteBtn.addEventListener("click", () => deleteUser(user.id));
 
-      actionsCell.append(editBtn, " ", deleteBtn);
+      actionsCell.append(whatsappBtn);
+      if (stats.debt > 0) {
+        actionsCell.append(createWhatsAppLink({
+          phone: user.phone,
+          message: whatsappTemplates.paymentSummary({
+            name: user.fullName || user.name,
+            amount: stats.debt.toFixed(2),
+          }),
+          label: "סיכום תשלום",
+          className: "btn-sm",
+        }));
+      }
+      actionsCell.append(editBtn, deleteBtn);
 
       // ── Edit row (hidden by default) ──────────────────────
       const editRow = document.createElement("tr");
@@ -395,6 +453,12 @@ function renderUsersAdmin() {
       `;
 
       const cell = row.querySelector(".actions-cell");
+      const whatsappBtn = createWhatsAppLink({
+        phone: user.phone,
+        message: whatsappTemplates.general(user.fullName || user.name),
+        label: "וואטסאפ",
+        className: "btn-sm",
+      });
 
       const approveBtn = document.createElement("button");
       approveBtn.className   = "primary-button btn-sm";
@@ -414,7 +478,7 @@ function renderUsersAdmin() {
       deleteBtn.textContent = "מחק";
       deleteBtn.addEventListener("click", () => deleteUser(user.id));
 
-      cell.append(approveBtn, " ", rejectBtn, " ", deleteBtn);
+      cell.append(whatsappBtn, approveBtn, rejectBtn, deleteBtn);
       pendingTable.append(row);
     });
   }
@@ -713,8 +777,19 @@ function renderWelcome() {
 
   renderWsOrderList(document.querySelector("#ws-open-orders"), open, "אין לך הזמנות פתוחות כרגע");
   renderWsOrderList(document.querySelector("#ws-past-orders"), past, "אין לך הזמנות שהסתיימו עדיין");
-  renderWsNotifications();
-  renderWsChat();
+
+  const whatsappContainer = document.querySelector("#ws-whatsapp-action");
+  if (whatsappContainer) {
+    const adminPhone = document.querySelector('meta[name="admin-whatsapp-phone"]')?.content ?? "";
+    const whatsappLink = createWhatsAppLink({
+      phone: adminPhone,
+      message: "היי אמיר, רציתי לדבר איתך על הדפסה 😊",
+      label: "פתיחת WhatsApp עם אמיר",
+    });
+    whatsappContainer.replaceChildren(whatsappLink);
+    const note = document.querySelector("#ws-whatsapp-note");
+    if (note) note.hidden = !whatsappLink.disabled;
+  }
 }
 
 function renderWsOrderList(container, orders, emptyMsg) {
@@ -745,157 +820,6 @@ function renderWsOrderList(container, orders, emptyMsg) {
     `;
     container.append(div);
   });
-}
-
-function renderWsNotifications() {
-  const list = document.querySelector("#ws-notif-list");
-  if (!list) return;
-  list.replaceChildren();
-  if (store.notifications.length === 0) {
-    const li = document.createElement("li");
-    li.className = "ws-notif-empty";
-    li.textContent = "אין עדכונים";
-    list.append(li);
-    return;
-  }
-  store.notifications.slice(0, 15).forEach((n) => {
-    const li = document.createElement("li");
-    li.className = `ws-notif-item${n.read ? "" : " unread"}`;
-    const msg = document.createElement("span");
-    msg.textContent = n.message;
-    const time = document.createElement("time");
-    time.textContent = new Date(n.createdAt).toLocaleDateString("he-IL");
-    li.append(msg, time);
-    list.append(li);
-  });
-}
-
-function renderWsChat() {
-  const thread = document.querySelector("#ws-chat-thread");
-  if (!thread) return;
-  thread.replaceChildren();
-  if (store.messages.length === 0) {
-    const p = document.createElement("p");
-    p.className = "ws-empty";
-    p.textContent = "עדיין אין הודעות — שלח משהו 👋";
-    thread.append(p);
-  } else {
-    store.messages.forEach((msg) => buildChatBubble(thread, msg.sender, msg.content, msg.createdAt));
-    thread.scrollTop = thread.scrollHeight;
-  }
-}
-
-function buildChatBubble(container, sender, content, createdAt) {
-  const isAdmin = sender === "admin";
-  const div = document.createElement("div");
-  div.className = `chat-bubble ${isAdmin ? "chat-bubble-admin" : "chat-bubble-user"}`;
-  const p = document.createElement("p");
-  p.textContent = content;
-  const time = document.createElement("time");
-  time.className = "chat-time";
-  time.textContent = new Date(createdAt).toLocaleString("he-IL", {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  });
-  div.append(p, time);
-  container.append(div);
-}
-
-// ── Admin messages view ───────────────────────────────────────
-
-function renderAdminMessages() {
-  const convList = document.querySelector("#conversations-list");
-  if (!convList) return;
-
-  document.querySelector("#messages-empty")
-    ?.classList.toggle("is-visible", store.conversations.length === 0);
-
-  const unreadTotal = store.conversations.filter((c) => c.unreadCount > 0).length;
-  const badge = document.querySelector("#messages-badge");
-  if (badge) {
-    badge.textContent = unreadTotal || "";
-    badge.hidden = unreadTotal === 0;
-  }
-
-  convList.replaceChildren();
-  store.conversations.forEach((conv) => {
-    const card = document.createElement("div");
-    card.className = `conv-card${conv.unreadCount > 0 ? " conv-unread" : ""}`;
-    card.innerHTML = `
-      <div class="conv-info">
-        <strong class="conv-user">${escapeHtml(conv.userName)}</strong>
-        <span class="conv-preview">${escapeHtml(conv.latestMessage)}</span>
-      </div>
-      <div class="conv-meta">
-        ${conv.unreadCount > 0 ? `<span class="conv-badge">${conv.unreadCount}</span>` : ""}
-        <span class="conv-time">${new Date(conv.createdAt).toLocaleDateString("he-IL")}</span>
-      </div>
-    `;
-    card.addEventListener("click", () => openAdminConversation(conv.userName));
-    convList.append(card);
-  });
-}
-
-async function openAdminConversation(userName) {
-  const threadPanel = document.querySelector("#admin-thread-panel");
-  const threadEl    = document.querySelector("#admin-chat-thread");
-  const nameEl      = document.querySelector("#thread-user-name");
-  if (!threadPanel || !threadEl) return;
-
-  if (nameEl) nameEl.textContent = userName;
-  threadPanel.hidden = false;
-
-  try {
-    const messages = await api(`/api/messages?user=${encodeURIComponent(userName)}`);
-    const conv = store.conversations.find((c) => c.userName === userName);
-    if (conv) conv.unreadCount = 0;
-    renderAdminMessages();
-
-    store._activeThread = { userName, messages };
-    refreshAdminThread(threadEl, messages);
-
-    // Wire reply form fresh each time (clone removes old listeners)
-    const oldForm = document.querySelector("#admin-chat-form");
-    if (oldForm) {
-      const newForm = oldForm.cloneNode(true);
-      oldForm.parentNode.replaceChild(newForm, oldForm);
-      newForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const textarea = e.target.elements.content;
-        const content  = textarea.value.trim();
-        if (!content) return;
-        const btn = e.target.querySelector("[type=submit]");
-        btn.disabled = true;
-        try {
-          const msg = await api("/api/messages", {
-            method: "POST",
-            body: JSON.stringify({ content, userName }),
-          });
-          store._activeThread.messages.push(msg);
-          textarea.value = "";
-          refreshAdminThread(threadEl, store._activeThread.messages);
-        } catch (err) {
-          alert(`שגיאה: ${err.message}`);
-        } finally {
-          btn.disabled = false;
-        }
-      });
-    }
-  } catch (err) {
-    alert(`שגיאה בטעינת השיחה: ${err.message}`);
-  }
-}
-
-function refreshAdminThread(container, messages) {
-  container.replaceChildren();
-  if (messages.length === 0) {
-    const p = document.createElement("p");
-    p.className = "ws-empty";
-    p.textContent = "עדיין אין הודעות בשיחה זו.";
-    container.append(p);
-    return;
-  }
-  messages.forEach((msg) => buildChatBubble(container, msg.sender, msg.content, msg.createdAt));
-  container.scrollTop = container.scrollHeight;
 }
 
 // ── Filaments (admin view) ────────────────────────────────────
@@ -976,42 +900,5 @@ function renderPricingForm() {
     if (form.elements[`${p}_wearPerHour`])  form.elements[`${p}_wearPerHour`].value  = prof.wearPerHour  ?? "";
     if (form.elements[`${p}_fixedWear`])    form.elements[`${p}_fixedWear`].value    = prof.fixedWear    ?? "";
     if (form.elements[`${p}_riskPercent`])  form.elements[`${p}_riskPercent`].value  = prof.riskPercent  ?? "";
-  });
-}
-
-// ── Inbox / notifications ─────────────────────────────────────
-
-function renderInbox() {
-  const unread = store.notifications.filter((n) => !n.read).length;
-
-  const badge = document.querySelector("#inbox-badge");
-  if (badge) {
-    badge.textContent = unread || "";
-    badge.hidden = unread === 0;
-  }
-
-  const list = document.querySelector("#inbox-list");
-  if (!list) return;
-  list.replaceChildren();
-
-  if (store.notifications.length === 0) {
-    const li = document.createElement("li");
-    li.className = "inbox-empty";
-    li.textContent = "אין עדכונים להצגה";
-    list.append(li);
-    return;
-  }
-
-  store.notifications.forEach((notif) => {
-    const li = document.createElement("li");
-    li.className = `inbox-item${notif.read ? "" : " unread"}`;
-    const msg = document.createElement("span");
-    msg.className = "inbox-msg";
-    msg.textContent = notif.message;
-    const time = document.createElement("span");
-    time.className = "inbox-time";
-    time.textContent = new Date(notif.createdAt).toLocaleDateString("he-IL");
-    li.append(msg, time);
-    list.append(li);
   });
 }

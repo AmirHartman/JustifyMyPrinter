@@ -55,7 +55,7 @@
           <form class="auth-form" id="register-form" data-auth-form="register">
             <div>
               <h2>מצטרפים לחבורה</h2>
-              <p>הגשת בקשה תשלח לאישור המנהל. תקבל עדכון במייל.</p>
+              <p>הגשת הבקשה תועבר לאישור המנהל. התיאום נעשה ב־WhatsApp.</p>
             </div>
             <label>
               שם משתמש
@@ -67,7 +67,7 @@
             </label>
             <label>
               אימייל
-              <input name="email" type="email" required autocomplete="email" placeholder="לשם קבלת עדכון אישור" />
+              <input name="email" type="email" required autocomplete="email" placeholder="כתובת אימייל" />
             </label>
             <label>
               טלפון
@@ -107,18 +107,6 @@
       <div class="topbar-actions">
         <div class="user-bar" aria-label="משתמש מחובר">
           <span id="current-user"></span>
-          <div class="inbox-wrap" id="inbox-wrap">
-            <button class="ghost-button inbox-bell" id="inbox-bell" type="button" aria-label="עדכונים">
-              🔔<span class="inbox-badge" id="inbox-badge" hidden></span>
-            </button>
-            <div class="inbox-dropdown" id="inbox-dropdown" hidden>
-              <div class="inbox-header">
-                <strong>עדכונים</strong>
-                <button class="ghost-button btn-sm" id="inbox-mark-read" type="button">סמן הכל כנקרא</button>
-              </div>
-              <ul class="inbox-list" id="inbox-list"></ul>
-            </div>
-          </div>
           <button class="ghost-button" id="logout-button" type="button">יציאה</button>
         </div>
         <div class="summary-strip admin-only" aria-label="סיכום מערכת">
@@ -148,10 +136,6 @@
         </button>
         <button class="tab admin-tab" data-view="filaments">חומרים וצבעים</button>
         <button class="tab admin-tab" data-view="pricing">הגדרות תמחור</button>
-        <button class="tab admin-tab" data-view="messages">
-          הודעות
-          <span class="tab-badge" id="messages-badge" hidden></span>
-        </button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>
 
@@ -499,30 +483,6 @@
         </form>
       </section>
 
-      <!-- ── Messages view ── -->
-      <section class="view" id="messages-view" aria-labelledby="messages-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="messages-title">הודעות</h2>
-            <p>שיחות אישיות עם חברים — שאלות, בקשות ופרויקטים.</p>
-          </div>
-        </div>
-        <div class="messages-layout" id="messages-layout">
-          <div class="conv-list" id="conversations-list"></div>
-          <div class="admin-thread-panel" id="admin-thread-panel" hidden>
-            <div class="thread-topbar">
-              <button class="ghost-button btn-sm" id="thread-back" type="button">← חזרה</button>
-              <strong id="thread-user-name"></strong>
-            </div>
-            <div class="ws-chat-thread" id="admin-chat-thread"></div>
-            <form class="ws-chat-form" id="admin-chat-form">
-              <textarea name="content" placeholder="כתוב תשובה..." rows="2" required></textarea>
-              <button class="primary-button btn-sm" type="submit">שלח</button>
-            </form>
-          </div>
-        </div>
-        <p class="empty-state" id="messages-empty">אין שיחות עדיין.</p>
-      </section>
     </main>
 
     <script type="module" src="js/app.js"></script>

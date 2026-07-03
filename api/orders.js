@@ -127,7 +127,6 @@ module.exports = async (req, res) => {
       if (!admin) return;
       try {
         const sql = getSql();
-        await sql`DELETE FROM notifications WHERE order_id = ${id}`;
         const rows = await sql`DELETE FROM orders WHERE id = ${id} RETURNING id`;
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
         return res.json({ ok: true });
