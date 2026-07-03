@@ -68,13 +68,84 @@ module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   const id = String(req.query.id ?? '').trim();
   const mine = req.query.mine === 'true';
+  const action = String(req.query.action ?? '');
+
+  if (action === 'mark-paid') {
+    if (req.method !== 'PUT') return res.status(405).end();
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    try {
+      const body = await parseBody(req);
+      const orderIds = Array.isArray(body.orderIds) ? body.orderIds.map(String).filter(Boolean) : [];
+      if (orderIds.length === 0) return res.status(400).json({ error: 'orderIds is required' });
+      const paid = body.paid === undefined ? true : Boolean(body.paid);
+      const sql = getSql();
+      const result = await sql.query(
+        `UPDATE orders SET paid = $1, updated_at = NOW() WHERE id = ANY($2) RETURNING ${SELECT_COLUMNS}`,
+        [paid, orderIds]
+      );
+      return res.json({ ok: true, orders: (result.rows ?? result).map(normalizeRow) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
 
   if (id) {
     if (req.method === 'PUT') {
+      const body = await parseBody(req);
+
+      if (body.action === 'cancel' || body.action === 'approve-price') {
+        const user = await requireAuth(req, res);
+        if (!user) return;
+        try {
+          const sql = getSql();
+          const rows = await sql`
+            SELECT user_id, friend_name, status, requires_user_price_approval
+            FROM orders WHERE id = ${id}
+          `;
+          const order = rows[0];
+          if (!order) return res.status(404).json({ error: 'Not found' });
+          const owns = user.role === 'admin'
+            || order.user_id === user.id
+            || (order.user_id == null && order.friend_name === user.name);
+          if (!owns) return res.status(403).json({ error: 'Forbidden' });
+          const currentStatus = normalizeOrderStatus(order.status);
+
+          if (body.action === 'cancel') {
+            if (!['new', 'waiting_approval', 'waiting_print'].includes(currentStatus)) {
+              return res.status(400).json({ error: 'לא ניתן לבטל הזמנה שכבר בהדפסה או שהסתיימה' });
+            }
+            const reason = String(body.cancellationReason ?? '').trim();
+            if (!reason) return res.status(400).json({ error: 'Cancellation reason is required' });
+            const updated = await sql`
+              UPDATE orders SET status = 'cancelled', cancellation_reason = ${reason}, updated_at = NOW()
+              WHERE id = ${id}
+              RETURNING ${sql.unsafe(SELECT_COLUMNS)}
+            `;
+            return res.json(normalizeRow(updated[0]));
+          }
+
+          // approve-price
+          if (currentStatus !== 'waiting_approval' || !order.requires_user_price_approval) {
+            return res.status(400).json({ error: 'הזמנה זו אינה ממתינה לאישור מחיר' });
+          }
+          const updated = await sql`
+            UPDATE orders SET
+              user_approved_price = TRUE,
+              status = 'waiting_print',
+              updated_at = NOW()
+            WHERE id = ${id}
+            RETURNING ${sql.unsafe(SELECT_COLUMNS)}
+          `;
+          return res.json(normalizeRow(updated[0]));
+        } catch (err) {
+          return res.status(500).json({ error: err.message });
+        }
+      }
+
       const admin = await requireAdmin(req, res);
       if (!admin) return;
       try {
-        const body = await parseBody(req);
         const sql = getSql();
         const status = body.status === undefined ? null : canonicalStatus(body.status);
         if (body.status !== undefined && !status) {

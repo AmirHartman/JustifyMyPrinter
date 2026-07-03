@@ -46,3 +46,14 @@ export function getOrderFriendName(data) {
     ? store.currentUser.name
     : String(data.get("friendName") ?? "").trim();
 }
+
+// ── External-link / custom order dialog ────────────────────────
+
+const customOrderDialog = document.querySelector("#custom-order-dialog");
+const customOrderForm   = document.querySelector("#custom-order-form");
+
+export function openCustomOrderDialog() {
+  if (!customOrderForm || !customOrderDialog) return;
+  customOrderForm.reset();
+  customOrderDialog.showModal();
+}

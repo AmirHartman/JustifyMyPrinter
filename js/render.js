@@ -2,15 +2,20 @@ import { store, loadData, findProduct } from "./state.js";
 import { formatCurrency, escapeHtml, calculateProductCost } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog } from "./orders.js";
-import { createWhatsAppLink, whatsappTemplates } from "./whatsapp.js";
+import { createWhatsAppLink, whatsappTemplates, STATUS_LABELS } from "./whatsapp.js";
 
-const STATUS_LABELS = {
-  new:       "חדש",
-  approved:  "אושר - ממתין להדפסה",
-  printing:  "בהדפסה",
-  ready:     "מוכן",
-  delivered: "נמסר",
-  rejected:  "נדחה",
+// Canonical order, used to build status <select> options (STATUS_LABELS also
+// carries legacy keys as a display fallback, which must not appear as choices).
+const ORDER_STATUS_SEQUENCE = [
+  "new", "waiting_approval", "waiting_print", "printing",
+  "ready_delivery", "completed", "cancelled",
+];
+
+const ORDER_TYPE_LABELS = {
+  catalog: "מהקטלוג",
+  external_link: "קישור חיצוני",
+  custom: "בקשה מיוחדת",
+  future_upload: "העלאת קובץ",
 };
 
 const USER_STATUS_LABELS = {
@@ -83,7 +88,7 @@ function renderCatalog() {
 
 // ── Orders table (admin view) ─────────────────────────────────
 
-const PAST_STATUSES = new Set(["delivered", "rejected"]);
+const PAST_STATUSES = new Set(["completed", "cancelled"]);
 
 function buildOrderRow(order) {
   const product = findProduct(order.productId);
@@ -91,34 +96,53 @@ function buildOrderRow(order) {
     candidate.id === order.userId || candidate.name === order.friendName);
   const recipientName = user?.fullName || order.friendName;
   const orderName = product?.name || order.requestDescription || "הבקשה שלך";
+  const amount = Number(order.finalAmount ?? order.price);
   const row = document.createElement("tr");
   row.innerHTML = `
     <td>${escapeHtml(order.friendName)}</td>
-    <td>${escapeHtml(product?.name ?? "מוצר שנמחק")}</td>
+    <td>${escapeHtml(product?.name ?? (order.requestDescription ? order.requestDescription : "בקשה מיוחדת"))}
+      ${order.orderType && order.orderType !== "catalog"
+        ? `<span class="status-badge status-pending">${escapeHtml(ORDER_TYPE_LABELS[order.orderType] ?? order.orderType)}</span>`
+        : ""}
+    </td>
     <td>${order.quantity}</td>
-    <td>${formatCurrency(order.price)}</td>
+    <td>${formatCurrency(amount)}</td>
     <td></td>
     <td></td>
     <td></td>
   `;
 
   const statusSelect = document.createElement("select");
-  Object.entries(STATUS_LABELS).forEach(([value, label]) => {
+  ORDER_STATUS_SEQUENCE.forEach((value) => {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = label;
+    option.textContent = STATUS_LABELS[value] ?? value;
     option.selected = order.status === value;
     statusSelect.append(option);
   });
   statusSelect.addEventListener("change", async () => {
-    order.status = statusSelect.value;
+    const previous = order.status;
+    const next = statusSelect.value;
+    let cancellationReason;
+    if (next === "cancelled") {
+      const reason = window.prompt("סיבת הביטול (תוצג ללקוח):");
+      if (reason === null || !reason.trim()) { statusSelect.value = previous; return; }
+      cancellationReason = reason.trim();
+    }
+    order.status = next;
     render();
     try {
-      await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+      const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
         method: "PUT",
-        body: JSON.stringify({ status: order.status }),
+        body: JSON.stringify({ status: next, cancellationReason }),
       });
-    } catch { /* status already updated locally */ }
+      Object.assign(order, updated);
+      render();
+    } catch (err) {
+      order.status = previous;
+      render();
+      alert(`שגיאה בעדכון סטטוס: ${err.message}`);
+    }
   });
 
   const paidLabel = document.createElement("label");
@@ -135,6 +159,11 @@ function buildOrderRow(order) {
     } catch { /* paid already updated locally */ }
   });
 
+  const detailsBtn = document.createElement("button");
+  detailsBtn.className   = "ghost-button btn-sm";
+  detailsBtn.type        = "button";
+  detailsBtn.textContent = "פרטים ומחיר";
+
   const deleteBtn = document.createElement("button");
   deleteBtn.className   = "ghost-button btn-sm user-delete-btn order-delete-btn";
   deleteBtn.type        = "button";
@@ -145,6 +174,7 @@ function buildOrderRow(order) {
 
   const actions = document.createElement("div");
   actions.className = "whatsapp-actions";
+  actions.append(detailsBtn);
   actions.append(createWhatsAppLink({
     phone: user?.phone,
     message: whatsappTemplates.status({
@@ -156,7 +186,6 @@ function buildOrderRow(order) {
     className: "btn-sm",
   }));
 
-  const amount = Number(order.finalAmount ?? order.price);
   if (Number.isFinite(amount) && amount > 0) {
     actions.append(createWhatsAppLink({
       phone: user?.phone,
@@ -170,7 +199,7 @@ function buildOrderRow(order) {
     }));
   }
 
-  if (["ready", "ready_delivery"].includes(order.status)) {
+  if (order.status === "ready_delivery") {
     actions.append(createWhatsAppLink({
       phone: user?.phone,
       message: whatsappTemplates.delivery({ name: recipientName }),
@@ -183,7 +212,71 @@ function buildOrderRow(order) {
   row.children[4].append(statusSelect);
   row.children[5].append(paidLabel);
   row.children[6].append(actions);
-  return row;
+
+  const detailRow = buildOrderDetailRow(order);
+  detailsBtn.addEventListener("click", () => {
+    detailRow.hidden = !detailRow.hidden;
+    detailsBtn.textContent = detailRow.hidden ? "פרטים ומחיר" : "סגירה";
+  });
+
+  return [row, detailRow];
+}
+
+function buildOrderDetailRow(order) {
+  const detailRow = document.createElement("tr");
+  detailRow.className = "user-edit-row";
+  detailRow.hidden = true;
+
+  const cell = document.createElement("td");
+  cell.colSpan = 7;
+
+  const readOnlyBits = [];
+  if (order.requestDescription) readOnlyBits.push(`<div><strong>בקשה:</strong> ${escapeHtml(order.requestDescription)}</div>`);
+  if (order.externalModelLink) readOnlyBits.push(`<div><strong>קישור:</strong> <a href="${escapeHtml(order.externalModelLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(order.externalModelLink)}</a></div>`);
+  if (order.selectedColors?.length) readOnlyBits.push(`<div><strong>צבעים:</strong> ${escapeHtml(order.selectedColors.join(", "))}</div>`);
+  if (order.userNotes) readOnlyBits.push(`<div><strong>הערות לקוח:</strong> ${escapeHtml(order.userNotes)}</div>`);
+  if (order.cancellationReason) readOnlyBits.push(`<div><strong>סיבת ביטול:</strong> ${escapeHtml(order.cancellationReason)}</div>`);
+
+  cell.innerHTML = `
+    ${readOnlyBits.length ? `<div class="order-detail-readonly">${readOnlyBits.join("")}</div>` : ""}
+    <form class="user-edit-form order-price-form">
+      <div class="user-edit-fields">
+        <label>עלות בסיס (₪)<input name="baseCost" type="number" min="0" step="0.01" value="${order.baseCost ?? ""}" /></label>
+        <label>תוספת תמיכה (₪)<input name="supportAmount" type="number" min="0" step="0.01" value="${order.supportAmount ?? 0}" /></label>
+        <label>סכום סופי (₪)<input name="finalAmount" type="number" min="0" step="0.01" value="${order.finalAmount ?? ""}" /></label>
+        <label class="checkbox-label"><input name="requiresUserPriceApproval" type="checkbox" style="width:auto" ${order.requiresUserPriceApproval ? "checked" : ""} /> נדרש אישור מחיר מהלקוח</label>
+        <label>הערות מנהל (פנימי)<textarea name="adminNotes" rows="2">${escapeHtml(order.adminNotes ?? "")}</textarea></label>
+      </div>
+      <div class="user-edit-actions">
+        <button class="primary-button btn-sm" type="submit">שמירה</button>
+      </div>
+    </form>
+  `;
+
+  cell.querySelector("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const payload = {
+      baseCost: fd.get("baseCost") === "" ? null : Number(fd.get("baseCost")),
+      supportAmount: Number(fd.get("supportAmount")) || 0,
+      finalAmount: fd.get("finalAmount") === "" ? null : Number(fd.get("finalAmount")),
+      adminNotes: String(fd.get("adminNotes") ?? "").trim(),
+      requiresUserPriceApproval: fd.get("requiresUserPriceApproval") !== null,
+    };
+    try {
+      const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      Object.assign(order, updated);
+      render();
+    } catch (err) {
+      alert(`שגיאה בשמירת פרטי הזמנה: ${err.message}`);
+    }
+  });
+
+  detailRow.append(cell);
+  return detailRow;
 }
 
 function renderOrders() {
@@ -205,13 +298,13 @@ function renderOrders() {
   ordersTable.replaceChildren();
   document.querySelector("#orders-empty")
     ?.classList.toggle("is-visible", openOrders.length === 0);
-  openOrders.forEach((order) => ordersTable.append(buildOrderRow(order)));
+  openOrders.forEach((order) => ordersTable.append(...buildOrderRow(order)));
 
   if (pastOrdersTable) {
     pastOrdersTable.replaceChildren();
     document.querySelector("#past-orders-empty")
       ?.classList.toggle("is-visible", pastOrders.length === 0);
-    pastOrders.forEach((order) => pastOrdersTable.append(buildOrderRow(order)));
+    pastOrders.forEach((order) => pastOrdersTable.append(...buildOrderRow(order)));
   }
 }
 
@@ -227,7 +320,7 @@ function renderItemStats() {
 
   store.products.forEach((product) => {
     const orders    = store.orders.filter((o) => o.productId === product.id);
-    const completed = orders.filter((o) => o.status === "delivered").length;
+    const completed = orders.filter((o) => o.status === "completed").length;
     const revenue   = orders.reduce((s, o) => s + o.price, 0);
     const cogs      = orders.reduce((s, o) => s + Number(product.cost) * o.quantity, 0);
     const profit    = revenue - cogs;
@@ -347,6 +440,12 @@ function renderUsersAdmin() {
           label: "סיכום תשלום",
           className: "btn-sm",
         }));
+        const markPaidBtn = document.createElement("button");
+        markPaidBtn.className   = "ghost-button btn-sm";
+        markPaidBtn.type        = "button";
+        markPaidBtn.textContent = "סמן הכל כשולם";
+        markPaidBtn.addEventListener("click", () => markUserOrdersPaid(user.name));
+        actionsCell.append(markPaidBtn);
       }
       actionsCell.append(editBtn, deleteBtn);
 
@@ -706,6 +805,25 @@ async function deleteOrder(orderId) {
   }
 }
 
+async function markUserOrdersPaid(friendName) {
+  const orderIds = store.orders.filter((o) => o.friendName === friendName && !o.paid).map((o) => o.id);
+  if (orderIds.length === 0) return;
+  if (!window.confirm(`לסמן ${orderIds.length} הזמנות של ${friendName} כשולמו?`)) return;
+  try {
+    const { orders: updated } = await api(`/api/orders?action=mark-paid`, {
+      method: "PUT",
+      body: JSON.stringify({ orderIds, paid: true }),
+    });
+    updated.forEach((u) => {
+      const order = store.orders.find((o) => o.id === u.id);
+      if (order) Object.assign(order, u);
+    });
+    render();
+  } catch (err) {
+    alert(`שגיאה בסימון הזמנות כשולמו: ${err.message}`);
+  }
+}
+
 // ── User interactions ─────────────────────────────────────────────
 
 async function saveUserEdit(userId, updates) {
@@ -766,8 +884,8 @@ function renderWelcome() {
   const pendingBanner = document.querySelector("#ws-pending-banner");
   if (pendingBanner) pendingBanner.hidden = store.currentUser?.status !== "pending";
 
-  const open = store.myOrders.filter((o) => !["delivered", "rejected"].includes(o.status));
-  const past = store.myOrders.filter((o) => ["delivered", "rejected"].includes(o.status));
+  const open = store.myOrders.filter((o) => !["completed", "cancelled"].includes(o.status));
+  const past = store.myOrders.filter((o) => ["completed", "cancelled"].includes(o.status));
 
   const openCount = document.querySelector("#ws-open-count");
   if (openCount) {
@@ -804,22 +922,75 @@ function renderWsOrderList(container, orders, emptyMsg) {
   }
   orders.forEach((order) => {
     const product = store.products.find((p) => p.id === order.productId);
+    const title = product?.name ?? order.requestDescription ?? "בקשה מיוחדת";
     const div = document.createElement("div");
     div.className = "ws-order-card";
     div.innerHTML = `
       <div class="ws-order-info">
-        <span class="ws-order-product">${escapeHtml(product?.name ?? "מוצר")}</span>
-        <span class="ws-order-meta">כמות ${order.quantity} · ₪${order.price}</span>
+        <span class="ws-order-product">${escapeHtml(title)}</span>
+        <span class="ws-order-meta">כמות ${order.quantity} · ₪${order.finalAmount ?? order.price}</span>
+        ${order.adminNotes ? `<span class="ws-order-meta">הערת אמיר: ${escapeHtml(order.adminNotes)}</span>` : ""}
+        ${order.cancellationReason ? `<span class="ws-order-meta">סיבת ביטול: ${escapeHtml(order.cancellationReason)}</span>` : ""}
       </div>
       <div class="ws-order-right">
         <span class="ws-status-chip ws-status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] ?? order.status)}</span>
         ${order.paid
           ? '<span class="ws-paid-chip">שולם ✓</span>'
           : '<span class="ws-unpaid-chip">ממתין לתשלום</span>'}
+        <div class="ws-order-actions"></div>
       </div>
     `;
+
+    const actions = div.querySelector(".ws-order-actions");
+    if (order.status === "waiting_approval" && order.requiresUserPriceApproval && !order.userApprovedPrice) {
+      const approveBtn = document.createElement("button");
+      approveBtn.className   = "primary-button btn-sm";
+      approveBtn.type        = "button";
+      approveBtn.textContent = "אשר מחיר";
+      approveBtn.addEventListener("click", () => approveOrderPrice(order.id));
+      actions.append(approveBtn);
+    }
+    if (["new", "waiting_approval", "waiting_print"].includes(order.status)) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className   = "ghost-button btn-sm";
+      cancelBtn.type        = "button";
+      cancelBtn.textContent = "ביטול הזמנה";
+      cancelBtn.addEventListener("click", () => cancelOwnOrder(order.id));
+      actions.append(cancelBtn);
+    }
+
     container.append(div);
   });
+}
+
+async function approveOrderPrice(orderId) {
+  try {
+    const updated = await api(`/api/orders?id=${encodeURIComponent(orderId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ action: "approve-price" }),
+    });
+    const idx = store.myOrders.findIndex((o) => o.id === orderId);
+    if (idx !== -1) store.myOrders[idx] = updated;
+    render();
+  } catch (err) {
+    alert(`שגיאה באישור מחיר: ${err.message}`);
+  }
+}
+
+async function cancelOwnOrder(orderId) {
+  const reason = window.prompt("סיבת הביטול:");
+  if (reason === null || !reason.trim()) return;
+  try {
+    const updated = await api(`/api/orders?id=${encodeURIComponent(orderId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ action: "cancel", cancellationReason: reason.trim() }),
+    });
+    const idx = store.myOrders.findIndex((o) => o.id === orderId);
+    if (idx !== -1) store.myOrders[idx] = updated;
+    render();
+  } catch (err) {
+    alert(`שגיאה בביטול הזמנה: ${err.message}`);
+  }
 }
 
 // ── Filaments (admin view) ────────────────────────────────────

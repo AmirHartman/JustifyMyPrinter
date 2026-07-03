@@ -40,6 +40,7 @@
         <div class="catalog-note">
           <strong>יש רעיון שלא מופיע כאן?</strong>
           <span>תזמינו משהו קרוב או דברו איתי. חצי מהכיף הוא למצוא פתרונות מוזרים לדברים קטנים.</span>
+          <button class="ghost-button btn-sm" id="custom-order-button" type="button">בקשת הדפסה מיוחדת</button>
         </div>
       </section>
 
@@ -68,6 +69,41 @@
         <menu>
           <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
           <button class="primary-button" id="submit-order" type="submit">יצירת הזמנה</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="custom-order-dialog">
+      <form method="dialog" class="order-form" id="custom-order-form">
+        <button class="icon-button close-button" type="button" data-close-custom-order aria-label="סגירה">×</button>
+        <h2>בקשת הדפסה מיוחדת</h2>
+        <p>קישור למודל חיצוני או תיאור בקשה חופשית. אני אבדוק, אעריך מחיר, ותקבלו אותו לאישור לפני שמתחילים להדפיס.</p>
+        <label>
+          קישור למודל (לא חובה)
+          <input name="externalModelLink" type="url" placeholder="https://www.thingiverse.com/thing:..." />
+        </label>
+        <label>
+          תיאור הבקשה
+          <textarea name="requestDescription" required rows="3" placeholder="מה תרצו שאדפיס?"></textarea>
+        </label>
+        <label>
+          הערות נוספות (לא חובה)
+          <textarea name="userNotes" rows="2" placeholder="צבע, גודל, כל דבר שיעזור לי"></textarea>
+        </label>
+        <div class="form-row">
+          <label>
+            צבע מבוקש (לא חובה)
+            <input name="selectedColor" placeholder="למשל: שחור" />
+          </label>
+          <label>
+            כמות
+            <input name="quantity" required type="number" min="1" value="1" />
+          </label>
+        </div>
+        <p class="form-error" id="custom-order-error"></p>
+        <menu>
+          <button class="ghost-button" type="button" data-close-custom-order>ביטול</button>
+          <button class="primary-button" type="submit">שליחת בקשה</button>
         </menu>
       </form>
     </dialog>

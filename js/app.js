@@ -1,7 +1,7 @@
 import { api } from "./api.js";
 import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
-import { openOrderDialog, updateOrderMinimum, getOrderFriendName } from "./orders.js";
+import { openOrderDialog, updateOrderMinimum, getOrderFriendName, openCustomOrderDialog } from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
 import { formatCurrency, createAiProductDraft, calculateProductCost } from "./utils.js";
 
@@ -183,6 +183,49 @@ orderForm?.addEventListener("submit", async (event) => {
     setView(store.appMode === "admin" ? "orders" : "catalog");
   } catch (err) {
     alert(`שגיאה ביצירת הזמנה: ${err.message}`);
+  }
+});
+
+// ── Custom / external-link order dialog ────────────────────────
+const customOrderDialog = document.querySelector("#custom-order-dialog");
+const customOrderForm   = document.querySelector("#custom-order-form");
+const customOrderError  = document.querySelector("#custom-order-error");
+
+document.querySelector("#custom-order-button")?.addEventListener("click", () => {
+  if (!store.currentUser) { window.location.href = "dashboard.html"; return; }
+  const eligible = store.currentUser.role === "admin" || store.currentUser.status === "active";
+  if (!eligible) { alert("רק חברים פעילים יכולים להזמין. מחכים לאישור המנהל."); return; }
+  openCustomOrderDialog();
+});
+
+document.querySelectorAll("[data-close-custom-order]").forEach((btn) => {
+  btn.addEventListener("click", () => customOrderDialog?.close());
+});
+
+customOrderForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(customOrderForm);
+  const color = String(data.get("selectedColor") ?? "").trim();
+
+  customOrderError.classList.remove("is-visible");
+  try {
+    const order = await api("/api/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        orderType: "external_link",
+        externalModelLink: String(data.get("externalModelLink") ?? "").trim(),
+        requestDescription: String(data.get("requestDescription") ?? "").trim(),
+        userNotes: String(data.get("userNotes") ?? "").trim(),
+        selectedColors: color ? [color] : [],
+        quantity: Number(data.get("quantity")) || 1,
+      }),
+    });
+    store.myOrders.unshift(order);
+    customOrderDialog.close();
+    window.location.href = "welcome.html";
+  } catch (err) {
+    customOrderError.textContent = err.message;
+    customOrderError.classList.add("is-visible");
   }
 });
 

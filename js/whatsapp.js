@@ -1,14 +1,15 @@
-const STATUS_LABELS = {
-  new: "חדש",
-  waiting_approval: "ממתין לאישור מחיר",
+export const STATUS_LABELS = {
+  new: "הזמנה חדשה",
+  waiting_approval: "ממתין לאישור",
   waiting_print: "ממתין להדפסה",
-  approved: "ממתין להדפסה",
   printing: "בהדפסה",
   ready_delivery: "מוכן למסירה",
-  ready: "מוכן למסירה",
-  completed: "הושלם",
-  delivered: "הושלם",
+  completed: "הסתיים",
   cancelled: "בוטל",
+  // Legacy values, kept in case old rows ever reach the client unnormalized.
+  approved: "ממתין להדפסה",
+  ready: "מוכן למסירה",
+  delivered: "הסתיים",
   rejected: "בוטל",
 };
 
