@@ -10,9 +10,13 @@ Always read `docs/BUILDER_PLAN.md` before making edits to understand file owners
 
 ## Language
 
-- Speak to the user in Hebrew unless asked otherwise.
+- Write plans, progress updates, analyses, summaries, test results, and final
+  handoffs to the user in English unless the user explicitly requests another
+  language.
 - Prompts intended for Claude Code, Codex, Cursor, or other coding/build AIs
   must be written in English by default.
+- Keep user-facing product copy and UI text in Hebrew unless the task explicitly
+  changes the product language requirement.
 - Coding-agent prompts should be token-efficient but clear and actionable.
 
 ## Non-negotiable defaults for all builders

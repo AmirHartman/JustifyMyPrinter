@@ -168,6 +168,8 @@ See `docs/BUILDER_PLAN.md` for which builder owns each fix.
 
 ## General rules for all builders
 
+- Write builder plans, analyses, progress updates, summaries, test results, and
+  final handoffs in English unless the user explicitly requests another language.
 - No new Vercel serverless functions. The deployment target is Render/Express.
 - No paid services or paid add-ons without explicit approval from the owner.
 - No architecture replacement without approval.

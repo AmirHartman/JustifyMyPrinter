@@ -13,6 +13,10 @@ which has the full task breakdown.
 4. Read `CLAUDE.md` — architecture, local dev, deployment, known gaps.
 5. Read `docs/RENDER_DEPLOYMENT_NOTES.md` — Render setup and free-tier rules.
 
+Builder communication, including plans, analyses, progress updates, summaries,
+test results, and final handoffs, must be in English unless the user explicitly
+requests another language. Product UI and user-facing copy remain Hebrew RTL.
+
 ## Builder sequence
 
 | # | Name | Tool | Role |

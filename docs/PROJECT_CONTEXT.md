@@ -115,6 +115,8 @@ When the user says "my printer": **Bambu Lab P2S Combo with AMS 2 Pro**.
 
 When generating prompts for Claude Code, Codex, or other coding/build agents:
 - write prompts in English;
+- write agent plans, analyses, progress updates, summaries, test results, and
+  final handoffs in English unless the user explicitly requests another language;
 - keep them token-efficient;
 - include only relevant context;
 - preserve Hebrew RTL, Neon, Render free-tier constraints, and no paid services
