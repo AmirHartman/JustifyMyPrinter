@@ -41,8 +41,9 @@ On a fresh Neon database, seed tables and initial data:
 
 ```bash
 curl -X POST http://localhost:3000/api/init   # local
-# or
-curl -X POST https://<your-render-url>/api/init   # production
+# Production requires INIT_SECRET:
+curl -X POST -H "Authorization: Bearer $INIT_SECRET" \
+  https://<your-render-url>/api/init
 ```
 
 This is idempotent — safe to re-run.
@@ -111,15 +112,15 @@ The function signature is identical — each file exports a single `(req, res)` 
 - `api/products.js` — product CRUD (admin only for write). `?id=:id` for single-product ops.
 - `api/users.js` — user management (admin only). `?id=:id` for single-user ops.
 - `api/filaments.js` — filament management. `?id=:id` for single-filament ops.
-- `api/messages.js` — **DEPRECATED: to be removed.** Internal chat (replaced by WhatsApp).
-- `api/notifications.js` — **DEPRECATED: to be removed.** In-app notifications (replaced by WhatsApp).
+- `api/messages.js` — authenticated compatibility stub returning `410 Gone`.
+- `api/notifications.js` — authenticated compatibility stub returning `410 Gone`.
 - `api/settings.js` — key/value settings store (admin only). `?key=pricing`.
 
 ### Auth & roles
 
 Sessions are cookie-based (`session` cookie, HttpOnly). The `sessions` table
-stores `token → user_id, user_name, user_role, expires_at`. Passwords are
-currently stored in plaintext — a known risk, tracked for future improvement.
+stores `token → user_id, user_name, user_role, expires_at`. Passwords are stored
+as scrypt hashes; legacy plaintext values are upgraded after successful login.
 
 Two roles:
 - `admin` — sees all orders, manages products/users, reads all data.
@@ -127,9 +128,6 @@ Two roles:
 
 User statuses: `pending` (awaiting approval), `active` (can order),
 `inactive` (deactivated), `rejected` (with reason).
-
-> **Known gap:** current code uses 'approved' instead of 'active' for the
-> active-friend status. Builder 4 must fix this.
 
 New registrations start as `status: 'pending'` and must be approved by admin.
 Pending users can view the catalog but cannot order.
@@ -144,25 +142,12 @@ See `api/init.js` for full column definitions. All schema changes use
 
 ---
 
-## Known code gaps (for future builders)
+## Implementation status
 
-These are confirmed mismatches between the code and `docs/PRODUCT_SPEC.md`.
-See `docs/BUILDER_PLAN.md` for which builder owns each fix.
-
-| Gap | File | Builder |
-|-----|------|---------|
-| Order statuses wrong (`approved/ready/delivered/rejected` instead of `waiting_approval/waiting_print/ready_delivery/completed/cancelled`) | `api/orders.js` | 5 |
-| User status 'approved' should be 'active' | `api/users.js`, `api/auth.js` | 4 |
-| GET `/api/products` requires auth — public catalog blocked | `api/products.js` | 7 |
-| Orders POST doesn't check user status (pending users could order) | `api/orders.js` | 4/5 |
-| Missing registration fields: phone, how_you_know_admin, message_to_admin | `api/auth.js` | 4 |
-| Internal messaging/notifications still active | `api/messages.js`, `api/notifications.js`, `api/orders.js` | 6 |
-| `js/state.js` still fetches messages/notifications | `js/state.js` | 6 |
-| No mark-multiple-orders-as-paid endpoint | `api/orders.js` | 5 |
-| No price approval flow | `api/orders.js`, frontend | 5 |
-| No cancellation reason field | `api/orders.js`, schema | 3/5 |
-| Dynamic categories not implemented (single text field) | `api/products.js`, schema | 3/7 |
-| Passwords stored in plaintext | `api/auth.js` | post-MVP |
+Builders 2–8 completed the runtime, schema, auth, orders, WhatsApp, categories,
+catalog, and UI passes. `docs/BUILDER_PLAN.md` and the gap notes in the original
+project-context documents are historical builder instructions; verify current
+behavior in code and the Builder 9 QA handoff before release.
 
 ---
 
