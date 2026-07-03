@@ -86,6 +86,68 @@ module.exports = async (req, res) => {
       )
     `;
 
+    // ── Extended product columns ──────────────────────────────
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_hours NUMERIC(6,2) DEFAULT 0`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_profile TEXT DEFAULT 'regular'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS materials JSONB DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS calculated_cost NUMERIC(10,2)`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS manual_price_enabled BOOLEAN DEFAULT FALSE`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS manual_price NUMERIC(10,2)`;
+
+    // ── Filaments table ───────────────────────────────────────
+    await sql`
+      CREATE TABLE IF NOT EXISTS filaments (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        material_type TEXT NOT NULL DEFAULT 'PLA',
+        color_hex TEXT NOT NULL DEFAULT '#000000',
+        price_per_kg NUMERIC(10,2) NOT NULL DEFAULT 80,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+
+    const SEED_FILAMENTS = [
+      { id: 'filament-black-pla', name: 'שחור PLA',  materialType: 'PLA', colorHex: '#111111', pricePerKg: 80 },
+      { id: 'filament-white-pla', name: 'לבן PLA',   materialType: 'PLA', colorHex: '#ffffff', pricePerKg: 80 },
+      { id: 'filament-red-pla',   name: 'אדום PLA',  materialType: 'PLA', colorHex: '#ff0000', pricePerKg: 80 },
+    ];
+    for (const f of SEED_FILAMENTS) {
+      await sql`
+        INSERT INTO filaments (id, name, material_type, color_hex, price_per_kg)
+        VALUES (${f.id}, ${f.name}, ${f.materialType}, ${f.colorHex}, ${f.pricePerKg})
+        ON CONFLICT (id) DO NOTHING
+      `;
+    }
+
+    // ── Settings table ────────────────────────────────────────
+    await sql`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value JSONB NOT NULL
+      )
+    `;
+
+    const DEFAULT_PRICING = {
+      electricityPerHour: 0.13,
+      roundingMode: 'ceil',
+      printProfiles: {
+        regular: { label: 'רגיל',               wearPerHour: 1.5, fixedWear: 2, riskPercent: 0.12 },
+        ams:     { label: 'AMS / ריבוי צבעים',  wearPerHour: 2.0, fixedWear: 3, riskPercent: 0.15 },
+        complex: { label: 'הדפסה מורכבת',        wearPerHour: 2.5, fixedWear: 5, riskPercent: 0.20 },
+      },
+    };
+    await sql`
+      INSERT INTO settings (key, value)
+      VALUES ('pricing', ${JSON.stringify(DEFAULT_PRICING)})
+      ON CONFLICT (key) DO NOTHING
+    `;
+
     for (const u of SEED_USERS) {
       await sql`
         INSERT INTO users (id, name, full_name, email, role, password, status)
@@ -114,7 +176,7 @@ module.exports = async (req, res) => {
       `;
     }
 
-    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions'], seeded: true });
+    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings'], seeded: true });
   } catch (err) {
     console.error('init error:', err);
     res.status(500).json({ error: err.message });

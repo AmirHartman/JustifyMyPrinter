@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-auth="signed-out" data-entry="app" data-role="friend" data-mode="friend" data-page="welcome">
+    <nav class="global-tabs">
+      <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+      <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+      <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
+      <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+    </nav>
     <header class="topbar">
       <div>
         <p class="eyebrow">האזור האישי שלך</p>
@@ -14,8 +20,8 @@
       </div>
       <div class="topbar-actions">
         <div class="user-bar" aria-label="משתמש מחובר">
+          <a class="admin-return-button" href="dashboard.html">לוח ניהול</a>
           <span id="current-user">חבר</span>
-          <a class="ghost-button" href="catalog.html">לחנות</a>
           <div class="inbox-wrap" id="inbox-wrap">
             <button class="ghost-button inbox-bell" id="inbox-bell" type="button" aria-label="עדכונים">
               🔔<span class="inbox-badge" id="inbox-badge" hidden></span>
@@ -43,7 +49,6 @@
           <p>כאן תוכל לעקוב אחרי ההזמנות שלך, לקרוא עדכונים ולשלוח בקשות אישיות.</p>
           <div class="ws-hero-actions">
             <a class="primary-button" href="catalog.html">לקטלוג המוצרים</a>
-            <a class="ghost-button" href="index.html">איך התהליך עובד?</a>
           </div>
         </div>
         <div class="ws-hero-panel">

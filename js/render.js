@@ -1,5 +1,5 @@
 import { store, loadData, findProduct } from "./state.js";
-import { formatCurrency, escapeHtml } from "./utils.js";
+import { formatCurrency, escapeHtml, calculateProductCost } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog } from "./orders.js";
 
@@ -30,6 +30,8 @@ export function render() {
   renderInbox();
   renderWelcome();
   renderAdminMessages();
+  renderFilaments();
+  renderPricingForm();
 }
 
 // ── Catalog (friend view) ─────────────────────────────────────
@@ -39,8 +41,12 @@ function renderCatalog() {
   const cardTemplate = document.querySelector("#product-card-template");
   if (!catalogGrid || !cardTemplate) return;
 
+  const visibleProducts = store.appMode === "admin"
+    ? store.products
+    : store.products.filter((p) => p.active !== false);
+
   catalogGrid.replaceChildren();
-  store.products.forEach((product) => {
+  visibleProducts.forEach((product) => {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
     renderProductImage(card.querySelector(".product-image"), product);
     card.querySelector("h3").textContent = product.name;
@@ -57,6 +63,10 @@ function renderCatalog() {
 function renderOrders() {
   const ordersTable = document.querySelector("#orders-table");
   if (!ordersTable) return;
+  const pastOrdersTable = document.querySelector("#past-orders-table");
+  const isPastOrder = (order) => ["delivered", "rejected"].includes(order.status);
+  const openOrders = store.orders.filter((order) => !isPastOrder(order));
+  const pastOrders = store.orders.filter(isPastOrder);
 
   // Badge on the orders tab for unreviewed (new) orders
   const newOrdersBadge = document.querySelector("#new-orders-badge");
@@ -68,9 +78,14 @@ function renderOrders() {
 
   ordersTable.replaceChildren();
   document.querySelector("#orders-empty")
-    ?.classList.toggle("is-visible", store.orders.length === 0);
+    ?.classList.toggle("is-visible", openOrders.length === 0);
+  if (pastOrdersTable) {
+    pastOrdersTable.replaceChildren();
+    document.querySelector("#past-orders-empty")
+      ?.classList.toggle("is-visible", pastOrders.length === 0);
+  }
 
-  store.orders.forEach((order) => {
+  const renderOrderRows = (orders, table, allowDelete) => orders.forEach((order) => {
     const product = findProduct(order.productId);
     const row = document.createElement("tr");
     row.innerHTML = `
@@ -78,6 +93,7 @@ function renderOrders() {
       <td>${escapeHtml(product?.name ?? "מוצר שנמחק")}</td>
       <td>${order.quantity}</td>
       <td>${formatCurrency(order.price)}</td>
+      <td></td>
       <td></td>
       <td></td>
     `;
@@ -115,10 +131,21 @@ function renderOrders() {
       } catch { /* paid already updated locally */ }
     });
 
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className   = "ghost-button btn-sm user-delete-btn order-delete-btn";
+    deleteBtn.type        = "button";
+    deleteBtn.textContent = allowDelete ? "מחק" : "✕";
+    deleteBtn.title       = "מחק הזמנה";
+    deleteBtn.addEventListener("click", () => deleteOrder(order.id));
+
     row.children[4].append(statusSelect);
     row.children[5].append(paidLabel);
-    ordersTable.append(row);
+    row.children[6].append(deleteBtn);
+    table.append(row);
   });
+
+  renderOrderRows(openOrders, ordersTable, false);
+  if (pastOrdersTable) renderOrderRows(pastOrders, pastOrdersTable, true);
 }
 
 // ── Items stats table (admin view) ───────────────────────────
@@ -482,8 +509,27 @@ function renderStoreEdit() {
     deleteBtn.textContent = "מחיקה";
     deleteBtn.addEventListener("click", () => deleteProduct(product.id));
 
-    footer.append(stlInput, deleteBtn);
+    // Active toggle
+    const activeLabel    = document.createElement("label");
+    activeLabel.className = "store-edit-active-toggle";
+    const activeCheckbox = document.createElement("input");
+    activeCheckbox.type    = "checkbox";
+    activeCheckbox.checked = product.active !== false;
+    activeCheckbox.addEventListener("change", () => updateProduct(product.id, { active: activeCheckbox.checked }));
+    activeLabel.append(activeCheckbox, " פעיל");
+
+    // Edit-details button (wired in app.js via window.openProductEditForm)
+    const editDetailsBtn = document.createElement("button");
+    editDetailsBtn.className   = "ghost-button btn-sm";
+    editDetailsBtn.type        = "button";
+    editDetailsBtn.textContent = "ערוך פרטים";
+    editDetailsBtn.addEventListener("click", () => {
+      if (typeof window.openProductEditForm === "function") window.openProductEditForm(product);
+    });
+
+    footer.append(activeLabel, stlInput, editDetailsBtn, deleteBtn);
     body.append(nameInput, costRow, gramsRow, descInput, footer);
+    card.classList.toggle("store-edit-card--inactive", product.active === false);
     card.append(imageWrap, body);
     grid.append(card);
   });
@@ -505,11 +551,12 @@ function renderSummary() {
 // ── Shared rendering helpers ──────────────────────────────────
 
 function renderProductImage(container, product) {
+  const mainUrl = product.images?.find((i) => i.isMain)?.url || product.image || "";
   container.replaceChildren();
-  container.classList.toggle("has-image", Boolean(product.image));
-  if (!product.image) return;
+  container.classList.toggle("has-image", Boolean(mainUrl));
+  if (!mainUrl) return;
   const img = document.createElement("img");
-  img.src = product.image;
+  img.src = mainUrl;
   img.alt = product.name;
   img.loading = "lazy";
   img.referrerPolicy = "no-referrer";
@@ -555,6 +602,24 @@ async function deleteProduct(productId) {
     alert(`שגיאה במחיקת מוצר: ${err.message}`);
     await loadData();
     render();
+  }
+}
+
+// ── Order interactions ────────────────────────────────────────────
+
+async function deleteOrder(orderId) {
+  const order = store.orders.find((item) => item.id === orderId);
+  const product = findProduct(order?.productId);
+  const description = product?.name
+    ? `ההזמנה של ${order.friendName} עבור ${product.name}`
+    : "ההזמנה";
+  if (!window.confirm(`למחוק את ${description}? פעולה זו אינה הפיכה.`)) return;
+  try {
+    await api(`/api/orders/${orderId}`, { method: "DELETE" });
+    store.orders = store.orders.filter((o) => o.id !== orderId);
+    render();
+  } catch (err) {
+    alert(`שגיאה במחיקת הזמנה: ${err.message}`);
   }
 }
 
@@ -809,6 +874,87 @@ function refreshAdminThread(container, messages) {
   }
   messages.forEach((msg) => buildChatBubble(container, msg.sender, msg.content, msg.createdAt));
   container.scrollTop = container.scrollHeight;
+}
+
+// ── Filaments (admin view) ────────────────────────────────────
+
+function renderFilaments() {
+  const tbody = document.querySelector("#filaments-table-body");
+  if (!tbody) return;
+
+  document.querySelector("#filaments-empty")
+    ?.classList.toggle("is-visible", store.filaments.length === 0);
+
+  tbody.replaceChildren();
+  store.filaments.forEach((f) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><span class="color-swatch" style="background:${escapeHtml(f.colorHex)}"></span></td>
+      <td>${escapeHtml(f.name)}</td>
+      <td>${escapeHtml(f.materialType ?? '')}</td>
+      <td>${formatCurrency(f.pricePerKg)}/ק״ג</td>
+      <td class="actions-cell"></td>
+    `;
+
+    const cell = row.querySelector(".actions-cell");
+
+    const editBtn = document.createElement("button");
+    editBtn.className   = "ghost-button btn-sm";
+    editBtn.type        = "button";
+    editBtn.textContent = "ערוך";
+    editBtn.addEventListener("click", () => openFilamentEditForm(f));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+    deleteBtn.type        = "button";
+    deleteBtn.textContent = "מחק";
+    deleteBtn.addEventListener("click", () => deleteFilament(f.id));
+
+    cell.append(editBtn, " ", deleteBtn);
+    tbody.append(row);
+  });
+}
+
+async function deleteFilament(filamentId) {
+  if (!window.confirm("למחוק חומר זה? פעולה זו אינה הפיכה.")) return;
+  try {
+    await api(`/api/filaments/${filamentId}`, { method: "DELETE" });
+    store.filaments = store.filaments.filter((f) => f.id !== filamentId);
+    render();
+  } catch (err) {
+    alert(`שגיאה במחיקת חומר: ${err.message}`);
+  }
+}
+
+function openFilamentEditForm(f) {
+  const form = document.querySelector("#filament-form");
+  if (!form) return;
+  form.elements["filamentId"].value  = f.id;
+  form.elements["name"].value        = f.name;
+  form.elements["materialType"].value = f.materialType ?? "PLA";
+  form.elements["colorHex"].value    = f.colorHex;
+  form.elements["pricePerKg"].value  = f.pricePerKg;
+  form.elements["note"].value        = f.note ?? "";
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ── Pricing settings form (admin view) ───────────────────────
+
+function renderPricingForm() {
+  const form = document.querySelector("#pricing-form");
+  if (!form || !store.pricingSettings) return;
+  const s = store.pricingSettings;
+
+  if (form.elements.electricityPerHour)
+    form.elements.electricityPerHour.value = s.electricityPerHour ?? "";
+
+  ["regular", "ams", "complex"].forEach((p) => {
+    const prof = s.printProfiles?.[p] ?? {};
+    if (form.elements[`${p}_wearPerHour`])  form.elements[`${p}_wearPerHour`].value  = prof.wearPerHour  ?? "";
+    if (form.elements[`${p}_fixedWear`])    form.elements[`${p}_fixedWear`].value    = prof.fixedWear    ?? "";
+    if (form.elements[`${p}_riskPercent`])  form.elements[`${p}_riskPercent`].value  = prof.riskPercent  ?? "";
+  });
 }
 
 // ── Inbox / notifications ─────────────────────────────────────

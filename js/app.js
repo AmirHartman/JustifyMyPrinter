@@ -3,7 +3,7 @@ import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
 import { openOrderDialog, updateOrderMinimum, getOrderFriendName } from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
-import { formatCurrency, createAiProductDraft } from "./utils.js";
+import { formatCurrency, createAiProductDraft, calculateProductCost } from "./utils.js";
 
 // ── DOM references ────────────────────────────────────────────
 const loginForm     = document.querySelector("#login-form");
@@ -59,17 +59,7 @@ loginForm?.addEventListener("submit", async (event) => {
   store.currentUser = result;
   store.appMode = store.currentUser.role === "admin" ? "admin" : "friend";
 
-  if (store.currentUser.role === "friend") {
-    window.location.href = "welcome.html";
-    return;
-  }
-
-  document.body.dataset.entry = "app";
-  applyAuth();
-  applyMode();
-  await loadData();
-  setView("items");
-  render();
+  window.location.href = "welcome.html";
 });
 
 registerForm?.addEventListener("submit", async (event) => {
@@ -257,26 +247,420 @@ document.querySelector("#ai-draft-button")?.addEventListener("click", () => {
 
 productForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const data = new FormData(productForm);
+  const data      = new FormData(productForm);
+  const editId    = String(data.get("editProductId") ?? "").trim();
+  const isEdit    = Boolean(editId);
+
+  const materials = collectMaterialRows();
+  const images    = collectImageRows();
+
+  // If the legacy single-image field is filled but no gallery images added, treat it as gallery main image
+  const legacyImage = String(data.get("image") ?? "").trim();
+  if (legacyImage && images.length === 0) {
+    images.push({ url: legacyImage, isMain: true });
+  }
+  const mainImageUrl = images.find((i) => i.isMain)?.url ?? images[0]?.url ?? legacyImage;
+
+  const payload = {
+    name:               String(data.get("name") ?? "").trim(),
+    cost:               data.get("cost"),
+    grams:              data.get("grams"),
+    description:        String(data.get("description") ?? "").trim(),
+    image:              mainImageUrl,
+    stlUrl:             String(data.get("stlUrl") ?? "").trim(),
+    sourceUrl:          String(data.get("sourceUrl") ?? "").trim(),
+    category:           String(data.get("category") ?? "").trim(),
+    printHours:         Number(data.get("printHours")) || 0,
+    printProfile:       String(data.get("printProfile") ?? "regular"),
+    materials,
+    images,
+    active:             data.get("productActive") !== null,
+    manualPriceEnabled: data.get("manualPriceEnabled") !== null,
+    manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
+    calculatedCost:     computedCostFromForm(),
+  };
+
+  // Resolve effective cost
+  if (payload.manualPriceEnabled && payload.manualPrice) {
+    payload.cost = payload.manualPrice;
+  } else if (payload.calculatedCost) {
+    payload.cost = payload.calculatedCost;
+  }
 
   try {
-    const product = await api("/api/products", {
-      method: "POST",
-      body: JSON.stringify({
-        name:        String(data.get("name") ?? "").trim(),
-        cost:        data.get("cost"),
-        grams:       data.get("grams"),
-        description: String(data.get("description") ?? "").trim(),
-        image:       String(data.get("image") ?? "").trim(),
-        stlUrl:      String(data.get("stlUrl") ?? "").trim(),
-      }),
-    });
-    store.products.push(product);
-    productForm.reset();
-    render();
-    setView("items");
+    if (isEdit) {
+      const updated = await api(`/api/products/${editId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      const idx = store.products.findIndex((p) => p.id === editId);
+      if (idx !== -1) store.products[idx] = updated;
+      resetProductForm();
+      render();
+      setView("store-edit");
+    } else {
+      const product = await api("/api/products", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      store.products.push(product);
+      resetProductForm();
+      render();
+      setView("items");
+    }
   } catch (err) {
-    alert(`שגיאה בהוספת מוצר: ${err.message}`);
+    alert(`שגיאה ב${isEdit ? "עדכון" : "הוספת"} מוצר: ${err.message}`);
+  }
+});
+
+// ── Product form helpers ──────────────────────────────────────
+
+function collectMaterialRows() {
+  const rows = document.querySelectorAll("#product-materials-rows .material-row");
+  return Array.from(rows).map((row) => ({
+    filamentId: row.querySelector("select")?.value ?? "",
+    grams:      Number(row.querySelector("input[type='number']")?.value) || 0,
+  })).filter((m) => m.filamentId);
+}
+
+function collectImageRows() {
+  const rows = document.querySelectorAll("#product-image-rows .image-row");
+  const mainRadio = document.querySelector("#product-image-rows input[name='mainImage']:checked");
+  const mainIdx   = mainRadio ? Number(mainRadio.dataset.idx) : 0;
+  return Array.from(rows).map((row, i) => ({
+    url:    String(row.querySelector("input[type='url']")?.value ?? "").trim(),
+    isMain: i === mainIdx,
+  })).filter((img) => img.url);
+}
+
+function computedCostFromForm() {
+  const product = {
+    printHours:   Number(document.querySelector("#product-form [name='printHours']")?.value) || 0,
+    printProfile: document.querySelector("#product-form [name='printProfile']")?.value ?? "regular",
+    materials:    collectMaterialRows(),
+  };
+  if (!store.pricingSettings) return null;
+  const { finalCost } = calculateProductCost(product, store.filaments, store.pricingSettings);
+  return finalCost || null;
+}
+
+function resetProductForm() {
+  productForm?.reset();
+  document.querySelector("#edit-product-id").value = "";
+  document.querySelector("#product-materials-rows").replaceChildren();
+  document.querySelector("#product-image-rows").replaceChildren();
+  document.querySelector("#cost-preview-breakdown").innerHTML =
+    `<span style="color:var(--muted);font-size:var(--text-sm)">מלא שעות הדפסה וחומרים כדי לראות חישוב.</span>`;
+  document.querySelector("#manual-price-field")?.setAttribute("hidden", "");
+  document.querySelector("#product-submit-btn").textContent = "הוספת מוצר";
+  document.querySelector("#product-edit-cancel")?.setAttribute("hidden", "");
+  document.querySelector("#product-add-title").textContent = "הוספת מוצר";
+  document.querySelector("#product-active-toggle").checked = true;
+}
+
+// Exposed globally so render.js store-edit cards can call it
+window.openProductEditForm = function openProductEditForm(product) {
+  if (!productForm) return;
+  resetProductForm();
+
+  productForm.elements["name"].value        = product.name;
+  productForm.elements["cost"].value        = product.cost;
+  productForm.elements["grams"].value       = product.grams;
+  productForm.elements["description"].value = product.description;
+  productForm.elements["image"].value       = product.image ?? "";
+  productForm.elements["stlUrl"].value      = product.stlUrl ?? "";
+  productForm.elements["sourceUrl"].value   = product.sourceUrl ?? "";
+  productForm.elements["category"].value    = product.category ?? "";
+  productForm.elements["printHours"].value  = product.printHours ?? 0;
+  productForm.elements["printProfile"].value = product.printProfile ?? "regular";
+  document.querySelector("#edit-product-id").value = product.id;
+  document.querySelector("#product-active-toggle").checked = product.active !== false;
+
+  if (product.manualPriceEnabled) {
+    productForm.elements["manualPriceEnabled"].checked = true;
+    document.querySelector("#manual-price-field")?.removeAttribute("hidden");
+    productForm.elements["manualPrice"].value = product.manualPrice ?? "";
+  }
+
+  // Rebuild material rows
+  const materialsContainer = document.querySelector("#product-materials-rows");
+  materialsContainer.replaceChildren();
+  (product.materials ?? []).forEach((m) => addMaterialRow(m.filamentId, m.grams));
+
+  // Rebuild image rows
+  const imagesContainer = document.querySelector("#product-image-rows");
+  imagesContainer.replaceChildren();
+  (product.images ?? []).forEach((img, i) => addImageRow(img.url, img.isMain, i));
+
+  document.querySelector("#product-submit-btn").textContent  = "שמור שינויים";
+  document.querySelector("#product-edit-cancel")?.removeAttribute("hidden");
+  document.querySelector("#product-add-title").textContent  = `עריכת מוצר: ${product.name}`;
+
+  updateCostPreview();
+  setView("product-add");
+  productForm.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+// ── Product edit cancel ───────────────────────────────────────
+document.querySelector("#product-edit-cancel")?.addEventListener("click", () => {
+  resetProductForm();
+  setView("store-edit");
+});
+
+// ── Material rows ─────────────────────────────────────────────
+function addMaterialRow(filamentId = "", grams = "") {
+  const container = document.querySelector("#product-materials-rows");
+  if (!container) return;
+
+  const row = document.createElement("div");
+  row.className = "material-row";
+
+  const select = document.createElement("select");
+  store.filaments.forEach((f) => {
+    const opt = document.createElement("option");
+    opt.value = f.id;
+    opt.textContent = `${f.name}`;
+    opt.selected = f.id === filamentId;
+    select.append(opt);
+  });
+  if (!store.filaments.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "— אין חומרים מוגדרים —";
+    select.append(opt);
+  }
+
+  const swatch = document.createElement("span");
+  swatch.className = "color-swatch";
+  const updateSwatch = () => {
+    const f = store.filaments.find((f) => f.id === select.value);
+    swatch.style.background = f?.colorHex ?? "#ccc";
+  };
+  updateSwatch();
+  select.addEventListener("change", () => {
+    updateSwatch();
+    autoSwitchProfileForMultiMaterial();
+    updateCostPreview();
+  });
+
+  const gramsInput = document.createElement("input");
+  gramsInput.type        = "number";
+  gramsInput.min         = "0";
+  gramsInput.step        = "1";
+  gramsInput.placeholder = "גרם";
+  gramsInput.value       = grams;
+  gramsInput.addEventListener("input", updateCostPreview);
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+  deleteBtn.type        = "button";
+  deleteBtn.textContent = "✕";
+  deleteBtn.addEventListener("click", () => {
+    row.remove();
+    autoSwitchProfileForMultiMaterial();
+    updateCostPreview();
+  });
+
+  row.append(swatch, select, gramsInput, deleteBtn);
+  container.append(row);
+  autoSwitchProfileForMultiMaterial();
+  updateCostPreview();
+}
+
+document.querySelector("#add-material-row-btn")?.addEventListener("click", () => addMaterialRow());
+
+function autoSwitchProfileForMultiMaterial() {
+  const count   = document.querySelectorAll("#product-materials-rows .material-row").length;
+  const select  = document.querySelector("#product-print-profile");
+  if (!select) return;
+  if (count > 1 && select.value === "regular") select.value = "ams";
+  if (count <= 1 && select.value === "ams")   select.value = "regular";
+}
+
+// ── Image rows ────────────────────────────────────────────────
+function addImageRow(url = "", isMain = false, idx = null) {
+  const container = document.querySelector("#product-image-rows");
+  if (!container) return;
+
+  const rowIdx = idx ?? container.children.length;
+
+  const row = document.createElement("div");
+  row.className = "image-row";
+
+  const urlInput = document.createElement("input");
+  urlInput.type        = "url";
+  urlInput.placeholder = "https://example.com/image.jpg";
+  urlInput.value       = url;
+
+  const radioLabel = document.createElement("label");
+  radioLabel.className = "radio-label";
+  const radio = document.createElement("input");
+  radio.type    = "radio";
+  radio.name    = "mainImage";
+  radio.dataset.idx = String(rowIdx);
+  radio.checked = isMain || rowIdx === 0;
+  radioLabel.append(radio, " ראשי");
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+  deleteBtn.type        = "button";
+  deleteBtn.textContent = "✕";
+  deleteBtn.addEventListener("click", () => {
+    row.remove();
+    // Make first remaining row's radio checked
+    const firstRadio = document.querySelector("#product-image-rows input[type='radio']");
+    if (firstRadio) firstRadio.checked = true;
+  });
+
+  row.append(urlInput, radioLabel, deleteBtn);
+  container.append(row);
+}
+
+document.querySelector("#add-image-row-btn")?.addEventListener("click", () => addImageRow());
+
+// ── Live cost preview ─────────────────────────────────────────
+function updateCostPreview() {
+  const panel = document.querySelector("#cost-preview-breakdown");
+  if (!panel || !store.pricingSettings) return;
+
+  const product = {
+    printHours:   Number(productForm?.elements["printHours"]?.value) || 0,
+    printProfile: productForm?.elements["printProfile"]?.value ?? "regular",
+    materials:    collectMaterialRows(),
+  };
+
+  if (!product.printHours && !product.materials.length) {
+    panel.innerHTML = `<span style="color:var(--muted);font-size:var(--text-sm)">מלא שעות הדפסה וחומרים כדי לראות חישוב.</span>`;
+    return;
+  }
+
+  const b = calculateProductCost(product, store.filaments, store.pricingSettings);
+
+  panel.innerHTML = `
+    <div class="cost-preview-row"><span>עלות חומרים</span><span>${formatCurrency(b.materialCost)}</span></div>
+    <div class="cost-preview-row"><span>עלות חשמל</span><span>${formatCurrency(b.electricityCost)}</span></div>
+    <div class="cost-preview-row"><span>בלאי ציוד (שעתי)</span><span>${formatCurrency(b.hourlyWearCost)}</span></div>
+    <div class="cost-preview-row"><span>בלאי קבוע</span><span>${formatCurrency(b.fixedWear)}</span></div>
+    <div class="cost-preview-row"><span>סיכון (${Math.round((store.pricingSettings?.printProfiles?.[product.printProfile]?.riskPercent ?? 0) * 100)}%)</span><span>${formatCurrency(b.riskCost)}</span></div>
+    <div class="cost-preview-final"><span>עלות מינימום מחושבת</span><span>${formatCurrency(b.finalCost)}</span></div>
+  `;
+}
+
+// Wire live preview to form inputs (input covers number fields; change covers select)
+productForm?.addEventListener("input",  (e) => {
+  if (e.target.matches("[name='printHours']")) updateCostPreview();
+});
+productForm?.addEventListener("change", (e) => {
+  if (e.target.matches("[name='printProfile']")) updateCostPreview();
+});
+
+// ── Manual price toggle ───────────────────────────────────────
+document.querySelector("#manual-price-toggle")?.addEventListener("change", (e) => {
+  const field = document.querySelector("#manual-price-field");
+  if (field) field.hidden = !e.target.checked;
+});
+
+// ── Filament form ─────────────────────────────────────────────
+document.querySelector("#add-filament-btn")?.addEventListener("click", () => {
+  const form = document.querySelector("#filament-form");
+  if (!form) return;
+  form.reset();
+  form.elements["filamentId"].value = "";
+  form.hidden = false;
+  setView("filaments");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.querySelector("#filament-form-cancel")?.addEventListener("click", () => {
+  const form = document.querySelector("#filament-form");
+  if (form) { form.reset(); form.hidden = true; }
+});
+
+document.querySelector("#filament-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const id   = String(data.get("filamentId") ?? "").trim();
+  const isEdit = Boolean(id);
+
+  const payload = {
+    name:         String(data.get("name") ?? "").trim(),
+    materialType: String(data.get("materialType") ?? "PLA").trim(),
+    colorHex:     String(data.get("colorHex") ?? "#000000").trim(),
+    pricePerKg:   Number(data.get("pricePerKg")) || 0,
+    note:         String(data.get("note") ?? "").trim(),
+  };
+
+  const btn = form.querySelector("[type='submit']");
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "שומר...";
+
+  try {
+    if (isEdit) {
+      const updated = await api(`/api/filaments/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      const idx = store.filaments.findIndex((f) => f.id === id);
+      if (idx !== -1) store.filaments[idx] = updated;
+    } else {
+      const created = await api("/api/filaments", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      store.filaments.push(created);
+    }
+    form.reset();
+    form.hidden = true;
+    render();
+  } catch (err) {
+    alert(`שגיאה בשמירת חומר: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+});
+
+// ── Pricing settings form ─────────────────────────────────────
+document.querySelector("#pricing-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(event.target);
+  const btn  = event.target.querySelector("[type='submit']");
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "שומר...";
+
+  const buildProfile = (prefix) => ({
+    label:       store.pricingSettings?.printProfiles?.[prefix]?.label ?? prefix,
+    wearPerHour:  Number(data.get(`${prefix}_wearPerHour`))  || 0,
+    fixedWear:    Number(data.get(`${prefix}_fixedWear`))    || 0,
+    riskPercent:  Number(data.get(`${prefix}_riskPercent`))  || 0,
+  });
+
+  const settings = {
+    electricityPerHour: Number(data.get("electricityPerHour")) || 0,
+    roundingMode:       store.pricingSettings?.roundingMode ?? "ceil",
+    printProfiles: {
+      regular: buildProfile("regular"),
+      ams:     buildProfile("ams"),
+      complex: buildProfile("complex"),
+    },
+  };
+
+  try {
+    const saved = await api("/api/settings?key=pricing", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    });
+    store.pricingSettings = saved;
+    render();
+    updateCostPreview();
+  } catch (err) {
+    alert(`שגיאה בשמירת הגדרות: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
   }
 });
 
@@ -301,14 +685,10 @@ productForm?.addEventListener("submit", async (event) => {
     window.location.href = "welcome.html";
     return;
   }
-  if (store.currentUser?.role === "admin" && pageName === "welcome") {
-    window.location.href = "dashboard.html";
-    return;
-  }
 
-  // Admin visiting catalog.html is forced into friend mode so they see the friend UI.
-  // Set this before loadData so orders are not fetched needlessly on that page.
-  if (pageName === "catalog" && store.currentUser?.role === "admin") {
+  // Admin visiting catalog or welcome is forced into friend mode so they see the friend UI.
+  // Set this before loadData so admin data is not fetched needlessly on those pages.
+  if (["catalog", "welcome"].includes(pageName) && store.currentUser?.role === "admin") {
     store.appMode = "friend";
     applyMode();
   }

@@ -13,30 +13,37 @@ export const store = {
   messages:       [],        // friend: chat thread
   conversations:  [],        // admin: conversation list
   _activeThread:  null,      // admin: currently open thread { userName, messages }
+  filaments:      [],        // all authenticated users: filament reference data
+  pricingSettings: null,     // admin: pricing config
 };
 
 export const pageName = document.body.dataset.page || "app";
 
 export async function loadData() {
-  const isAdmin  = store.appMode === "admin";
-  const isFriend = store.currentUser && !isAdmin;
+  const isAdmin      = store.appMode === "admin";
+  const isFriendMode = store.currentUser && !isAdmin;
+  const isRealFriend = isFriendMode && store.currentUser.role !== "admin";
 
-  const [products, orders, users, notifications, myOrders, messages, conversations] = await Promise.all([
+  const [products, orders, users, notifications, myOrders, messages, conversations, filaments, pricingSettings] = await Promise.all([
     api("/api/products"),
-    isAdmin  ? api("/api/orders")         : Promise.resolve([]),
-    isAdmin  ? api("/api/users")          : Promise.resolve([]),
-    store.currentUser ? api("/api/notifications") : Promise.resolve([]),
-    isFriend ? api("/api/my-orders")      : Promise.resolve([]),
-    isFriend ? api("/api/messages")       : Promise.resolve([]),
-    isAdmin  ? api("/api/messages")       : Promise.resolve([]),
+    isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
+    isAdmin      ? api("/api/users")                   : Promise.resolve([]),
+    store.currentUser ? api("/api/notifications")      : Promise.resolve([]),
+    isFriendMode ? api("/api/my-orders")               : Promise.resolve([]),
+    isRealFriend ? api("/api/messages")                : Promise.resolve([]),
+    isAdmin      ? api("/api/messages")                : Promise.resolve([]),
+    store.currentUser ? api("/api/filaments")          : Promise.resolve([]),
+    isAdmin      ? api("/api/settings?key=pricing")    : Promise.resolve(null),
   ]);
-  store.products      = products;
-  store.orders        = orders;
-  store.users         = users;
-  store.notifications = notifications;
-  store.myOrders      = myOrders;
-  store.messages      = messages;
-  store.conversations = conversations;
+  store.products       = products;
+  store.orders         = orders;
+  store.users          = users;
+  store.notifications  = notifications;
+  store.myOrders       = myOrders;
+  store.messages       = messages;
+  store.conversations  = conversations;
+  store.filaments      = filaments;
+  store.pricingSettings = pricingSettings;
 }
 
 export function findProduct(productId) {

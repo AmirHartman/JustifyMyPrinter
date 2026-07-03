@@ -6,11 +6,16 @@
     <title>מדפסת לחברים - כניסה</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body data-auth="signed-out" data-entry="login" data-role="friend" data-mode="friend">
+  <body data-auth="signed-out" data-entry="login" data-role="friend" data-mode="friend" data-page="app">
+    <nav class="global-tabs">
+      <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+      <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+      <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
+      <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+    </nav>
     <main class="login-screen" id="login-screen" aria-labelledby="login-title">
       <section class="auth-shell">
         <div class="auth-story">
-          <a class="back-link" href="index.html">חזרה לעמוד ההסבר</a>
           <p class="eyebrow">כניסה קטנה לפרויקט קטן</p>
           <h1 id="login-title">בואו נראה מה אפשר להדפיס לכם</h1>
           <p>
@@ -89,7 +94,6 @@
       </div>
       <div class="topbar-actions">
         <div class="user-bar" aria-label="משתמש מחובר">
-          <a class="primary-button admin-only" href="catalog.html">צפייה כלקוח</a>
           <span id="current-user"></span>
           <div class="inbox-wrap" id="inbox-wrap">
             <button class="ghost-button inbox-bell" id="inbox-bell" type="button" aria-label="עדכונים">
@@ -130,6 +134,8 @@
           הזמנות
           <span class="tab-badge" id="new-orders-badge" hidden></span>
         </button>
+        <button class="tab admin-tab" data-view="filaments">חומרים וצבעים</button>
+        <button class="tab admin-tab" data-view="pricing">הגדרות תמחור</button>
         <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
         <button class="tab admin-tab" data-view="messages">
           הודעות
@@ -256,12 +262,139 @@
                 <th>סכום</th>
                 <th>סטטוס</th>
                 <th>תשלום</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="orders-table"></tbody>
           </table>
         </div>
-        <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
+        <p class="empty-state" id="orders-empty">אין הזמנות פתוחות.</p>
+
+        <div class="section-heading orders-history-heading">
+          <div>
+            <h3>הזמנות עבר</h3>
+            <p>הזמנות שנמסרו או נדחו. מנהל יכול למחוק אותן לצמיתות.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>חבר</th>
+                <th>מוצר</th>
+                <th>כמות</th>
+                <th>סכום</th>
+                <th>סטטוס</th>
+                <th>תשלום</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="past-orders-table"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="past-orders-empty">אין הזמנות עבר.</p>
+      </section>
+
+      <!-- ── Filaments view ── -->
+      <section class="view" id="filaments-view" aria-labelledby="filaments-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="filaments-title">חומרים וצבעים</h2>
+            <p>ניהול הצבעים וחומרי ההדפסה לחישוב עלות אוטומטי.</p>
+          </div>
+          <button class="primary-button btn-sm" id="add-filament-btn" type="button">+ הוספת חומר</button>
+        </div>
+
+        <form class="product-form filament-inline-form" id="filament-form" hidden>
+          <input type="hidden" name="filamentId" />
+          <div class="filament-form-row">
+            <label>
+              שם חומר
+              <input name="name" required placeholder="למשל: כחול PETG" />
+            </label>
+            <label>
+              סוג
+              <select name="materialType">
+                <option value="PLA">PLA</option>
+                <option value="PETG">PETG</option>
+                <option value="TPU">TPU</option>
+                <option value="ABS">ABS</option>
+                <option value="אחר">אחר</option>
+              </select>
+            </label>
+            <label>
+              צבע
+              <input name="colorHex" type="color" value="#000000" required />
+            </label>
+            <label>
+              מחיר לק״ג (₪)
+              <input name="pricePerKg" type="number" min="0" step="0.01" required placeholder="80" />
+            </label>
+            <label>
+              הערה
+              <input name="note" placeholder="אופציונלי" />
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="primary-button btn-sm" type="submit">שמור חומר</button>
+            <button class="ghost-button btn-sm" type="button" id="filament-form-cancel">ביטול</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>צבע</th>
+                <th>שם</th>
+                <th>סוג</th>
+                <th>מחיר לק״ג</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody id="filaments-table-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="filaments-empty">אין חומרים מוגדרים עדיין.</p>
+      </section>
+
+      <!-- ── Pricing settings view ── -->
+      <section class="view" id="pricing-view" aria-labelledby="pricing-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="pricing-title">הגדרות תמחור</h2>
+            <p>פרופילי הדפסה, בלאי ציוד ועלות חשמל לחישוב עלות אוטומטי.</p>
+          </div>
+        </div>
+        <form class="product-form" id="pricing-form">
+          <label>
+            עלות חשמל לשעת הדפסה (₪)
+            <input name="electricityPerHour" type="number" min="0" step="0.001" placeholder="0.13" />
+          </label>
+
+          <div class="pricing-profiles-grid">
+            <div class="pricing-profile-card">
+              <h3>פרופיל רגיל</h3>
+              <label>בלאי ציוד לשעה (₪)<input name="regular_wearPerHour" type="number" min="0" step="0.01" /></label>
+              <label>בלאי קבוע להדפסה (₪)<input name="regular_fixedWear" type="number" min="0" step="0.01" /></label>
+              <label>אחוז סיכון (0–1)<input name="regular_riskPercent" type="number" min="0" max="1" step="0.01" /></label>
+            </div>
+            <div class="pricing-profile-card">
+              <h3>פרופיל AMS</h3>
+              <label>בלאי ציוד לשעה (₪)<input name="ams_wearPerHour" type="number" min="0" step="0.01" /></label>
+              <label>בלאי קבוע (₪)<input name="ams_fixedWear" type="number" min="0" step="0.01" /></label>
+              <label>אחוז סיכון<input name="ams_riskPercent" type="number" min="0" max="1" step="0.01" /></label>
+            </div>
+            <div class="pricing-profile-card">
+              <h3>פרופיל מורכב</h3>
+              <label>בלאי ציוד לשעה (₪)<input name="complex_wearPerHour" type="number" min="0" step="0.01" /></label>
+              <label>בלאי קבוע (₪)<input name="complex_fixedWear" type="number" min="0" step="0.01" /></label>
+              <label>אחוז סיכון<input name="complex_riskPercent" type="number" min="0" max="1" step="0.01" /></label>
+            </div>
+          </div>
+
+          <button class="primary-button" type="submit">שמור הגדרות</button>
+        </form>
       </section>
 
       <!-- ── Product add view ── -->
@@ -308,7 +441,75 @@
             לינק לקובץ STL
             <input name="stlUrl" type="url" placeholder="https://example.com/model.stl או קישור מקור" />
           </label>
-          <button class="primary-button" type="submit">הוספת מוצר</button>
+          <label>
+            קישור מקור (Thingiverse וכד׳)
+            <input name="sourceUrl" type="url" placeholder="https://www.thingiverse.com/thing:..." />
+          </label>
+          <label>
+            קטגוריה
+            <input name="category" placeholder="למשל: מטבח, ילדים, עבודה" />
+          </label>
+
+          <hr class="form-divider" />
+
+          <label>
+            שעות הדפסה
+            <input name="printHours" type="number" min="0" step="0.1" value="0" placeholder="0" />
+          </label>
+          <label>
+            פרופיל הדפסה
+            <select name="printProfile" id="product-print-profile">
+              <option value="regular">רגיל</option>
+              <option value="ams">AMS / ריבוי צבעים</option>
+              <option value="complex">מורכב</option>
+            </select>
+          </label>
+
+          <!-- Materials section -->
+          <div class="product-materials-section">
+            <div>
+              <strong>חומרים וצבעים</strong>
+              <button class="ghost-button btn-sm" type="button" id="add-material-row-btn">+ הוסף חומר</button>
+            </div>
+            <div id="product-materials-rows"></div>
+          </div>
+
+          <!-- Image gallery section -->
+          <div class="product-gallery-section">
+            <div>
+              <strong>גלריית תמונות</strong>
+              <button class="ghost-button btn-sm" type="button" id="add-image-row-btn">+ הוסף תמונה</button>
+            </div>
+            <div id="product-image-rows"></div>
+          </div>
+
+          <!-- Cost preview -->
+          <div class="cost-preview-panel" id="cost-preview-panel">
+            <strong>תצוגת עלות מחושבת</strong>
+            <div id="cost-preview-breakdown"><span style="color:var(--muted);font-size:var(--text-sm)">מלא שעות הדפסה וחומרים כדי לראות חישוב.</span></div>
+          </div>
+
+          <!-- Manual price override -->
+          <label class="checkbox-label">
+            <input name="manualPriceEnabled" type="checkbox" id="manual-price-toggle" style="width:auto" />
+            קביעת מחיר ידנית (במקום מחיר מחושב)
+          </label>
+          <label id="manual-price-field" hidden>
+            מחיר ידני (₪)
+            <input name="manualPrice" type="number" min="0" step="0.01" placeholder="0" />
+          </label>
+
+          <!-- Active toggle -->
+          <label class="checkbox-label">
+            <input name="productActive" type="checkbox" id="product-active-toggle" checked style="width:auto" />
+            מוצר פעיל (מוצג ללקוחות)
+          </label>
+
+          <!-- Hidden: edit mode -->
+          <input type="hidden" id="edit-product-id" name="editProductId" value="" />
+
+          <button class="primary-button" type="submit" id="product-submit-btn">הוספת מוצר</button>
+          <button class="ghost-button" type="button" id="product-edit-cancel" hidden>ביטול עריכה</button>
         </form>
       </section>
 
