@@ -19,6 +19,7 @@ app.use(express.json());
 app.all('/api/auth',          require('./api/auth'));
 app.all('/api/orders',        require('./api/orders'));
 app.all('/api/products',      require('./api/products'));
+app.all('/api/categories',    require('./api/categories'));
 app.all('/api/users',         require('./api/users'));
 app.all('/api/filaments',     require('./api/filaments'));
 app.all('/api/messages',      require('./api/messages'));

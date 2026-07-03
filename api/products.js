@@ -2,6 +2,7 @@ const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
 const { parseBody, getSession, requireAdmin } = require('./_middleware');
 
+// Full shape — admin only. Includes internal pricing mechanics and print notes.
 function normalizeRow(row) {
   return {
     id:                 row.id,
@@ -13,6 +14,7 @@ function normalizeRow(row) {
     stlUrl:             row.stl_url ?? '',
     sourceUrl:          row.source_url ?? '',
     category:           row.category ?? '',
+    categoryIds:        row.category_ids ?? [],
     active:             row.active !== false,
     printHours:         Number(row.print_hours) || 0,
     printProfile:       row.print_profile ?? 'regular',
@@ -27,6 +29,16 @@ function normalizeRow(row) {
     allowMultiple:      row.allow_multiple !== false,
     internalPrintNotes: row.internal_print_notes ?? '',
   };
+}
+
+// Public/friend shape — omits internal-only admin fields (pricing mechanics,
+// internal print notes). Never returned to unauthenticated/non-admin callers.
+function normalizePublicRow(row) {
+  const {
+    calculatedCost, manualPriceEnabled, manualPrice, internalPrintNotes,
+    ...publicFields
+  } = normalizeRow(row);
+  return publicFields;
 }
 
 module.exports = async (req, res) => {
@@ -56,6 +68,7 @@ module.exports = async (req, res) => {
         const stlUrl             = body.stlUrl             !== undefined ? String(body.stlUrl).trim()                      : null;
         const sourceUrl          = body.sourceUrl          !== undefined ? String(body.sourceUrl).trim()                   : null;
         const category           = body.category           !== undefined ? String(body.category).trim()                    : null;
+        const categoryIds        = body.categoryIds        !== undefined ? JSON.stringify(Array.isArray(body.categoryIds) ? body.categoryIds : []) : null;
         const printProfile       = body.printProfile       !== undefined ? String(body.printProfile).trim()                : null;
         const possibleColors     = body.possibleColors     !== undefined ? JSON.stringify(body.possibleColors)              : null;
         const requiredColors     = body.requiredColors     !== undefined ? JSON.stringify(body.requiredColors)              : null;
@@ -73,6 +86,7 @@ module.exports = async (req, res) => {
             stl_url             = COALESCE(${stlUrl},             stl_url),
             source_url          = COALESCE(${sourceUrl},          source_url),
             category            = COALESCE(${category},           category),
+            category_ids        = COALESCE(${categoryIds}::jsonb, category_ids),
             active              = COALESCE(${active},             active),
             print_hours         = COALESCE(${printHours},         print_hours),
             print_profile       = COALESCE(${printProfile},       print_profile),
@@ -90,13 +104,12 @@ module.exports = async (req, res) => {
           WHERE id = ${id}
           RETURNING
             id, name, cost, grams, description, image, stl_url,
-            source_url, category, active, print_hours, print_profile,
+            source_url, category, category_ids, active, print_hours, print_profile,
             images, materials, calculated_cost, manual_price_enabled, manual_price,
             possible_colors, required_colors, requires_admin_approval,
             allow_multiple, internal_print_notes
         `;
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-        const r = rows[0];
         return res.json(normalizeRow(rows[0]));
       } catch (err) {
         return res.status(500).json({ error: err.message });
@@ -123,11 +136,12 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     try {
       const user = await getSession(req);
+      const isAdmin = user?.role === 'admin';
       const sql = getSql();
-      const rows = user?.role === 'admin'
+      const rows = isAdmin
         ? await sql`
             SELECT id, name, cost, grams, description, image, stl_url,
-                   source_url, category, active, print_hours, print_profile,
+                   source_url, category, category_ids, active, print_hours, print_profile,
                    images, materials, calculated_cost, manual_price_enabled, manual_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes
@@ -135,13 +149,13 @@ module.exports = async (req, res) => {
           `
         : await sql`
             SELECT id, name, cost, grams, description, image, stl_url,
-                   source_url, category, active, print_hours, print_profile,
+                   source_url, category, category_ids, active, print_hours, print_profile,
                    images, materials, calculated_cost, manual_price_enabled, manual_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes
             FROM products WHERE active = TRUE ORDER BY created_at ASC
           `;
-      return res.json(rows.map(normalizeRow));
+      return res.json(rows.map(isAdmin ? normalizeRow : normalizePublicRow));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -162,6 +176,7 @@ module.exports = async (req, res) => {
       const stlUrl             = String(body.stlUrl ?? '').trim();
       const sourceUrl          = String(body.sourceUrl ?? '').trim();
       const category           = String(body.category ?? '').trim();
+      const categoryIds        = JSON.stringify(Array.isArray(body.categoryIds) ? body.categoryIds : []);
       const active             = body.active !== false;
       const printHours         = Math.max(Number(body.printHours) || 0, 0);
       const printProfile       = String(body.printProfile ?? 'regular').trim();
@@ -179,14 +194,14 @@ module.exports = async (req, res) => {
       await sql`
         INSERT INTO products (
           id, name, cost, grams, description, image, stl_url,
-          source_url, category, active, print_hours, print_profile,
+          source_url, category, category_ids, active, print_hours, print_profile,
           images, materials, calculated_cost, manual_price_enabled, manual_price,
           possible_colors, required_colors, requires_admin_approval,
           allow_multiple, internal_print_notes
         )
         VALUES (
           ${id}, ${name}, ${cost}, ${grams}, ${description}, ${image}, ${stlUrl},
-          ${sourceUrl}, ${category}, ${active}, ${printHours}, ${printProfile},
+          ${sourceUrl}, ${category}, ${categoryIds}, ${active}, ${printHours}, ${printProfile},
           ${images}, ${materials}, ${calculatedCost}, ${manualPriceEnabled}, ${manualPrice},
           ${possibleColors}, ${requiredColors}, ${requiresApproval},
           ${allowMultiple}, ${internalPrintNotes}
@@ -194,7 +209,7 @@ module.exports = async (req, res) => {
       `;
       return res.status(201).json(normalizeRow({
         id, name, cost, grams, description, image, stl_url: stlUrl,
-        source_url: sourceUrl, category, active, print_hours: printHours,
+        source_url: sourceUrl, category, category_ids: body.categoryIds ?? [], active, print_hours: printHours,
         print_profile: printProfile, images: body.images ?? [], materials: body.materials ?? [],
         calculated_cost: calculatedCost, manual_price_enabled: manualPriceEnabled, manual_price: manualPrice,
         possible_colors: body.possibleColors ?? [], required_colors: body.requiredColors ?? [],

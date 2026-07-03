@@ -146,6 +146,36 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_multiple BOOLEAN NOT NULL DEFAULT TRUE`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS internal_print_notes TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category_ids JSONB NOT NULL DEFAULT '[]'`;
+
+    // ── Categories table (dynamic, admin-managed) ─────────────
+    await sql`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+
+    const SEED_CATEGORIES = [
+      { id: 'cat-kitchen',  name: 'מטבח',        sortOrder: 1 },
+      { id: 'cat-kids',     name: 'ילדים',        sortOrder: 2 },
+      { id: 'cat-office',   name: 'עבודה / משרד', sortOrder: 3 },
+      { id: 'cat-car',      name: 'רכב',          sortOrder: 4 },
+      { id: 'cat-garden',   name: 'גינה',         sortOrder: 5 },
+      { id: 'cat-bathroom', name: 'אמבטיה',       sortOrder: 6 },
+      { id: 'cat-ideas',    name: 'רעיונות עתידיים', sortOrder: 7 },
+    ];
+    for (const c of SEED_CATEGORIES) {
+      await sql`
+        INSERT INTO categories (id, name, sort_order)
+        VALUES (${c.id}, ${c.name}, ${c.sortOrder})
+        ON CONFLICT (id) DO NOTHING
+      `;
+    }
 
     // ── Filaments table ───────────────────────────────────────
     await sql`
@@ -235,7 +265,7 @@ module.exports = async (req, res) => {
       `;
     }
 
-    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses'], seeded: true });
+    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories'], seeded: true });
   } catch (err) {
     console.error('init error:', err);
     res.status(500).json({ error: err.message });

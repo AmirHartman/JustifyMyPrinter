@@ -130,6 +130,7 @@
           <span class="tab-badge" id="pending-tab-badge"></span>
         </button>
         <button class="tab admin-tab" data-view="store-edit">ניהול חנות</button>
+        <button class="tab admin-tab" data-view="categories">קטגוריות</button>
         <button class="tab admin-tab" data-view="orders">
           הזמנות
           <span class="tab-badge" id="new-orders-badge" hidden></span>
@@ -236,6 +237,59 @@
         </div>
         <div class="store-edit-grid" id="store-edit-grid"></div>
         <p class="empty-state" id="store-edit-empty">אין מוצרים בקטלוג.</p>
+      </section>
+
+      <!-- ── Categories view ── -->
+      <section class="view" id="categories-view" aria-labelledby="categories-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="categories-title">ניהול קטגוריות</h2>
+            <p>קטגוריות דינמיות לסינון הקטלוג. מוצר יכול להשתייך למספר קטגוריות.</p>
+          </div>
+          <button class="primary-button btn-sm" id="add-category-btn" type="button">+ הוספת קטגוריה</button>
+        </div>
+
+        <form class="product-form filament-inline-form" id="category-form" hidden>
+          <input type="hidden" name="categoryId" />
+          <div class="filament-form-row">
+            <label>
+              שם קטגוריה
+              <input name="name" required placeholder="למשל: מטבח" />
+            </label>
+            <label>
+              תיאור (לא חובה)
+              <input name="description" placeholder="אופציונלי" />
+            </label>
+            <label>
+              סדר תצוגה
+              <input name="sortOrder" type="number" step="1" value="0" />
+            </label>
+            <label class="checkbox-label">
+              <input name="active" type="checkbox" checked style="width:auto" />
+              פעילה (מוצגת בקטלוג)
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="primary-button btn-sm" type="submit">שמירת קטגוריה</button>
+            <button class="ghost-button btn-sm" type="button" id="category-form-cancel">ביטול</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>שם</th>
+                <th>תיאור</th>
+                <th>סדר</th>
+                <th>סטטוס</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody id="categories-table-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="categories-empty">אין קטגוריות עדיין.</p>
       </section>
 
       <!-- ── Orders view ── -->
@@ -416,8 +470,20 @@
             <input name="sourceUrl" type="url" placeholder="https://www.thingiverse.com/thing:..." />
           </label>
           <label>
-            קטגוריה
+            קטגוריה (טקסט חופשי, לתאימות לאחור — לא חובה)
             <input name="category" placeholder="למשל: מטבח, ילדים, עבודה" />
+          </label>
+
+          <div class="product-materials-section">
+            <div>
+              <strong>קטגוריות</strong>
+            </div>
+            <div id="product-category-rows"></div>
+          </div>
+
+          <label class="checkbox-label">
+            <input name="requiresAdminApproval" type="checkbox" id="product-requires-approval" style="width:auto" />
+            רעיון עתידי — דורש אישור מנהל לפני הדפסה (לא מוצר מוכן מהמדף)
           </label>
 
           <hr class="form-divider" />

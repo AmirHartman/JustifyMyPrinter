@@ -6,6 +6,7 @@ export const store = {
   currentUser:    null,
   appMode:        "friend",
   products:       [],
+  categories:     [],        // dynamic product categories (public: active only, admin: all)
   orders:         [],        // admin: all orders
   users:          [],        // admin: all users
   myOrders:       [],        // friend: own orders
@@ -19,8 +20,9 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, orders, users, myOrders, filaments, pricingSettings] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings] = await Promise.all([
     api("/api/products"),
+    api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
     isAdmin      ? api("/api/users")                   : Promise.resolve([]),
     isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
@@ -28,6 +30,7 @@ export async function loadData() {
     isAdmin      ? api("/api/settings?key=pricing")    : Promise.resolve(null),
   ]);
   store.products       = products;
+  store.categories     = categories;
   store.orders         = orders;
   store.users          = users;
   store.myOrders       = myOrders;
@@ -37,6 +40,10 @@ export async function loadData() {
 
 export function findProduct(productId) {
   return store.products.find((p) => p.id === productId);
+}
+
+export function findCategory(categoryId) {
+  return store.categories.find((c) => c.id === categoryId);
 }
 
 export function getProductOrderedQuantity(productId) {

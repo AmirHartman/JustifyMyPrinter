@@ -265,6 +265,8 @@ productForm?.addEventListener("submit", async (event) => {
     stlUrl:             String(data.get("stlUrl") ?? "").trim(),
     sourceUrl:          String(data.get("sourceUrl") ?? "").trim(),
     category:           String(data.get("category") ?? "").trim(),
+    categoryIds:        collectCategoryRows(),
+    requiresAdminApproval: data.get("requiresAdminApproval") !== null,
     printHours:         Number(data.get("printHours")) || 0,
     printProfile:       String(data.get("printProfile") ?? "regular"),
     materials,
@@ -318,6 +320,37 @@ function collectMaterialRows() {
   })).filter((m) => m.filamentId);
 }
 
+function renderCategoryCheckboxes(selectedIds = []) {
+  const container = document.querySelector("#product-category-rows");
+  if (!container) return;
+  container.replaceChildren();
+
+  if (store.categories.length === 0) {
+    const note = document.createElement("span");
+    note.style.cssText = "color:var(--muted);font-size:var(--text-sm)";
+    note.textContent = "אין קטגוריות מוגדרות עדיין. אפשר להוסיף בלשונית \"קטגוריות\".";
+    container.append(note);
+    return;
+  }
+
+  store.categories.forEach((category) => {
+    const label = document.createElement("label");
+    label.className = "checkbox-label";
+    const checkbox = document.createElement("input");
+    checkbox.type    = "checkbox";
+    checkbox.value   = category.id;
+    checkbox.style.width = "auto";
+    checkbox.checked = selectedIds.includes(category.id);
+    label.append(checkbox, ` ${category.name}${category.active === false ? " (מושבתת)" : ""}`);
+    container.append(label);
+  });
+}
+
+function collectCategoryRows() {
+  const boxes = document.querySelectorAll("#product-category-rows input[type='checkbox']:checked");
+  return Array.from(boxes).map((box) => box.value);
+}
+
 function collectImageRows() {
   const rows = document.querySelectorAll("#product-image-rows .image-row");
   const mainRadio = document.querySelector("#product-image-rows input[name='mainImage']:checked");
@@ -351,6 +384,7 @@ function resetProductForm() {
   document.querySelector("#product-edit-cancel")?.setAttribute("hidden", "");
   document.querySelector("#product-add-title").textContent = "הוספת מוצר";
   document.querySelector("#product-active-toggle").checked = true;
+  renderCategoryCheckboxes([]);
 }
 
 // Exposed globally so render.js store-edit cards can call it
@@ -370,6 +404,8 @@ window.openProductEditForm = function openProductEditForm(product) {
   productForm.elements["printProfile"].value = product.printProfile ?? "regular";
   document.querySelector("#edit-product-id").value = product.id;
   document.querySelector("#product-active-toggle").checked = product.active !== false;
+  document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
+  renderCategoryCheckboxes(product.categoryIds ?? []);
 
   if (product.manualPriceEnabled) {
     productForm.elements["manualPriceEnabled"].checked = true;
@@ -616,6 +652,81 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
     btn.textContent = origLabel;
   }
 });
+
+// ── Category form (admin) ──────────────────────────────────────
+document.querySelector("#add-category-btn")?.addEventListener("click", () => {
+  const form = document.querySelector("#category-form");
+  if (!form) return;
+  form.reset();
+  form.elements["categoryId"].value = "";
+  form.elements["active"].checked = true;
+  form.hidden = false;
+  setView("categories");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.querySelector("#category-form-cancel")?.addEventListener("click", () => {
+  const form = document.querySelector("#category-form");
+  if (form) { form.reset(); form.hidden = true; }
+});
+
+document.querySelector("#category-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const id   = String(data.get("categoryId") ?? "").trim();
+  const isEdit = Boolean(id);
+
+  const payload = {
+    name:        String(data.get("name") ?? "").trim(),
+    description: String(data.get("description") ?? "").trim(),
+    sortOrder:   Number(data.get("sortOrder")) || 0,
+    active:      data.get("active") !== null,
+  };
+
+  const btn = form.querySelector("[type='submit']");
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "שומר...";
+
+  try {
+    if (isEdit) {
+      const updated = await api(`/api/categories?id=${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      const idx = store.categories.findIndex((c) => c.id === id);
+      if (idx !== -1) store.categories[idx] = updated;
+    } else {
+      const created = await api("/api/categories", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      store.categories.push(created);
+    }
+    form.reset();
+    form.hidden = true;
+    render();
+  } catch (err) {
+    alert(`שגיאה בשמירת קטגוריה: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+});
+
+window.openCategoryEditForm = function openCategoryEditForm(category) {
+  const form = document.querySelector("#category-form");
+  if (!form) return;
+  form.elements["categoryId"].value  = category.id;
+  form.elements["name"].value        = category.name;
+  form.elements["description"].value = category.description ?? "";
+  form.elements["sortOrder"].value   = category.sortOrder ?? 0;
+  form.elements["active"].checked    = category.active !== false;
+  form.hidden = false;
+  setView("categories");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
 
 // ── Pricing settings form ─────────────────────────────────────
 document.querySelector("#pricing-form")?.addEventListener("submit", async (event) => {

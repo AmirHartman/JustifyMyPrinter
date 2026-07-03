@@ -33,6 +33,7 @@ export function render() {
   renderItemStats();
   renderUsersAdmin();
   renderStoreEdit();
+  renderCategoriesAdmin();
   renderSummary();
   renderWelcome();
   renderFilaments();
@@ -40,6 +41,41 @@ export function render() {
 }
 
 // ── Catalog (friend view) ─────────────────────────────────────
+
+// Transient UI state — which category chip is selected. Not persisted in
+// store since it's a local view filter, not app data.
+let selectedCategoryId = null;
+
+function renderCategoryFilters() {
+  const container = document.querySelector("#category-filters");
+  if (!container) return;
+
+  const activeCategories = store.categories.filter((c) => c.active !== false);
+  if (activeCategories.length === 0) { container.replaceChildren(); return; }
+
+  // Selected category may have been deactivated/deleted since last render.
+  if (selectedCategoryId && !activeCategories.some((c) => c.id === selectedCategoryId)) {
+    selectedCategoryId = null;
+  }
+
+  container.replaceChildren();
+
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = `category-chip${selectedCategoryId === null ? " is-active" : ""}`;
+  allChip.textContent = "הכל";
+  allChip.addEventListener("click", () => { selectedCategoryId = null; render(); });
+  container.append(allChip);
+
+  activeCategories.forEach((category) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `category-chip${selectedCategoryId === category.id ? " is-active" : ""}`;
+    chip.textContent = category.name;
+    chip.addEventListener("click", () => { selectedCategoryId = category.id; render(); });
+    container.append(chip);
+  });
+}
 
 function getOrderEligibility() {
   const user = store.currentUser;
@@ -56,9 +92,15 @@ function renderCatalog() {
   const cardTemplate = document.querySelector("#product-card-template");
   if (!catalogGrid || !cardTemplate) return;
 
-  const visibleProducts = store.appMode === "admin"
+  renderCategoryFilters();
+
+  let visibleProducts = store.appMode === "admin"
     ? store.products
     : store.products.filter((p) => p.active !== false);
+
+  if (selectedCategoryId) {
+    visibleProducts = visibleProducts.filter((p) => p.categoryIds?.includes(selectedCategoryId));
+  }
 
   const eligibility = getOrderEligibility();
 
@@ -715,6 +757,83 @@ function renderStoreEdit() {
     card.append(imageWrap, body);
     grid.append(card);
   });
+}
+
+// ── Categories admin table ─────────────────────────────────────
+
+function renderCategoriesAdmin() {
+  const tbody = document.querySelector("#categories-table-body");
+  if (!tbody) return;
+
+  document.querySelector("#categories-empty")
+    ?.classList.toggle("is-visible", store.categories.length === 0);
+
+  tbody.replaceChildren();
+  store.categories.forEach((category) => {
+    const productCount = store.products.filter((p) => p.categoryIds?.includes(category.id)).length;
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(category.name)}</td>
+      <td>${escapeHtml(category.description ?? "")}</td>
+      <td class="stat-cell">${category.sortOrder ?? 0}</td>
+      <td>${category.active !== false
+        ? '<span class="status-badge status-active">פעילה</span>'
+        : '<span class="status-badge status-inactive">מושבתת</span>'}
+        ${productCount ? `<span class="status-badge status-pending">${productCount} מוצרים</span>` : ""}
+      </td>
+      <td class="actions-cell"></td>
+    `;
+
+    const cell = row.querySelector(".actions-cell");
+
+    const editBtn = document.createElement("button");
+    editBtn.className   = "ghost-button btn-sm";
+    editBtn.type        = "button";
+    editBtn.textContent = "ערוך";
+    editBtn.addEventListener("click", () => {
+      if (typeof window.openCategoryEditForm === "function") window.openCategoryEditForm(category);
+    });
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className   = "ghost-button btn-sm";
+    toggleBtn.type        = "button";
+    toggleBtn.textContent = category.active !== false ? "השבתה" : "הפעלה";
+    toggleBtn.addEventListener("click", () => toggleCategoryActive(category));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+    deleteBtn.type        = "button";
+    deleteBtn.textContent = "מחק";
+    deleteBtn.addEventListener("click", () => deleteCategory(category));
+
+    cell.append(editBtn, toggleBtn, deleteBtn);
+    tbody.append(row);
+  });
+}
+
+async function toggleCategoryActive(category) {
+  try {
+    const updated = await api(`/api/categories?id=${encodeURIComponent(category.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ active: category.active === false }),
+    });
+    const idx = store.categories.findIndex((c) => c.id === category.id);
+    if (idx !== -1) store.categories[idx] = updated;
+    render();
+  } catch (err) {
+    alert(`שגיאה בעדכון קטגוריה: ${err.message}`);
+  }
+}
+
+async function deleteCategory(category) {
+  if (!window.confirm(`למחוק את הקטגוריה "${category.name}"? פעולה זו אינה הפיכה.`)) return;
+  try {
+    await api(`/api/categories?id=${encodeURIComponent(category.id)}`, { method: "DELETE" });
+    store.categories = store.categories.filter((c) => c.id !== category.id);
+    render();
+  } catch (err) {
+    alert(`שגיאה במחיקת קטגוריה: ${err.message}`);
+  }
 }
 
 // ── Summary strip (admin view) ────────────────────────────────
