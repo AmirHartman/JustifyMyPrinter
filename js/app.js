@@ -815,6 +815,6 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
     document.body.dataset.entry = "app";
   }
 
-  setView(store.appMode === "admin" ? "items" : "catalog");
+  setView(store.appMode === "admin" ? "overview" : "catalog");
   render();
 })();

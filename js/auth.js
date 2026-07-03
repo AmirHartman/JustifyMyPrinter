@@ -74,9 +74,9 @@ export function applyAuth() {
     if (final) final.textContent = "חזרה לאזור האישי";
   } else {
     hero?.setAttribute("href", "dashboard.html");
-    if (hero)  hero.textContent  = "מעבור לחנות";
+    if (hero)  hero.textContent  = "כניסה / הרשמה";
     final?.setAttribute("href", "dashboard.html");
-    if (final) final.textContent = "מעבור לחנות";
+    if (final) final.textContent = "כניסה / הרשמה";
   }
 }
 

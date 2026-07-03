@@ -3,6 +3,7 @@ import { formatCurrency, escapeHtml, calculateProductCost } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog } from "./orders.js";
 import { createWhatsAppLink, whatsappTemplates, STATUS_LABELS } from "./whatsapp.js";
+import { setView } from "./auth.js";
 
 // Canonical order, used to build status <select> options (STATUS_LABELS also
 // carries legacy keys as a display fallback, which must not appear as choices).
@@ -35,6 +36,7 @@ export function render() {
   renderStoreEdit();
   renderCategoriesAdmin();
   renderSummary();
+  renderOverview();
   renderWelcome();
   renderFilaments();
   renderPricingForm();
@@ -105,6 +107,9 @@ function renderCatalog() {
   const eligibility = getOrderEligibility();
 
   catalogGrid.replaceChildren();
+  document.querySelector("#catalog-empty")
+    ?.classList.toggle("is-visible", visibleProducts.length === 0);
+
   visibleProducts.forEach((product) => {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
     renderProductImage(card.querySelector(".product-image"), product);
@@ -112,6 +117,8 @@ function renderCatalog() {
     card.querySelector("p").textContent  = product.description;
     card.querySelector(".cost").textContent = `עלות ייצור: ${formatCurrency(product.cost)}`;
     renderStlLink(card, product);
+    renderProductBadges(card, product);
+    renderProductFacts(card, product);
 
     const orderBtn = card.querySelector("button");
     if (eligibility.canOrder) {
@@ -849,6 +856,47 @@ function renderSummary() {
   summaryDebt.textContent   = formatCurrency(totalDebt);
 }
 
+// ── Overview cards (admin dashboard) ──────────────────────────
+
+const OVERVIEW_ORDER_CARDS = [
+  { key: "new",              label: "הזמנות חדשות",        filter: (o) => o.status === "new" },
+  { key: "waiting_approval", label: "ממתינות לאישור לקוח", filter: (o) => o.status === "waiting_approval" },
+  { key: "waiting_print",    label: "ממתינות להדפסה",      filter: (o) => o.status === "waiting_print" },
+  { key: "printing",         label: "בהדפסה עכשיו",        filter: (o) => o.status === "printing" },
+  { key: "ready_delivery",   label: "מוכנות למסירה",       filter: (o) => o.status === "ready_delivery" },
+  { key: "unpaid",           label: "הזמנות לא שולמו",     filter: (o) => !o.paid && o.status !== "cancelled" },
+];
+
+function renderOverview() {
+  const grid = document.querySelector("#overview-grid");
+  if (!grid) return;
+
+  grid.replaceChildren();
+
+  OVERVIEW_ORDER_CARDS.forEach(({ key, label, filter }) => {
+    const count = store.orders.filter(filter).length;
+    grid.append(buildOverviewCard(key, label, count, () => setView("orders")));
+  });
+
+  const pendingUsers = store.users.filter((u) => u.status === "pending").length;
+  grid.append(buildOverviewCard("pending-users", "משתמשים ממתינים לאישור", pendingUsers, () => {
+    setView("users");
+    document.querySelector('.sub-tab[data-sub="pending-users"]')?.click();
+  }));
+}
+
+function buildOverviewCard(key, label, count, onClick) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = `overview-card overview-card-${key}${count > 0 ? " has-count" : ""}`;
+  card.innerHTML = `
+    <span class="overview-card-count">${count}</span>
+    <span class="overview-card-label">${label}</span>
+  `;
+  card.addEventListener("click", onClick);
+  return card;
+}
+
 // ── Shared rendering helpers ──────────────────────────────────
 
 function renderProductImage(container, product) {
@@ -868,6 +916,37 @@ function renderStlLink(card, product) {
   const stlLink = card.querySelector(".stl-link");
   if (!product.stlUrl) { stlLink?.remove(); return; }
   if (stlLink) stlLink.href = product.stlUrl;
+}
+
+function renderProductBadges(card, product) {
+  const container = card.querySelector(".product-badges");
+  if (!container) return;
+  container.replaceChildren();
+  if (product.requiresAdminApproval) {
+    const badge = document.createElement("span");
+    badge.className = "product-badge product-badge-idea";
+    badge.textContent = "רעיון — דורש אישור מחיר לפני הדפסה";
+    container.append(badge);
+  }
+}
+
+function renderProductFacts(card, product) {
+  const container = card.querySelector(".product-facts");
+  if (!container) return;
+  container.replaceChildren();
+
+  const facts = [];
+  if (product.printHours) facts.push(`⏱️ כ־${product.printHours} שעות הדפסה`);
+  if (product.grams) facts.push(`🧵 כ־${product.grams} גרם חומר`);
+  if (product.possibleColors?.length) facts.push(`🎨 ${product.possibleColors.join(", ")}`);
+
+  if (facts.length === 0) { container.remove(); return; }
+  facts.forEach((fact) => {
+    const span = document.createElement("span");
+    span.className = "product-fact";
+    span.textContent = fact;
+    container.append(span);
+  });
 }
 
 // ── Product interactions ──────────────────────────────────────
@@ -1042,12 +1121,16 @@ function renderWsOrderList(container, orders, emptyMsg) {
   orders.forEach((order) => {
     const product = store.products.find((p) => p.id === order.productId);
     const title = product?.name ?? order.requestDescription ?? "בקשה מיוחדת";
+    const amount = Number(order.finalAmount ?? order.price);
+    const supportAmount = Number(order.supportAmount) || 0;
+
     const div = document.createElement("div");
     div.className = "ws-order-card";
     div.innerHTML = `
       <div class="ws-order-info">
         <span class="ws-order-product">${escapeHtml(title)}</span>
-        <span class="ws-order-meta">כמות ${order.quantity} · ₪${order.finalAmount ?? order.price}</span>
+        <span class="ws-order-meta">כמות ${order.quantity} · לתשלום ${formatCurrency(amount)}</span>
+        ${supportAmount > 0 ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} פרגון — תודה! 💛</span>` : ""}
         ${order.adminNotes ? `<span class="ws-order-meta">הערת אמיר: ${escapeHtml(order.adminNotes)}</span>` : ""}
         ${order.cancellationReason ? `<span class="ws-order-meta">סיבת ביטול: ${escapeHtml(order.cancellationReason)}</span>` : ""}
       </div>
@@ -1074,8 +1157,14 @@ function renderWsOrderList(container, orders, emptyMsg) {
       cancelBtn.className   = "ghost-button btn-sm";
       cancelBtn.type        = "button";
       cancelBtn.textContent = "ביטול הזמנה";
+      cancelBtn.title       = "אפשר לבטל רק לפני שמתחילים להדפיס";
       cancelBtn.addEventListener("click", () => cancelOwnOrder(order.id));
       actions.append(cancelBtn);
+
+      const cancelHint = document.createElement("small");
+      cancelHint.className = "ws-cancel-hint";
+      cancelHint.textContent = "אפשר לבטל רק לפני שההדפסה מתחילה";
+      actions.append(cancelHint);
     }
 
     container.append(div);

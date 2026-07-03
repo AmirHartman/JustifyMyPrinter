@@ -47,6 +47,7 @@
       <div class="category-filters" id="category-filters" role="tablist" aria-label="סינון לפי קטגוריה"></div>
 
       <div class="catalog-grid" id="catalog-grid"></div>
+      <p class="empty-state" id="catalog-empty">אין עדיין מוצרים בקטלוג. אפשר לבקש הדפסה מיוחדת למעלה.</p>
     </main>
 
     <dialog id="order-dialog">
@@ -114,9 +115,11 @@
       <article class="product-card">
         <div class="product-image" aria-hidden="true"></div>
         <div class="product-body">
+          <div class="product-badges"></div>
           <h3></h3>
           <p></p>
           <a class="stl-link" href="#" target="_blank" rel="noopener noreferrer">פתיחת מקור</a>
+          <div class="product-facts"></div>
           <div class="product-meta">
             <span class="cost"></span>
             <button class="primary-button">הזמנה</button>

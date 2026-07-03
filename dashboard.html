@@ -124,6 +124,7 @@
 
     <main class="app-shell">
       <nav class="tabs admin-tabs" aria-label="ניווט מנהל">
+        <button class="tab admin-tab" data-view="overview">סקירה כללית</button>
         <button class="tab admin-tab" data-view="items">ניהול פריטים</button>
         <button class="tab admin-tab" data-view="users">
           ניהול משתמשים
@@ -139,6 +140,17 @@
         <button class="tab admin-tab" data-view="pricing">הגדרות תמחור</button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>
+
+      <!-- ── Overview view ── -->
+      <section class="view" id="overview-view" aria-labelledby="overview-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="overview-title">סקירה כללית</h2>
+            <p>מה דורש תשומת לב עכשיו — לחיצה על כרטיס קופצת לרשימה המלאה.</p>
+          </div>
+        </div>
+        <div class="overview-grid" id="overview-grid"></div>
+      </section>
 
       <!-- ── Items stats view ── -->
       <section class="view" id="items-view" aria-labelledby="items-title">
