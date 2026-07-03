@@ -41,6 +41,13 @@ module.exports = async (req, res) => {
         const expenseDate = body.expenseDate !== undefined ? String(body.expenseDate)          : null;
         const notes       = body.notes       !== undefined ? String(body.notes).trim()         : null;
 
+        if (description !== null && !description) {
+          return res.status(400).json({ error: 'Description required' });
+        }
+        if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+          return res.status(400).json({ error: 'Amount must be greater than 0' });
+        }
+
         const rows = await sql`
           UPDATE expenses SET
             description  = COALESCE(${description}, description),

@@ -1258,6 +1258,9 @@ function renderWelcome() {
       message: `היי ${adminLabel}, רציתי לדבר איתך על הדפסה 😊`,
       label: `פתיחת WhatsApp עם ${adminLabel}`,
     });
+    if (whatsappLink.disabled) {
+      whatsappLink.textContent = "הוואטסאפ של המנהל עדיין לא הוגדר";
+    }
     whatsappContainer.replaceChildren(whatsappLink);
     const note = document.querySelector("#ws-whatsapp-note");
     if (note) note.hidden = !whatsappLink.disabled;
