@@ -12,6 +12,7 @@ export const store = {
   myOrders:       [],        // friend: own orders
   filaments:      [],        // all authenticated users: filament reference data
   pricingSettings: null,     // admin: pricing config
+  contactSettings: null,     // public-safe admin WhatsApp contact
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -20,7 +21,7 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings] = await Promise.all([
     api("/api/products"),
     api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
@@ -28,6 +29,7 @@ export async function loadData() {
     isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
     store.currentUser ? api("/api/filaments")          : Promise.resolve([]),
     isAdmin      ? api("/api/settings?key=pricing")    : Promise.resolve(null),
+    isFriendMode ? api("/api/settings?key=contact")    : Promise.resolve(null),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -36,6 +38,7 @@ export async function loadData() {
   store.myOrders       = myOrders;
   store.filaments      = filaments;
   store.pricingSettings = pricingSettings;
+  store.contactSettings = contactSettings;
 }
 
 export function findProduct(productId) {

@@ -1096,11 +1096,12 @@ function renderWelcome() {
 
   const whatsappContainer = document.querySelector("#ws-whatsapp-action");
   if (whatsappContainer) {
-    const adminPhone = document.querySelector('meta[name="admin-whatsapp-phone"]')?.content ?? "";
+    const adminPhone = store.contactSettings?.whatsappPhone ?? "";
+    const adminLabel = store.contactSettings?.displayLabel || "המנהל";
     const whatsappLink = createWhatsAppLink({
       phone: adminPhone,
-      message: "היי אמיר, רציתי לדבר איתך על הדפסה 😊",
-      label: "פתיחת WhatsApp עם אמיר",
+      message: `היי ${adminLabel}, רציתי לדבר איתך על הדפסה 😊`,
+      label: `פתיחת WhatsApp עם ${adminLabel}`,
     });
     whatsappContainer.replaceChildren(whatsappLink);
     const note = document.querySelector("#ws-whatsapp-note");

@@ -29,11 +29,15 @@ cp env.local.example .env.local   # set DATABASE_URL to your Neon connection str
 npm run dev                        # http://localhost:3000
 ```
 
-On a fresh database, seed tables once:
+On a fresh database, create the schema:
 
 ```bash
 curl -X POST http://localhost:3000/api/init
 ```
+
+Demo data is opt-in with `SEED_DEMO_DATA=true`. Production admin bootstrap is
+also opt-in and uses only `ADMIN_BOOTSTRAP_*` environment variables; there is no
+default production password. Init never changes an existing user's password.
 
 ---
 
@@ -44,7 +48,12 @@ The app runs as `npm start` → `node server.js`. Point Render at this repo with
 - **Build command:** `npm install`
 - **Start command:** `npm start`
 
-Set `DATABASE_URL` (or `DB_JMP_DATABASE_URL`) in the Render environment.
+Set `DATABASE_URL` (or `DB_JMP_DATABASE_URL`), `INIT_SECRET`,
+`ADMIN_WHATSAPP_PHONE`, `ADMIN_WHATSAPP_LABEL`, and `NODE_ENV=production` in
+the Render environment. Use `ADMIN_BOOTSTRAP_NAME`,
+`ADMIN_BOOTSTRAP_FULL_NAME`, `ADMIN_BOOTSTRAP_EMAIL`, and
+`ADMIN_BOOTSTRAP_PASSWORD` only when creating the first admin. Render supplies
+`PORT`.
 See `docs/RENDER_DEPLOYMENT_NOTES.md` for full setup.
 
 ---

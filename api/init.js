@@ -17,6 +17,10 @@ function canInitialize(req) {
     && timingSafeEqual(suppliedBuffer, expectedBuffer);
 }
 
+function enabled(name) {
+  return process.env[name] === 'true';
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
   if (!canInitialize(req)) {
@@ -25,6 +29,15 @@ module.exports = async (req, res) => {
   }
 
   const sql = getSql();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const seedDemoData = enabled('SEED_DEMO_DATA');
+  const bootstrapName = String(process.env.ADMIN_BOOTSTRAP_NAME || '').trim();
+  const bootstrapPassword = String(process.env.ADMIN_BOOTSTRAP_PASSWORD || '');
+  const canBootstrapAdmin = Boolean(bootstrapName && bootstrapPassword);
+  const canSeedProductionDemoUsers = isProduction
+    && seedDemoData
+    && enabled('SEED_DEMO_USERS')
+    && Boolean(process.env.DEMO_USER_PASSWORD);
 
   try {
     await sql`
@@ -169,12 +182,14 @@ module.exports = async (req, res) => {
       { id: 'cat-bathroom', name: 'אמבטיה',       sortOrder: 6 },
       { id: 'cat-ideas',    name: 'רעיונות עתידיים', sortOrder: 7 },
     ];
-    for (const c of SEED_CATEGORIES) {
-      await sql`
-        INSERT INTO categories (id, name, sort_order)
-        VALUES (${c.id}, ${c.name}, ${c.sortOrder})
-        ON CONFLICT (id) DO NOTHING
-      `;
+    if (seedDemoData) {
+      for (const c of SEED_CATEGORIES) {
+        await sql`
+          INSERT INTO categories (id, name, sort_order)
+          VALUES (${c.id}, ${c.name}, ${c.sortOrder})
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
     }
 
     // ── Filaments table ───────────────────────────────────────
@@ -196,12 +211,14 @@ module.exports = async (req, res) => {
       { id: 'filament-white-pla', name: 'לבן PLA',   materialType: 'PLA', colorHex: '#ffffff', pricePerKg: 80 },
       { id: 'filament-red-pla',   name: 'אדום PLA',  materialType: 'PLA', colorHex: '#ff0000', pricePerKg: 80 },
     ];
-    for (const f of SEED_FILAMENTS) {
-      await sql`
-        INSERT INTO filaments (id, name, material_type, color_hex, price_per_kg)
-        VALUES (${f.id}, ${f.name}, ${f.materialType}, ${f.colorHex}, ${f.pricePerKg})
-        ON CONFLICT (id) DO NOTHING
-      `;
+    if (seedDemoData) {
+      for (const f of SEED_FILAMENTS) {
+        await sql`
+          INSERT INTO filaments (id, name, material_type, color_hex, price_per_kg)
+          VALUES (${f.id}, ${f.name}, ${f.materialType}, ${f.colorHex}, ${f.pricePerKg})
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
     }
 
     // ── Settings table ────────────────────────────────────────
@@ -240,8 +257,32 @@ module.exports = async (req, res) => {
       ON CONFLICT (key) DO NOTHING
     `;
 
-    for (const u of SEED_USERS) {
-      const passwordHash = await hashPassword(u.password);
+    let adminCreated = false;
+    if (canBootstrapAdmin) {
+      const passwordHash = await hashPassword(bootstrapPassword);
+      const inserted = await sql`
+        INSERT INTO users (id, name, full_name, email, role, password, status)
+        VALUES (
+          ${String(process.env.ADMIN_BOOTSTRAP_ID || 'bootstrap-admin').trim()},
+          ${bootstrapName},
+          ${String(process.env.ADMIN_BOOTSTRAP_FULL_NAME || bootstrapName).trim()},
+          ${String(process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim()},
+          'admin',
+          ${passwordHash},
+          'active'
+        )
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
+      `;
+      adminCreated = inserted.length > 0;
+    }
+
+    const demoUsers = isProduction
+      ? (canSeedProductionDemoUsers ? SEED_USERS.filter((u) => u.role !== 'admin') : [])
+      : (seedDemoData ? SEED_USERS : []);
+    for (const u of demoUsers) {
+      const password = isProduction ? process.env.DEMO_USER_PASSWORD : u.password;
+      const passwordHash = await hashPassword(password);
       await sql`
         INSERT INTO users (id, name, full_name, email, role, password, status)
         VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.email}, ${u.role}, ${passwordHash}, ${u.status})
@@ -249,23 +290,33 @@ module.exports = async (req, res) => {
       `;
     }
 
-    for (const p of SEED_PRODUCTS) {
-      await sql`
-        INSERT INTO products (id, name, cost, grams, description, image, stl_url)
-        VALUES (${p.id}, ${p.name}, ${p.cost}, ${p.grams}, ${p.description}, ${p.image}, ${p.stlUrl})
-        ON CONFLICT (id) DO NOTHING
-      `;
+    if (seedDemoData) {
+      for (const p of SEED_PRODUCTS) {
+        await sql`
+          INSERT INTO products (id, name, cost, grams, description, image, stl_url)
+          VALUES (${p.id}, ${p.name}, ${p.cost}, ${p.grams}, ${p.description}, ${p.image}, ${p.stlUrl})
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
     }
 
-    for (const o of SEED_ORDERS) {
-      await sql`
-        INSERT INTO orders (id, product_id, friend_name, quantity, price, status, paid)
-        VALUES (${o.id}, ${o.productId}, ${o.friendName}, ${o.quantity}, ${o.price}, ${o.status}, ${o.paid})
-        ON CONFLICT (id) DO NOTHING
-      `;
+    if (demoUsers.length > 0) {
+      for (const o of SEED_ORDERS) {
+        await sql`
+          INSERT INTO orders (id, product_id, friend_name, quantity, price, status, paid)
+          VALUES (${o.id}, ${o.productId}, ${o.friendName}, ${o.quantity}, ${o.price}, ${o.status}, ${o.paid})
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
     }
 
-    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories'], seeded: true });
+    res.json({
+      ok: true,
+      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories'],
+      demoDataSeeded: seedDemoData,
+      demoUsersSeeded: demoUsers.length > 0,
+      adminBootstrap: canBootstrapAdmin ? (adminCreated ? 'created' : 'already-exists') : 'skipped',
+    });
   } catch (err) {
     console.error('init error:', err);
     res.status(500).json({ error: err.message });

@@ -38,6 +38,16 @@ Set these in the Render dashboard under **Environment**:
 |-----------------------|------------------------------------------|
 | `DATABASE_URL`        | Neon connection string (postgres://…)    |
 | `DB_JMP_DATABASE_URL` | Alternative — `api/_db.js` checks this first |
+| `INIT_SECRET`         | Secret required to authorize production `/api/init` |
+| `SEED_DEMO_DATA`      | Optional; set to `true` only when demo catalog data is intentional |
+| `SEED_DEMO_USERS`     | Optional second production opt-in for demo friend accounts |
+| `DEMO_USER_PASSWORD`  | Required with `SEED_DEMO_USERS`; never use a seeded default |
+| `ADMIN_BOOTSTRAP_NAME` | Optional first-admin login name |
+| `ADMIN_BOOTSTRAP_FULL_NAME` | Optional first-admin display name |
+| `ADMIN_BOOTSTRAP_EMAIL` | Optional first-admin email |
+| `ADMIN_BOOTSTRAP_PASSWORD` | Required with `ADMIN_BOOTSTRAP_NAME` to create the first admin |
+| `ADMIN_WHATSAPP_PHONE` | Public contact number shown to signed-in friends |
+| `ADMIN_WHATSAPP_LABEL` | Public display label for that WhatsApp contact |
 | `NODE_ENV`            | `production`                             |
 | `PORT`                | Set automatically by Render — do not hardcode |
 
@@ -56,10 +66,25 @@ Set these in the Render dashboard under **Environment**:
 
 - **Neon** PostgreSQL (serverless). Already connected.
 - `api/_db.js` — lazy connection via `DB_JMP_DATABASE_URL` or `DATABASE_URL`.
-- `api/init.js` — idempotent POST to create tables and seed data. Run once on a fresh DB:
+- `api/init.js` — idempotent POST to create tables. Run on a fresh DB:
   ```
-  curl -X POST https://<your-render-url>/api/init
+  curl -X POST \
+    -H "Authorization: Bearer $INIT_SECRET" \
+    https://<your-render-url>/api/init
   ```
+- In production, `/api/init` returns `503` when `INIT_SECRET` is not configured
+  and `403` when the supplied secret is missing or incorrect.
+- Demo products/categories/filaments are skipped unless `SEED_DEMO_DATA=true`.
+  Production demo accounts are additionally disabled unless
+  `SEED_DEMO_USERS=true` and `DEMO_USER_PASSWORD` are explicitly configured.
+- The first admin is created only when both `ADMIN_BOOTSTRAP_NAME` and
+  `ADMIN_BOOTSTRAP_PASSWORD` are set. Existing users and passwords are never
+  overwritten. Remove the bootstrap password from Render after successful setup.
+- Before release, delete or deactivate all seeded friend accounts and remove
+  demo orders. Never rely on seeded passwords. Run production init only with
+  `INIT_SECRET`.
+- `ADMIN_WHATSAPP_PHONE` is intentionally public to authenticated friends. It
+  is contact data, not a secret; no other environment values are returned.
 - Do not run destructive migrations. All schema changes use `ADD COLUMN IF NOT EXISTS`.
 
 ## Legacy files (do not delete without review)
