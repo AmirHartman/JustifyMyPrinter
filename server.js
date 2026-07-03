@@ -29,12 +29,22 @@ app.all('/api/init',          require('./api/init'));
 // Unknown /api/* paths → structured 404, never falls through to the HTML catch-all.
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
+// Lightweight runtime check for Render. Does not touch Neon or expose config.
+app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
+
 // ── Static frontend ───────────────────────────────────────────────────────────
 // Serve only the files the browser needs. Explicit routes prevent directory
 // listing and ensure api/, node_modules/, .env*, .git, *.md, and package
 // metadata are never reachable.
 
 const ROOT = __dirname;
+
+// Reject dotfiles explicitly instead of letting them reach the HTML fallback.
+app.use((req, res, next) => {
+  const hasDotfileSegment = req.path.split('/').some((segment) => segment.startsWith('.'));
+  if (hasDotfileSegment) return res.sendStatus(404);
+  next();
+});
 
 // HTML pages
 const HTML_PAGES = ['index.html', 'welcome.html', 'catalog.html', 'dashboard.html'];

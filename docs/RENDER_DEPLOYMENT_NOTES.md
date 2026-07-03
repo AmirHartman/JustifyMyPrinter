@@ -27,6 +27,7 @@ npm run dev      →  node --watch --env-file=.env.local server.js
 | Start command      | `npm start`                       |
 | Root directory     | `JustifyMyPrinter` (repo subfolder if needed) |
 | Port               | Auto-detected from `process.env.PORT` (server.js uses `PORT \|\| 3000`) |
+| Health check path  | `/healthz`                        |
 | Region             | Any (closest to Israel preferred) |
 
 ## Environment variables on Render
@@ -67,7 +68,7 @@ Set these in the Render dashboard under **Environment**:
 |------------------------------|---------|--------------------------------------------|
 | `.vercel/`                   | Legacy  | Vercel project metadata — not needed       |
 | `vercel.json`                | Legacy  | `{"framework": null}` — safe to ignore     |
-| `.github/workflows/deploy-pages.yml` | Legacy/Optional | GitHub Pages static preview — may still be used for static hosting of the landing page only |
+| `.github/workflows/deploy-pages.yml` | Legacy/Optional | Publishes a static preview only; it does not deploy the Express API or replace Render |
 
 Builder 2 (Runtime) should verify whether `deploy-pages.yml` is still intentionally
 used or can be disabled. Do not delete it without confirming with the owner.
@@ -92,8 +93,9 @@ No Vercel CLI needed.
 
 ## Render health check
 
-Render pings `/` (root). The Express server returns `index.html` for `/` — this
-is compatible with Render health checks.
+Configure Render's health check path as `/healthz`. It returns a small JSON
+response without querying Neon or exposing configuration. The root path also
+remains available and returns `index.html`.
 
 ## Notes for future builders
 
