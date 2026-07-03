@@ -1,0 +1,58 @@
+'use strict';
+
+const express = require('express');
+const path    = require('path');
+
+const app = express();
+
+// Parse JSON bodies. The _middleware.js parseBody() fast-path checks
+// req.body first, so express.json() here makes all handlers work without
+// any changes to the existing API files.
+app.use(express.json());
+
+// ── API routes ────────────────────────────────────────────────────────────────
+// Each handler exports a single (req, res) function, the same signature
+// Express uses. app.all forwards every HTTP method so the handlers can
+// branch on req.method internally, exactly as they did on Vercel.
+// Query strings (?id=, ?mine=true, ?key=pricing) are part of req.query,
+// not the path, so one entry per resource covers all operations.
+app.all('/api/auth',          require('./api/auth'));
+app.all('/api/orders',        require('./api/orders'));
+app.all('/api/products',      require('./api/products'));
+app.all('/api/users',         require('./api/users'));
+app.all('/api/filaments',     require('./api/filaments'));
+app.all('/api/messages',      require('./api/messages'));
+app.all('/api/notifications', require('./api/notifications'));
+app.all('/api/settings',      require('./api/settings'));
+app.all('/api/init',          require('./api/init'));
+
+// Unknown /api/* paths → structured 404, never falls through to the HTML catch-all.
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+
+// ── Static frontend ───────────────────────────────────────────────────────────
+// Serve only the files the browser needs. Explicit routes prevent directory
+// listing and ensure api/, node_modules/, .env*, .git, *.md, and package
+// metadata are never reachable.
+
+const ROOT = __dirname;
+
+// HTML pages
+const HTML_PAGES = ['index.html', 'welcome.html', 'catalog.html', 'dashboard.html'];
+app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+for (const page of HTML_PAGES) {
+  app.get(`/${page}`, (req, res) => res.sendFile(path.join(ROOT, page)));
+}
+
+// Stylesheet
+app.get('/styles.css', (req, res) => res.sendFile(path.join(ROOT, 'styles.css')));
+
+// JS modules directory — served as a unit; dotfiles inside are blocked.
+app.use('/js', express.static(path.join(ROOT, 'js'), { dotfiles: 'deny' }));
+
+// Unknown non-API paths → main page. Keeps the app working if the browser
+// navigates directly to a known URL (e.g. bookmark to /dashboard.html).
+app.use((req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`JustifyMyPrinter running on port ${PORT}`));

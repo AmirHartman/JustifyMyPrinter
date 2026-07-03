@@ -8,3 +8,4 @@ public/
 .DS_Store
 Thumbs.db
 .vercel
+.env*

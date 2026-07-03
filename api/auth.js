@@ -3,6 +3,7 @@ const { getSql } = require('./_db');
 const { parseBody, parseCookies, getSession } = require('./_middleware');
 
 const SESSION_MAX_AGE = 7 * 24 * 3600;
+const SECURE = process.env.NODE_ENV === 'production' ? '; Secure' : '';
 
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -47,7 +48,7 @@ module.exports = async (req, res) => {
           INSERT INTO sessions (token, user_id, user_name, user_role, expires_at)
           VALUES (${token}, ${user.id}, ${user.name}, ${user.role}, ${expiresAt})
         `;
-        res.setHeader('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE}`);
+        res.setHeader('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE}${SECURE}`);
         return res.json({ id: user.id, name: user.name, role: user.role });
       } catch (err) {
         return res.status(500).json({ error: err.message });
@@ -92,7 +93,7 @@ module.exports = async (req, res) => {
       if (cookies.session) {
         try { await sql`DELETE FROM sessions WHERE token = ${cookies.session}`; } catch { /* ignore */ }
       }
-      res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+      res.setHeader('Set-Cookie', `session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${SECURE}`);
       return res.json({ ok: true });
     }
 

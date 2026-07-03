@@ -25,7 +25,6 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT NULL`;
-    await sql`UPDATE users SET status = 'approved' WHERE status = 'pending'`;
 
     await sql`
       CREATE TABLE IF NOT EXISTS products (
