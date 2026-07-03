@@ -1,5 +1,27 @@
 const { getSql } = require('./_db');
 
+const USER_STATUSES = ['pending', 'active', 'inactive', 'rejected'];
+const ORDER_STATUSES = [
+  'new', 'waiting_approval', 'waiting_print', 'printing',
+  'ready_delivery', 'completed', 'cancelled',
+];
+
+const LEGACY_USER_STATUS = { approved: 'active' };
+const LEGACY_ORDER_STATUS = {
+  approved: 'waiting_print',
+  ready: 'ready_delivery',
+  delivered: 'completed',
+  rejected: 'cancelled',
+};
+
+function normalizeUserStatus(status) {
+  return LEGACY_USER_STATUS[status] || status;
+}
+
+function normalizeOrderStatus(status) {
+  return LEGACY_ORDER_STATUS[status] || status;
+}
+
 // ── Request body parsing ──────────────────────────────────────
 
 function parseBody(req) {
@@ -54,4 +76,34 @@ async function requireAdmin(req, res) {
   return user;
 }
 
-module.exports = { parseBody, parseCookies, getSession, requireAuth, requireAdmin };
+async function requireActiveUser(req, res) {
+  const user = await requireAuth(req, res);
+  if (!user) return null;
+  if (user.role === 'admin') return user;
+  try {
+    const sql = getSql();
+    const rows = await sql`SELECT status FROM users WHERE id = ${user.id}`;
+    const status = rows[0] ? normalizeUserStatus(rows[0].status) : null;
+    if (status !== 'active') {
+      res.status(403).json({ error: 'Only active friends can place orders' });
+      return null;
+    }
+    return { ...user, status };
+  } catch {
+    res.status(500).json({ error: 'Unable to verify user status' });
+    return null;
+  }
+}
+
+module.exports = {
+  USER_STATUSES,
+  ORDER_STATUSES,
+  normalizeUserStatus,
+  normalizeOrderStatus,
+  parseBody,
+  parseCookies,
+  getSession,
+  requireAuth,
+  requireActiveUser,
+  requireAdmin,
+};

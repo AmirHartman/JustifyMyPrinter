@@ -21,6 +21,11 @@ function normalizeRow(row) {
     calculatedCost:     row.calculated_cost != null ? Number(row.calculated_cost) : null,
     manualPriceEnabled: Boolean(row.manual_price_enabled),
     manualPrice:        row.manual_price != null ? Number(row.manual_price) : null,
+    possibleColors:     row.possible_colors ?? [],
+    requiredColors:     row.required_colors ?? [],
+    requiresAdminApproval: Boolean(row.requires_admin_approval),
+    allowMultiple:      row.allow_multiple !== false,
+    internalPrintNotes: row.internal_print_notes ?? '',
   };
 }
 
@@ -52,6 +57,11 @@ module.exports = async (req, res) => {
         const sourceUrl          = body.sourceUrl          !== undefined ? String(body.sourceUrl).trim()                   : null;
         const category           = body.category           !== undefined ? String(body.category).trim()                    : null;
         const printProfile       = body.printProfile       !== undefined ? String(body.printProfile).trim()                : null;
+        const possibleColors     = body.possibleColors     !== undefined ? JSON.stringify(body.possibleColors)              : null;
+        const requiredColors     = body.requiredColors     !== undefined ? JSON.stringify(body.requiredColors)              : null;
+        const requiresApproval   = body.requiresAdminApproval !== undefined ? Boolean(body.requiresAdminApproval)           : null;
+        const allowMultiple      = body.allowMultiple      !== undefined ? Boolean(body.allowMultiple)                       : null;
+        const internalPrintNotes = body.internalPrintNotes !== undefined ? String(body.internalPrintNotes).trim()            : null;
 
         const rows = await sql`
           UPDATE products SET
@@ -70,26 +80,24 @@ module.exports = async (req, res) => {
             materials           = COALESCE(${materials}::jsonb,   materials),
             calculated_cost     = COALESCE(${calculatedCost},     calculated_cost),
             manual_price_enabled = COALESCE(${manualPriceEnabled}, manual_price_enabled),
-            manual_price        = COALESCE(${manualPrice},        manual_price)
+            manual_price        = COALESCE(${manualPrice},        manual_price),
+            possible_colors     = COALESCE(${possibleColors}::jsonb, possible_colors),
+            required_colors     = COALESCE(${requiredColors}::jsonb, required_colors),
+            requires_admin_approval = COALESCE(${requiresApproval}, requires_admin_approval),
+            allow_multiple      = COALESCE(${allowMultiple}, allow_multiple),
+            internal_print_notes = COALESCE(${internalPrintNotes}, internal_print_notes),
+            updated_at          = NOW()
           WHERE id = ${id}
           RETURNING
             id, name, cost, grams, description, image, stl_url,
             source_url, category, active, print_hours, print_profile,
-            images, materials, calculated_cost, manual_price_enabled, manual_price
+            images, materials, calculated_cost, manual_price_enabled, manual_price,
+            possible_colors, required_colors, requires_admin_approval,
+            allow_multiple, internal_print_notes
         `;
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
         const r = rows[0];
-        return res.json({
-          id: r.id, name: r.name, cost: Number(r.cost), grams: Number(r.grams),
-          description: r.description, image: r.image, stlUrl: r.stl_url,
-          sourceUrl: r.source_url ?? '', category: r.category ?? '',
-          active: r.active !== false,
-          printHours: Number(r.print_hours) || 0, printProfile: r.print_profile ?? 'regular',
-          images: r.images ?? [], materials: r.materials ?? [],
-          calculatedCost: r.calculated_cost != null ? Number(r.calculated_cost) : null,
-          manualPriceEnabled: Boolean(r.manual_price_enabled),
-          manualPrice: r.manual_price != null ? Number(r.manual_price) : null,
-        });
+        return res.json(normalizeRow(rows[0]));
       } catch (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -120,13 +128,17 @@ module.exports = async (req, res) => {
         ? await sql`
             SELECT id, name, cost, grams, description, image, stl_url,
                    source_url, category, active, print_hours, print_profile,
-                   images, materials, calculated_cost, manual_price_enabled, manual_price
+                   images, materials, calculated_cost, manual_price_enabled, manual_price,
+                   possible_colors, required_colors, requires_admin_approval,
+                   allow_multiple, internal_print_notes
             FROM products ORDER BY created_at ASC
           `
         : await sql`
             SELECT id, name, cost, grams, description, image, stl_url,
                    source_url, category, active, print_hours, print_profile,
-                   images, materials, calculated_cost, manual_price_enabled, manual_price
+                   images, materials, calculated_cost, manual_price_enabled, manual_price,
+                   possible_colors, required_colors, requires_admin_approval,
+                   allow_multiple, internal_print_notes
             FROM products WHERE active = TRUE ORDER BY created_at ASC
           `;
       return res.json(rows.map(normalizeRow));
@@ -158,17 +170,26 @@ module.exports = async (req, res) => {
       const calculatedCost     = body.calculatedCost != null ? Number(body.calculatedCost) : null;
       const manualPriceEnabled = Boolean(body.manualPriceEnabled);
       const manualPrice        = body.manualPrice != null ? Number(body.manualPrice) : null;
+      const possibleColors     = JSON.stringify(Array.isArray(body.possibleColors) ? body.possibleColors : []);
+      const requiredColors     = JSON.stringify(Array.isArray(body.requiredColors) ? body.requiredColors : []);
+      const requiresApproval   = Boolean(body.requiresAdminApproval);
+      const allowMultiple      = body.allowMultiple !== false;
+      const internalPrintNotes = String(body.internalPrintNotes ?? '').trim();
 
       await sql`
         INSERT INTO products (
           id, name, cost, grams, description, image, stl_url,
           source_url, category, active, print_hours, print_profile,
-          images, materials, calculated_cost, manual_price_enabled, manual_price
+          images, materials, calculated_cost, manual_price_enabled, manual_price,
+          possible_colors, required_colors, requires_admin_approval,
+          allow_multiple, internal_print_notes
         )
         VALUES (
           ${id}, ${name}, ${cost}, ${grams}, ${description}, ${image}, ${stlUrl},
           ${sourceUrl}, ${category}, ${active}, ${printHours}, ${printProfile},
-          ${images}, ${materials}, ${calculatedCost}, ${manualPriceEnabled}, ${manualPrice}
+          ${images}, ${materials}, ${calculatedCost}, ${manualPriceEnabled}, ${manualPrice},
+          ${possibleColors}, ${requiredColors}, ${requiresApproval},
+          ${allowMultiple}, ${internalPrintNotes}
         )
       `;
       return res.status(201).json(normalizeRow({
@@ -176,6 +197,9 @@ module.exports = async (req, res) => {
         source_url: sourceUrl, category, active, print_hours: printHours,
         print_profile: printProfile, images: body.images ?? [], materials: body.materials ?? [],
         calculated_cost: calculatedCost, manual_price_enabled: manualPriceEnabled, manual_price: manualPrice,
+        possible_colors: body.possibleColors ?? [], required_colors: body.requiredColors ?? [],
+        requires_admin_approval: requiresApproval, allow_multiple: allowMultiple,
+        internal_print_notes: internalPrintNotes,
       }));
     } catch (err) {
       return res.status(500).json({ error: err.message });

@@ -1,8 +1,28 @@
+const { timingSafeEqual } = require('crypto');
 const { getSql } = require('./_db');
 const { SEED_PRODUCTS, SEED_USERS, SEED_ORDERS } = require('./_seed');
+const { hashPassword } = require('./_password');
+
+function canInitialize(req) {
+  if (process.env.NODE_ENV !== 'production') return true;
+  const expected = process.env.INIT_SECRET;
+  if (!expected) return false;
+  const authorization = String(req.headers.authorization || '');
+  const bearer = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  const supplied = String(req.headers['x-init-secret'] || bearer);
+  if (!supplied) return false;
+  const suppliedBuffer = Buffer.from(supplied);
+  const expectedBuffer = Buffer.from(expected);
+  return suppliedBuffer.length === expectedBuffer.length
+    && timingSafeEqual(suppliedBuffer, expectedBuffer);
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!canInitialize(req)) {
+    const status = process.env.INIT_SECRET ? 403 : 503;
+    return res.status(status).json({ error: status === 503 ? 'Database initialization is not configured' : 'Forbidden' });
+  }
 
   const sql = getSql();
 
@@ -25,6 +45,10 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT NULL`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS how_you_know_admin TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_message TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
     await sql`
       CREATE TABLE IF NOT EXISTS products (
@@ -84,6 +108,26 @@ module.exports = async (req, res) => {
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+    // messages and notifications are legacy MVP tables, retained for backward compatibility.
+
+    // ── Extended order columns ────────────────────────────────
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id TEXT`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_type TEXT NOT NULL DEFAULT 'catalog'`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS request_description TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_model_link TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS selected_colors JSONB NOT NULL DEFAULT '[]'`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_notes TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_notes TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS base_cost NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS support_amount NUMERIC(10,2) NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_amount NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_material_weight NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_print_time NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requires_user_price_approval BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_approved_price BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`;
 
     // ── Extended product columns ──────────────────────────────
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT ''`;
@@ -96,6 +140,12 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS calculated_cost NUMERIC(10,2)`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS manual_price_enabled BOOLEAN DEFAULT FALSE`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS manual_price NUMERIC(10,2)`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS possible_colors JSONB NOT NULL DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS required_colors JSONB NOT NULL DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS requires_admin_approval BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_multiple BOOLEAN NOT NULL DEFAULT TRUE`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS internal_print_notes TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
     // ── Filaments table ───────────────────────────────────────
     await sql`
@@ -132,6 +182,19 @@ module.exports = async (req, res) => {
       )
     `;
 
+    await sql`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'general',
+        amount NUMERIC(10,2) NOT NULL,
+        expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+
     const DEFAULT_PRICING = {
       electricityPerHour: 0.13,
       roundingMode: 'ceil',
@@ -148,14 +211,11 @@ module.exports = async (req, res) => {
     `;
 
     for (const u of SEED_USERS) {
+      const passwordHash = await hashPassword(u.password);
       await sql`
         INSERT INTO users (id, name, full_name, email, role, password, status)
-        VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.email}, ${u.role}, ${u.password}, ${u.status})
-        ON CONFLICT (id) DO UPDATE
-          SET name = EXCLUDED.name,
-              password = EXCLUDED.password,
-              role = EXCLUDED.role,
-              status = EXCLUDED.status
+        VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.email}, ${u.role}, ${passwordHash}, ${u.status})
+        ON CONFLICT (id) DO NOTHING
       `;
     }
 
@@ -175,7 +235,7 @@ module.exports = async (req, res) => {
       `;
     }
 
-    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings'], seeded: true });
+    res.json({ ok: true, tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses'], seeded: true });
   } catch (err) {
     console.error('init error:', err);
     res.status(500).json({ error: err.message });

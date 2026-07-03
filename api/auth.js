@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
-const { parseBody, parseCookies, getSession } = require('./_middleware');
+const { parseBody, parseCookies, getSession, normalizeUserStatus } = require('./_middleware');
+const { hashPassword, verifyPassword } = require('./_password');
 
 const SESSION_MAX_AGE = 7 * 24 * 3600;
 const SECURE = process.env.NODE_ENV === 'production' ? '; Secure' : '';
@@ -37,10 +38,17 @@ module.exports = async (req, res) => {
 
         const user = rows[0];
 
-        if (user.status === 'pending')  return res.json({ status: 'pending' });
-        if (user.status === 'rejected') return res.json({ status: 'rejected', reason: user.rejection_reason ?? '' });
+        const status = normalizeUserStatus(user.status);
+        if (status === 'pending')  return res.json({ status: 'pending' });
+        if (status === 'rejected') return res.json({ status: 'rejected', reason: user.rejection_reason ?? '' });
+        if (status === 'inactive') return res.status(403).json({ error: 'החשבון אינו פעיל. אנא צור קשר עם המנהל.' });
 
-        if (user.pwd !== password) return res.status(401).json({ error: 'הסיסמה שגויה.' });
+        const passwordCheck = await verifyPassword(password, user.pwd);
+        if (!passwordCheck.valid) return res.status(401).json({ error: 'הסיסמה שגויה.' });
+        if (passwordCheck.needsUpgrade) {
+          const passwordHash = await hashPassword(password);
+          await sql`UPDATE users SET password = ${passwordHash}, updated_at = NOW() WHERE id = ${user.id}`;
+        }
 
         const token     = randomUUID();
         const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString();
@@ -59,6 +67,9 @@ module.exports = async (req, res) => {
       const name            = String(body.name ?? '').trim();
       const fullName        = String(body.fullName ?? '').trim();
       const email           = String(body.email ?? '').trim().toLowerCase();
+      const phone           = String(body.phone ?? '').trim();
+      const howYouKnowAdmin = String(body.howYouKnowAdmin ?? '').trim();
+      const registrationMessage = String(body.registrationMessage ?? body.messageToAdmin ?? '').trim();
       const password        = String(body.password ?? '');
       const confirmPassword = String(body.confirmPassword ?? '');
 
@@ -77,9 +88,16 @@ module.exports = async (req, res) => {
         }
 
         const userId = `friend-${randomUUID()}`;
+        const passwordHash = await hashPassword(password);
         await sql`
-          INSERT INTO users (id, name, full_name, email, role, password, status)
-          VALUES (${userId}, ${name}, ${fullName}, ${email}, 'friend', ${password}, 'pending')
+          INSERT INTO users (
+            id, name, full_name, email, phone, how_you_know_admin,
+            registration_message, role, password, status
+          )
+          VALUES (
+            ${userId}, ${name}, ${fullName}, ${email}, ${phone}, ${howYouKnowAdmin},
+            ${registrationMessage}, 'friend', ${passwordHash}, 'pending'
+          )
         `;
 
         return res.json({ pending: true, name, fullName });

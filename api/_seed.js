@@ -84,11 +84,11 @@ const SEED_PRODUCTS = RAW_PRODUCTS.map((p) => ({
 }));
 
 const SEED_USERS = [
-  { id: 'admin',         name: 'amir',    fullName: 'אמיר הרטמן',   email: 'admin@justifymyprinter.com', role: 'admin',  password: '1236', status: 'approved' },
-  { id: 'friend-lior',   name: 'lior',    fullName: 'ליאור',         email: 'lior@example.com',           role: 'friend', password: '1234', status: 'approved' },
-  { id: 'friend-daniel', name: 'דניאל',   fullName: 'דניאל כהן',    email: 'daniel@example.com',         role: 'friend', password: '1234', status: 'approved' },
-  { id: 'friend-noa',    name: 'נועה',    fullName: 'נועה לוי',     email: 'noa@example.com',            role: 'friend', password: '1234', status: 'approved' },
-  { id: 'friend-neomi',  name: 'נעמיקי',  fullName: 'נעמי גולדברג', email: 'neomi@example.com',          role: 'friend', password: '1234', status: 'approved' },
+  { id: 'admin',         name: 'amir',    fullName: 'אמיר הרטמן',   email: 'admin@justifymyprinter.com', role: 'admin',  password: '1236', status: 'active' },
+  { id: 'friend-lior',   name: 'lior',    fullName: 'ליאור',         email: 'lior@example.com',           role: 'friend', password: '1234', status: 'active' },
+  { id: 'friend-daniel', name: 'דניאל',   fullName: 'דניאל כהן',    email: 'daniel@example.com',         role: 'friend', password: '1234', status: 'active' },
+  { id: 'friend-noa',    name: 'נועה',    fullName: 'נועה לוי',     email: 'noa@example.com',            role: 'friend', password: '1234', status: 'active' },
+  { id: 'friend-neomi',  name: 'נעמיקי',  fullName: 'נעמי גולדברג', email: 'neomi@example.com',          role: 'friend', password: '1234', status: 'active' },
 ];
 
 const SEED_ORDERS = [
@@ -98,7 +98,7 @@ const SEED_ORDERS = [
     friendName: 'דניאל',
     quantity: 1,
     price: 25,
-    status: 'ready',
+    status: 'ready_delivery',
     paid: false,
   },
   {

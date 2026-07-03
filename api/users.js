@@ -1,7 +1,7 @@
 const { getSql } = require('./_db');
-const { parseBody, requireAdmin } = require('./_middleware');
+const { parseBody, requireAdmin, USER_STATUSES, normalizeUserStatus } = require('./_middleware');
+const { hashPassword } = require('./_password');
 
-const VALID_STATUSES = ['approved', 'rejected', 'pending'];
 const VALID_ROLES    = ['admin', 'friend'];
 
 function normalizeRow(r) {
@@ -10,11 +10,14 @@ function normalizeRow(r) {
     name:            r.name,
     fullName:        r.full_name,
     email:           r.email,
+    phone:           r.phone ?? '',
+    howYouKnowAdmin: r.how_you_know_admin ?? '',
+    registrationMessage: r.registration_message ?? '',
     role:            r.role,
-    status:          r.status,
+    status:          normalizeUserStatus(r.status),
     rejectionReason: r.rejection_reason,
-    password:        r.password,
     createdAt:       r.created_at,
+    updatedAt:       r.updated_at,
   };
 }
 
@@ -35,13 +38,16 @@ module.exports = async (req, res) => {
         if (body.name     !== undefined) updates.name             = String(body.name).trim();
         if (body.fullName !== undefined) updates.full_name        = String(body.fullName).trim();
         if (body.email    !== undefined) updates.email            = String(body.email).trim().toLowerCase();
-        if (body.password !== undefined) updates.password         = String(body.password);
+        if (body.phone    !== undefined) updates.phone            = String(body.phone).trim();
+        if (body.howYouKnowAdmin !== undefined) updates.how_you_know_admin = String(body.howYouKnowAdmin).trim();
+        if (body.registrationMessage !== undefined) updates.registration_message = String(body.registrationMessage).trim();
+        if (body.password !== undefined) updates.password         = await hashPassword(String(body.password));
         if (body.role     !== undefined && VALID_ROLES.includes(body.role))      updates.role   = body.role;
-        if (body.status   !== undefined && VALID_STATUSES.includes(body.status)) updates.status = body.status;
+        if (body.status   !== undefined && USER_STATUSES.includes(body.status)) updates.status = body.status;
         if (body.status === 'rejected')  updates.rejection_reason = String(body.rejectionReason ?? '').trim() || null;
         if (body.status !== 'rejected' && body.status !== undefined) updates.rejection_reason = null;
 
-        if (body.status !== undefined && !VALID_STATUSES.includes(body.status)) {
+        if (body.status !== undefined && !USER_STATUSES.includes(body.status)) {
           return res.status(400).json({ error: 'Invalid status' });
         }
 
@@ -53,12 +59,14 @@ module.exports = async (req, res) => {
         const vals = Object.values(updates);
         const setClause = cols.map((col, i) => `${col} = $${i + 1}`).join(', ');
         await sql.query(
-          `UPDATE users SET ${setClause} WHERE id = $${vals.length + 1}`,
+          `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${vals.length + 1}`,
           [...vals, id]
         );
 
         const result = await sql.query(
-          `SELECT id, name, full_name, email, role, status, rejection_reason, password, created_at FROM users WHERE id = $1`,
+          `SELECT id, name, full_name, email, phone, how_you_know_admin, registration_message,
+                  role, status, rejection_reason, created_at, updated_at
+           FROM users WHERE id = $1`,
           [id]
         );
         const rows = result.rows ?? result;
@@ -94,7 +102,8 @@ module.exports = async (req, res) => {
     try {
       const sql = getSql();
       const rows = await sql`
-        SELECT id, name, full_name, email, role, status, rejection_reason, password, created_at
+        SELECT id, name, full_name, email, phone, how_you_know_admin, registration_message,
+               role, status, rejection_reason, created_at, updated_at
         FROM users ORDER BY created_at DESC
       `;
       return res.json(rows.map(normalizeRow));
