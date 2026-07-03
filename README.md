@@ -11,3 +11,7 @@ Static multi-page site for the 3D printer project. The published root is the rep
 ## Local preview
 
 Open `index.html` directly in a browser, or use any static file server if you want a local HTTP preview.
+
+## Build
+
+Run `npm run build` to create the static site in `public/`. The same command is used by the GitHub Pages workflow.

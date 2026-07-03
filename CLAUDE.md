@@ -65,12 +65,13 @@ All files under `api/` are Vercel serverless functions (Node.js, CommonJS).
 - `api/_seed.js` — static catalog data and demo users/orders; imported by `api/init.js`.
 - `api/auth.js` — `GET` (session check), `POST` with `action: login|register|logout`.
 - `api/init.js` — `POST` creates all tables and upserts seed data.
-- `api/orders.js`, `api/orders/[id].js` — order CRUD.
-- `api/products.js`, `api/products/[id].js` — product CRUD (admin only for write).
-- `api/users.js`, `api/users/[id].js` — user management (admin only).
-- `api/my-orders.js` — friend's own orders.
+- `api/orders.js` — order CRUD. Pass `?id=:id` for single-order operations (PUT/DELETE); `?mine=true` for friend's own orders.
+- `api/products.js` — product CRUD (admin only for write). Pass `?id=:id` for single-product operations (PUT/DELETE).
+- `api/users.js` — user management (admin only). Pass `?id=:id` for single-user operations (PUT/DELETE).
+- `api/filaments.js` — filament management. Pass `?id=:id` for single-filament operations (PUT/DELETE).
 - `api/messages.js` — friend↔admin chat thread (scoped to user).
 - `api/notifications.js` — per-user inbox notifications.
+- `api/settings.js` — key/value settings store (admin only). Pass `?key=pricing`.
 
 ### Auth & roles
 
@@ -85,6 +86,18 @@ New registrations start as `status: 'pending'` (role `friend`) and must be appro
 ### Database schema (Neon PostgreSQL)
 
 Tables: `users`, `products`, `orders`, `sessions`, `messages`, `notifications`. See `api/init.js` for full column definitions.
+
+## Vercel Hobby Plan Limitation
+
+This project is intended to stay on the Vercel Hobby (free) plan.
+
+- **Do not create more than 12 Serverless Functions in a single deployment.** The current count is 9 (all non-`_` files under `api/`).
+- Before adding any new file under `api/`, check whether it creates another Serverless Function. Files prefixed with `_` (e.g., `_db.js`, `_middleware.js`) are private helpers and do not count.
+- Avoid creating a separate route for every small action. Prefer consolidated endpoints that distinguish operations via HTTP method or query parameters.
+- Single-resource operations use a query param on the collection route: `PUT /api/products?id=:id`, `DELETE /api/orders?id=:id`, etc. Do not reintroduce `api/products/[id].js`-style sub-routes — each such file adds another function.
+- If backend functionality is needed, prefer extending an existing consolidated route (e.g., `/api/products`, `/api/orders`) over creating a new file.
+- Prefer client-side logic or static generation where possible instead of new API routes.
+- Do not suggest a solution that requires upgrading to Vercel Pro or Team unless the user explicitly asks for that.
 
 ### Product pricing
 

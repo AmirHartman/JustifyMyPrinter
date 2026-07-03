@@ -289,7 +289,7 @@ productForm?.addEventListener("submit", async (event) => {
 
   try {
     if (isEdit) {
-      const updated = await api(`/api/products/${editId}`, {
+      const updated = await api(`/api/products?id=${encodeURIComponent(editId)}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
@@ -598,7 +598,7 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
 
   try {
     if (isEdit) {
-      const updated = await api(`/api/filaments/${id}`, {
+      const updated = await api(`/api/filaments?id=${encodeURIComponent(id)}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });

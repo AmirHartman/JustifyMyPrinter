@@ -60,18 +60,80 @@ function renderCatalog() {
 
 // ── Orders table (admin view) ─────────────────────────────────
 
+const PAST_STATUSES = new Set(["delivered", "rejected"]);
+
+function buildOrderRow(order) {
+  const product = findProduct(order.productId);
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td>${escapeHtml(order.friendName)}</td>
+    <td>${escapeHtml(product?.name ?? "מוצר שנמחק")}</td>
+    <td>${order.quantity}</td>
+    <td>${formatCurrency(order.price)}</td>
+    <td></td>
+    <td></td>
+    <td></td>
+  `;
+
+  const statusSelect = document.createElement("select");
+  Object.entries(STATUS_LABELS).forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    option.selected = order.status === value;
+    statusSelect.append(option);
+  });
+  statusSelect.addEventListener("change", async () => {
+    order.status = statusSelect.value;
+    render();
+    try {
+      await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: order.status }),
+      });
+    } catch { /* status already updated locally */ }
+  });
+
+  const paidLabel = document.createElement("label");
+  paidLabel.className = "paid-toggle";
+  paidLabel.innerHTML = `<input type="checkbox" ${order.paid ? "checked" : ""} /> שולם`;
+  paidLabel.querySelector("input").addEventListener("change", async (event) => {
+    order.paid = event.target.checked;
+    render();
+    try {
+      await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ paid: order.paid }),
+      });
+    } catch { /* paid already updated locally */ }
+  });
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className   = "ghost-button btn-sm user-delete-btn order-delete-btn";
+  deleteBtn.type        = "button";
+  deleteBtn.textContent = "מחק";
+  deleteBtn.title       = "מחק הזמנה";
+  deleteBtn.setAttribute("aria-label", `מחק הזמנה של ${order.friendName}`);
+  deleteBtn.addEventListener("click", () => deleteOrder(order.id));
+
+  row.children[4].append(statusSelect);
+  row.children[5].append(paidLabel);
+  row.children[6].append(deleteBtn);
+  return row;
+}
+
 function renderOrders() {
-  const ordersTable = document.querySelector("#orders-table");
-  if (!ordersTable) return;
+  const ordersTable     = document.querySelector("#orders-table");
   const pastOrdersTable = document.querySelector("#past-orders-table");
-  const isPastOrder = (order) => ["delivered", "rejected"].includes(order.status);
-  const openOrders = store.orders.filter((order) => !isPastOrder(order));
-  const pastOrders = store.orders.filter(isPastOrder);
+  if (!ordersTable) return;
+
+  const openOrders = store.orders.filter((o) => !PAST_STATUSES.has(o.status));
+  const pastOrders = store.orders.filter((o) => PAST_STATUSES.has(o.status));
 
   // Badge on the orders tab for unreviewed (new) orders
   const newOrdersBadge = document.querySelector("#new-orders-badge");
   if (newOrdersBadge) {
-    const count = store.orders.filter((o) => o.status === "new").length;
+    const count = openOrders.filter((o) => o.status === "new").length;
     newOrdersBadge.textContent = count || "";
     newOrdersBadge.hidden = count === 0;
   }
@@ -79,73 +141,14 @@ function renderOrders() {
   ordersTable.replaceChildren();
   document.querySelector("#orders-empty")
     ?.classList.toggle("is-visible", openOrders.length === 0);
+  openOrders.forEach((order) => ordersTable.append(buildOrderRow(order)));
+
   if (pastOrdersTable) {
     pastOrdersTable.replaceChildren();
     document.querySelector("#past-orders-empty")
       ?.classList.toggle("is-visible", pastOrders.length === 0);
+    pastOrders.forEach((order) => pastOrdersTable.append(buildOrderRow(order)));
   }
-
-  const renderOrderRows = (orders, table, allowDelete) => orders.forEach((order) => {
-    const product = findProduct(order.productId);
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${escapeHtml(order.friendName)}</td>
-      <td>${escapeHtml(product?.name ?? "מוצר שנמחק")}</td>
-      <td>${order.quantity}</td>
-      <td>${formatCurrency(order.price)}</td>
-      <td></td>
-      <td></td>
-      <td></td>
-    `;
-
-    const statusSelect = document.createElement("select");
-    Object.entries(STATUS_LABELS).forEach(([value, label]) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
-      option.selected = order.status === value;
-      statusSelect.append(option);
-    });
-    statusSelect.addEventListener("change", async () => {
-      order.status = statusSelect.value;
-      render();
-      try {
-        await api(`/api/orders/${order.id}`, {
-          method: "PUT",
-          body: JSON.stringify({ status: order.status }),
-        });
-      } catch { /* status already updated locally */ }
-    });
-
-    const paidLabel = document.createElement("label");
-    paidLabel.className = "paid-toggle";
-    paidLabel.innerHTML = `<input type="checkbox" ${order.paid ? "checked" : ""} /> שולם`;
-    paidLabel.querySelector("input").addEventListener("change", async (event) => {
-      order.paid = event.target.checked;
-      render();
-      try {
-        await api(`/api/orders/${order.id}`, {
-          method: "PUT",
-          body: JSON.stringify({ paid: order.paid }),
-        });
-      } catch { /* paid already updated locally */ }
-    });
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className   = "ghost-button btn-sm user-delete-btn order-delete-btn";
-    deleteBtn.type        = "button";
-    deleteBtn.textContent = allowDelete ? "מחק" : "✕";
-    deleteBtn.title       = "מחק הזמנה";
-    deleteBtn.addEventListener("click", () => deleteOrder(order.id));
-
-    row.children[4].append(statusSelect);
-    row.children[5].append(paidLabel);
-    row.children[6].append(deleteBtn);
-    table.append(row);
-  });
-
-  renderOrderRows(openOrders, ordersTable, false);
-  if (pastOrdersTable) renderOrderRows(pastOrders, pastOrdersTable, true);
 }
 
 // ── Items stats table (admin view) ───────────────────────────
@@ -579,7 +582,7 @@ async function updateProduct(productId, updates) {
   render();
 
   try {
-    await api(`/api/products/${productId}`, {
+    await api(`/api/products?id=${encodeURIComponent(productId)}`, {
       method: "PUT",
       body: JSON.stringify(updates),
     });
@@ -597,7 +600,7 @@ async function deleteProduct(productId) {
   render();
 
   try {
-    await api(`/api/products/${productId}`, { method: "DELETE" });
+    await api(`/api/products?id=${encodeURIComponent(productId)}`, { method: "DELETE" });
   } catch (err) {
     alert(`שגיאה במחיקת מוצר: ${err.message}`);
     await loadData();
@@ -615,7 +618,7 @@ async function deleteOrder(orderId) {
     : "ההזמנה";
   if (!window.confirm(`למחוק את ${description}? פעולה זו אינה הפיכה.`)) return;
   try {
-    await api(`/api/orders/${orderId}`, { method: "DELETE" });
+    await api(`/api/orders?id=${encodeURIComponent(orderId)}`, { method: "DELETE" });
     store.orders = store.orders.filter((o) => o.id !== orderId);
     render();
   } catch (err) {
@@ -627,7 +630,7 @@ async function deleteOrder(orderId) {
 
 async function saveUserEdit(userId, updates) {
   try {
-    const updated = await api(`/api/users/${userId}`, {
+    const updated = await api(`/api/users?id=${encodeURIComponent(userId)}`, {
       method: "PUT",
       body: JSON.stringify(updates),
     });
@@ -644,7 +647,7 @@ async function deleteUser(userId) {
   const label = user ? `${user.name}${user.fullName ? ` (${user.fullName})` : ""}` : userId;
   if (!window.confirm(`למחוק את המשתמש ${label}? פעולה זו אינה הפיכה.`)) return;
   try {
-    await api(`/api/users/${userId}`, { method: "DELETE" });
+    await api(`/api/users?id=${encodeURIComponent(userId)}`, { method: "DELETE" });
     store.users = store.users.filter((u) => u.id !== userId);
     render();
   } catch (err) {
@@ -660,7 +663,7 @@ async function promptReject(userId) {
 
 async function updateUserStatus(userId, status, rejectionReason = "") {
   try {
-    const updated = await api(`/api/users/${userId}`, {
+    const updated = await api(`/api/users?id=${encodeURIComponent(userId)}`, {
       method: "PUT",
       body: JSON.stringify({ status, rejectionReason }),
     });
@@ -918,7 +921,7 @@ function renderFilaments() {
 async function deleteFilament(filamentId) {
   if (!window.confirm("למחוק חומר זה? פעולה זו אינה הפיכה.")) return;
   try {
-    await api(`/api/filaments/${filamentId}`, { method: "DELETE" });
+    await api(`/api/filaments?id=${encodeURIComponent(filamentId)}`, { method: "DELETE" });
     store.filaments = store.filaments.filter((f) => f.id !== filamentId);
     render();
   } catch (err) {

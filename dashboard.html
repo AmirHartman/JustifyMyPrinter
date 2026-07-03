@@ -136,7 +136,6 @@
         </button>
         <button class="tab admin-tab" data-view="filaments">חומרים וצבעים</button>
         <button class="tab admin-tab" data-view="pricing">הגדרות תמחור</button>
-        <button class="tab admin-tab" data-view="product-add">הוספת מוצר</button>
         <button class="tab admin-tab" data-view="messages">
           הודעות
           <span class="tab-badge" id="messages-badge" hidden></span>
@@ -262,37 +261,13 @@
                 <th>סכום</th>
                 <th>סטטוס</th>
                 <th>תשלום</th>
-                <th></th>
+                <th>פעולות</th>
               </tr>
             </thead>
             <tbody id="orders-table"></tbody>
           </table>
         </div>
-        <p class="empty-state" id="orders-empty">אין הזמנות פתוחות.</p>
-
-        <div class="section-heading orders-history-heading">
-          <div>
-            <h3>הזמנות עבר</h3>
-            <p>הזמנות שנמסרו או נדחו. מנהל יכול למחוק אותן לצמיתות.</p>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>חבר</th>
-                <th>מוצר</th>
-                <th>כמות</th>
-                <th>סכום</th>
-                <th>סטטוס</th>
-                <th>תשלום</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="past-orders-table"></tbody>
-          </table>
-        </div>
-        <p class="empty-state" id="past-orders-empty">אין הזמנות עבר.</p>
+        <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
       </section>
 
       <!-- ── Filaments view ── -->

@@ -1852,10 +1852,6 @@ menu {
   line-height: 1;
 }
 
-.orders-history-heading {
-  margin-top: 32px;
-}
-
 .store-edit-footer .ghost-button {
   font-size: var(--text-xs);
 }

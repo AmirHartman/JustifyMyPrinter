@@ -31,15 +31,13 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Prepare publish folder
-        shell: bash
-        run: |
-          mkdir -p public
-          cp index.html landing.html welcome.html catalog.html styles.css app.js public/
-          if [ -d assets ]; then
-            cp -R assets public/
-          fi
-          touch public/.nojekyll
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build static site
+        run: npm run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

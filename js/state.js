@@ -29,7 +29,7 @@ export async function loadData() {
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
     isAdmin      ? api("/api/users")                   : Promise.resolve([]),
     store.currentUser ? api("/api/notifications")      : Promise.resolve([]),
-    isFriendMode ? api("/api/my-orders")               : Promise.resolve([]),
+    isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
     isRealFriend ? api("/api/messages")                : Promise.resolve([]),
     isAdmin      ? api("/api/messages")                : Promise.resolve([]),
     store.currentUser ? api("/api/filaments")          : Promise.resolve([]),
