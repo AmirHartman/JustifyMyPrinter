@@ -48,7 +48,7 @@ loginForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (result.status === "pending" || result.status === "rejected") {
+  if (result.status === "rejected") {
     loginForm.reset();
     showLoginStatus(result.status, result.reason);
     return;
@@ -64,16 +64,20 @@ loginForm?.addEventListener("submit", async (event) => {
 
 registerForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const data            = new FormData(registerForm);
-  const name            = String(data.get("name") ?? "").trim();
-  const fullName        = String(data.get("fullName") ?? "").trim();
-  const email           = String(data.get("email") ?? "").trim();
-  const password        = String(data.get("password") ?? "");
-  const confirmPassword = String(data.get("confirmPassword") ?? "");
+  const data                = new FormData(registerForm);
+  const name                = String(data.get("name") ?? "").trim();
+  const fullName            = String(data.get("fullName") ?? "").trim();
+  const email               = String(data.get("email") ?? "").trim();
+  const phone               = String(data.get("phone") ?? "").trim();
+  const howYouKnowAdmin     = String(data.get("howYouKnowAdmin") ?? "").trim();
+  const registrationMessage = String(data.get("registrationMessage") ?? "").trim();
+  const password            = String(data.get("password") ?? "");
+  const confirmPassword     = String(data.get("confirmPassword") ?? "");
 
   if (name.length < 2)             { showRegisterError("שם משתמש צריך להיות לפחות שני תווים."); return; }
   if (fullName.length < 2)         { showRegisterError("נא להזין שם מלא."); return; }
   if (!email.includes("@"))        { showRegisterError("נא להזין כתובת אימייל תקינה."); return; }
+  if (phone.length < 7)            { showRegisterError("נא להזין מספר טלפון תקין."); return; }
   if (password.length < 4)         { showRegisterError("הסיסמה צריכה להיות לפחות 4 תווים."); return; }
   if (password !== confirmPassword) { showRegisterError("הסיסמאות לא תואמות."); return; }
 
@@ -86,7 +90,10 @@ registerForm?.addEventListener("submit", async (event) => {
   try {
     result = await api("/api/auth", {
       method: "POST",
-      body: JSON.stringify({ action: "register", name, fullName, email, password, confirmPassword }),
+      body: JSON.stringify({
+        action: "register", name, fullName, email, phone, howYouKnowAdmin, registrationMessage,
+        password, confirmPassword,
+      }),
     });
   } catch (err) {
     showRegisterError(err.message);
@@ -677,7 +684,9 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
   applyAuth();
   applyMode();
 
-  if (["catalog", "welcome"].includes(pageName) && !store.currentUser) {
+  // welcome.html is the personal area — it requires a session.
+  // catalog.html is public: active products are visible without login.
+  if (pageName === "welcome" && !store.currentUser) {
     window.location.href = "dashboard.html";
     return;
   }
@@ -693,7 +702,9 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
     applyMode();
   }
 
-  if (store.currentUser && ["app", "catalog", "welcome"].includes(pageName)) {
+  const shouldLoadData =
+    pageName === "catalog" || (store.currentUser && ["app", "welcome"].includes(pageName));
+  if (shouldLoadData) {
     try {
       await loadData();
     } catch (err) {

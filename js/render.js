@@ -14,7 +14,8 @@ const STATUS_LABELS = {
 
 const USER_STATUS_LABELS = {
   pending:  "ממתין לאישור",
-  approved: "מאושר",
+  active:   "פעיל",
+  inactive: "לא פעיל",
   rejected: "נדחה",
 };
 
@@ -36,6 +37,16 @@ export function render() {
 
 // ── Catalog (friend view) ─────────────────────────────────────
 
+function getOrderEligibility() {
+  const user = store.currentUser;
+  if (!user) return { canOrder: false, label: "התחבר כדי להזמין", clickable: true };
+  if (user.role === "admin" || user.status === "active") return { canOrder: true };
+  if (user.status === "pending") {
+    return { canOrder: false, label: "ממתין לאישור מנהל", clickable: false };
+  }
+  return { canOrder: false, label: "לא ניתן להזמין כרגע", clickable: false };
+}
+
 function renderCatalog() {
   const catalogGrid  = document.querySelector("#catalog-grid");
   const cardTemplate = document.querySelector("#product-card-template");
@@ -45,6 +56,8 @@ function renderCatalog() {
     ? store.products
     : store.products.filter((p) => p.active !== false);
 
+  const eligibility = getOrderEligibility();
+
   catalogGrid.replaceChildren();
   visibleProducts.forEach((product) => {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
@@ -53,7 +66,18 @@ function renderCatalog() {
     card.querySelector("p").textContent  = product.description;
     card.querySelector(".cost").textContent = `עלות ייצור: ${formatCurrency(product.cost)}`;
     renderStlLink(card, product);
-    card.querySelector("button").addEventListener("click", () => openOrderDialog(product.id));
+
+    const orderBtn = card.querySelector("button");
+    if (eligibility.canOrder) {
+      orderBtn.addEventListener("click", () => openOrderDialog(product.id));
+    } else {
+      orderBtn.textContent = eligibility.label;
+      orderBtn.classList.add("order-btn-disabled");
+      orderBtn.disabled = !eligibility.clickable;
+      if (eligibility.clickable) {
+        orderBtn.addEventListener("click", () => { window.location.href = "dashboard.html"; });
+      }
+    }
     catalogGrid.append(card);
   });
 }
@@ -214,8 +238,9 @@ function getUserOrderStats(userName) {
 }
 
 function renderUsersAdmin() {
-  const approved = store.users.filter((u) => u.status === "approved");
+  const active   = store.users.filter((u) => u.status === "active");
   const pending  = store.users.filter((u) => u.status === "pending");
+  const inactive = store.users.filter((u) => u.status === "inactive");
   const rejected = store.users.filter((u) => u.status === "rejected");
 
   const count = pending.length;
@@ -226,7 +251,7 @@ function renderUsersAdmin() {
   const activeTable = document.querySelector("#active-users-table");
   if (activeTable) {
     activeTable.replaceChildren();
-    const activeList = [...approved, ...rejected];
+    const activeList = [...active, ...inactive, ...rejected];
     document.querySelector("#active-users-empty")
       ?.classList.toggle("is-visible", activeList.length === 0);
 
@@ -239,18 +264,11 @@ function renderUsersAdmin() {
       row.innerHTML = `
         <td>
           ${escapeHtml(user.name)}
-          ${user.role === "admin" ? `<span class="status-badge status-approved">מנהל</span>` : ""}
-          ${user.status === "rejected" ? `<span class="status-badge status-rejected">${USER_STATUS_LABELS.rejected}</span>` : ""}
+          ${user.role === "admin" ? `<span class="status-badge status-active">מנהל</span>` : ""}
+          ${user.status !== "active" ? `<span class="status-badge status-${escapeHtml(user.status)}">${USER_STATUS_LABELS[user.status] ?? user.status}</span>` : ""}
         </td>
         <td>${escapeHtml(user.fullName ?? "")}</td>
         <td>${escapeHtml(user.email ?? "")}</td>
-        <td class="pwd-cell">
-          <div class="pwd-cell-inner">
-            <span class="pwd-dots">••••••</span>
-            <span class="pwd-text" hidden>${escapeHtml(user.password ?? "")}</span>
-            <button class="ghost-button btn-sm pwd-toggle" type="button">הצג</button>
-          </div>
-        </td>
         <td class="stat-cell">${stats.count}</td>
         <td class="stat-cell stat-revenue">${formatCurrency(stats.revenue)}</td>
         <td class="stat-cell">${formatCurrency(stats.paid)}</td>
@@ -258,17 +276,6 @@ function renderUsersAdmin() {
         <td class="stat-cell ${stats.profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.profit)}</td>
         <td class="actions-cell"></td>
       `;
-
-      // Password toggle
-      const toggle = row.querySelector(".pwd-toggle");
-      const dots   = row.querySelector(".pwd-dots");
-      const text   = row.querySelector(".pwd-text");
-      toggle.addEventListener("click", () => {
-        const showing  = !text.hidden;
-        dots.hidden    = !showing;
-        text.hidden    = showing;
-        toggle.textContent = showing ? "הצג" : "הסתר";
-      });
 
       // Edit / Delete buttons
       const actionsCell = row.querySelector(".actions-cell");
@@ -295,19 +302,21 @@ function renderUsersAdmin() {
         <option value="admin">מנהל</option>
       `;
       const STATUS_OPTIONS = `
-        <option value="approved">מאושר</option>
+        <option value="active">פעיל</option>
+        <option value="pending">ממתין לאישור</option>
+        <option value="inactive">לא פעיל</option>
         <option value="rejected">נדחה</option>
       `;
 
       const editCell = document.createElement("td");
-      editCell.colSpan = 10;
+      editCell.colSpan = 9;
       editCell.innerHTML = `
         <form class="user-edit-form">
           <div class="user-edit-fields">
             <label>שם משתמש<input name="name" value="${escapeHtml(user.name)}" required /></label>
             <label>שם מלא<input name="fullName" value="${escapeHtml(user.fullName ?? "")}" /></label>
             <label>אימייל<input name="email" type="email" value="${escapeHtml(user.email ?? "")}" /></label>
-            <label>סיסמה<input name="password" value="${escapeHtml(user.password ?? "")}" /></label>
+            <label>סיסמה חדשה (השאר ריק כדי לשמור על הקיימת)<input name="password" type="password" placeholder="סיסמה חדשה" autocomplete="new-password" /></label>
             <label>תפקיד<select name="role">${ROLE_OPTIONS}</select></label>
             <label>סטטוס<select name="status">${STATUS_OPTIONS}</select></label>
           </div>
@@ -320,20 +329,27 @@ function renderUsersAdmin() {
 
       // Set select values
       editCell.querySelector("[name=role]").value   = user.role   ?? "friend";
-      editCell.querySelector("[name=status]").value = user.status ?? "approved";
+      editCell.querySelector("[name=status]").value = user.status ?? "active";
 
       const form = editCell.querySelector("form");
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        await saveUserEdit(user.id, {
+        const status = fd.get("status");
+        const payload = {
           name:     fd.get("name"),
           fullName: fd.get("fullName"),
           email:    fd.get("email"),
-          password: fd.get("password"),
           role:     fd.get("role"),
-          status:   fd.get("status"),
-        });
+          status,
+        };
+        const password = String(fd.get("password") ?? "").trim();
+        if (password) payload.password = password;
+        if (status === "rejected" && user.status !== "rejected") {
+          const reason = window.prompt("סיבת הדחייה (תוצג למשתמש):") ?? "";
+          payload.rejectionReason = reason.trim();
+        }
+        await saveUserEdit(user.id, payload);
       });
       editCell.querySelector("[data-cancel]").addEventListener("click", () => {
         editRow.hidden = true;
@@ -384,7 +400,7 @@ function renderUsersAdmin() {
       approveBtn.className   = "primary-button btn-sm";
       approveBtn.type        = "button";
       approveBtn.textContent = "אשר";
-      approveBtn.addEventListener("click", () => updateUserStatus(user.id, "approved"));
+      approveBtn.addEventListener("click", () => updateUserStatus(user.id, "active"));
 
       const rejectBtn = document.createElement("button");
       rejectBtn.className   = "ghost-button btn-sm";
@@ -682,6 +698,9 @@ function renderWelcome() {
 
   const nameEl = document.querySelector("#ws-user-name");
   if (nameEl && store.currentUser) nameEl.textContent = store.currentUser.name;
+
+  const pendingBanner = document.querySelector("#ws-pending-banner");
+  if (pendingBanner) pendingBanner.hidden = store.currentUser?.status !== "pending";
 
   const open = store.myOrders.filter((o) => !["delivered", "rejected"].includes(o.status));
   const past = store.myOrders.filter((o) => ["delivered", "rejected"].includes(o.status));

@@ -1,6 +1,6 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
-const { parseBody, requireAuth, requireAdmin } = require('./_middleware');
+const { parseBody, getSession, requireAdmin } = require('./_middleware');
 
 function normalizeRow(row) {
   return {
@@ -119,12 +119,12 @@ module.exports = async (req, res) => {
   }
 
   // ── /api/products — collection operations ─────────────────────
+  // Active products are public (no login required); admin sees all.
   if (req.method === 'GET') {
-    const user = await requireAuth(req, res);
-    if (!user) return;
     try {
+      const user = await getSession(req);
       const sql = getSql();
-      const rows = user.role === 'admin'
+      const rows = user?.role === 'admin'
         ? await sql`
             SELECT id, name, cost, grams, description, image, stl_url,
                    source_url, category, active, print_hours, print_profile,

@@ -111,10 +111,16 @@ p {
    AUTH VISIBILITY RULES
    ============================================================ */
 body[data-auth="signed-out"] .topbar,
-body[data-auth="signed-out"] .app-shell,
+body[data-auth="signed-out"] .app-shell:not(.catalog-shell),
 body[data-auth="signed-out"] dialog,
 body[data-auth="signed-out"] .welcome-shell {
   display: none;
+}
+
+/* Public catalog stays visible without a session; ordering itself is still guarded in JS/API. */
+.order-btn-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 body[data-auth="signed-in"] .login-screen {
@@ -638,7 +644,8 @@ body[data-mode="friend"] .admin-tabs {
 }
 
 .status-badge.status-pending  { background: #fdf3d0; color: #8a6000; }
-.status-badge.status-approved { background: #d4f0ee; color: var(--teal-dark); }
+.status-badge.status-active   { background: #d4f0ee; color: var(--teal-dark); }
+.status-badge.status-inactive { background: #e8e8e8; color: var(--muted); }
 .status-badge.status-rejected { background: #fde8e8; color: var(--danger); }
 
 /* ============================================================
@@ -1870,6 +1877,18 @@ menu {
    PERSONAL WORKSPACE (welcome.html)
    ============================================================ */
 body[data-auth="signed-out"] .workspace-shell { display: none; }
+
+.ws-pending-banner {
+  padding: 14px 18px;
+  border-radius: 8px;
+  background: #fdf3d0;
+  color: #8a6000;
+  border: 1px solid #f0dfa0;
+}
+
+.ws-pending-banner p {
+  margin: 4px 0 0;
+}
 
 .workspace-shell {
   padding: clamp(16px, 4vw, 40px);

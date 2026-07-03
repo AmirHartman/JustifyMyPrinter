@@ -52,11 +52,13 @@ async function getSession(req) {
   try {
     const sql = getSql();
     const rows = await sql`
-      SELECT user_id AS id, user_name AS name, user_role AS role
-      FROM sessions
-      WHERE token = ${token} AND expires_at > NOW()
+      SELECT s.user_id AS id, s.user_name AS name, s.user_role AS role, u.status AS status
+      FROM sessions s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.token = ${token} AND s.expires_at > NOW()
     `;
-    return rows[0] || null;
+    if (!rows[0]) return null;
+    return { ...rows[0], status: normalizeUserStatus(rows[0].status) };
   } catch {
     return null;
   }
@@ -80,19 +82,11 @@ async function requireActiveUser(req, res) {
   const user = await requireAuth(req, res);
   if (!user) return null;
   if (user.role === 'admin') return user;
-  try {
-    const sql = getSql();
-    const rows = await sql`SELECT status FROM users WHERE id = ${user.id}`;
-    const status = rows[0] ? normalizeUserStatus(rows[0].status) : null;
-    if (status !== 'active') {
-      res.status(403).json({ error: 'Only active friends can place orders' });
-      return null;
-    }
-    return { ...user, status };
-  } catch {
-    res.status(500).json({ error: 'Unable to verify user status' });
+  if (user.status !== 'active') {
+    res.status(403).json({ error: 'Only active friends can place orders' });
     return null;
   }
+  return user;
 }
 
 module.exports = {
