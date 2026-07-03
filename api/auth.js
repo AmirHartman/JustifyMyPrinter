@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
       const password = String(body.password ?? '');
       try {
         const rows = await sql`
-          SELECT id, name, full_name, role, status, password AS pwd, rejection_reason
+          SELECT id, name, full_name, role, status, gender, password AS pwd, rejection_reason
           FROM users WHERE name = ${name}
         `;
         if (rows.length === 0) return res.status(401).json({ error: 'שם המשתמש לא מוכר. בדוק שהקלדת נכון.' });
@@ -58,7 +58,7 @@ module.exports = async (req, res) => {
           VALUES (${token}, ${user.id}, ${user.name}, ${user.role}, ${expiresAt})
         `;
         res.setHeader('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE}${SECURE}`);
-        return res.json({ id: user.id, name: user.name, role: user.role, status });
+        return res.json({ id: user.id, name: user.name, role: user.role, status, gender: user.gender });
       } catch (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -67,8 +67,8 @@ module.exports = async (req, res) => {
     if (action === 'register') {
       const name            = String(body.name ?? '').trim();
       const fullName        = String(body.fullName ?? '').trim();
-      const email           = String(body.email ?? '').trim().toLowerCase();
       const phone           = String(body.phone ?? '').trim();
+      const gender          = String(body.gender ?? '').trim();
       const howYouKnowAdmin = String(body.howYouKnowAdmin ?? '').trim();
       const registrationMessage = String(body.registrationMessage ?? body.messageToAdmin ?? '').trim();
       const password        = String(body.password ?? '');
@@ -76,7 +76,7 @@ module.exports = async (req, res) => {
 
       if (name.length < 2)             return res.status(400).json({ error: 'שם משתמש צריך להיות לפחות שני תווים.' });
       if (fullName.length < 2)         return res.status(400).json({ error: 'נא להזין שם מלא.' });
-      if (!email.includes('@'))        return res.status(400).json({ error: 'נא להזין כתובת אימייל תקינה.' });
+      if (!['male', 'female'].includes(gender)) return res.status(400).json({ error: 'נא לבחור מגדר.' });
       if (password.length < 4)         return res.status(400).json({ error: 'הסיסמה צריכה להיות לפחות 4 תווים.' });
       if (password !== confirmPassword) return res.status(400).json({ error: 'הסיסמאות לא תואמות.' });
 
@@ -92,11 +92,11 @@ module.exports = async (req, res) => {
         const passwordHash = await hashPassword(password);
         await sql`
           INSERT INTO users (
-            id, name, full_name, email, phone, how_you_know_admin,
+            id, name, full_name, phone, gender, how_you_know_admin,
             registration_message, role, password, status
           )
           VALUES (
-            ${userId}, ${name}, ${fullName}, ${email}, ${phone}, ${howYouKnowAdmin},
+            ${userId}, ${name}, ${fullName}, ${phone}, ${gender}, ${howYouKnowAdmin},
             ${registrationMessage}, 'friend', ${passwordHash}, 'pending'
           )
         `;

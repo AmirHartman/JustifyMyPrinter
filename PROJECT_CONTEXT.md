@@ -50,7 +50,7 @@ The codebase already exists and currently includes:
 There are conceptual flow issues. The current spec should be used to align the existing project.
 
 ## Important decision: WhatsApp replaces internal messages
-Internal site messaging and email notifications are cancelled for now, not just postponed.
+Internal site messaging and automated notifications are cancelled for now, not just postponed.
 
 The app should use WhatsApp as the main communication channel:
 - WhatsApp buttons in admin user profiles;

@@ -1,8 +1,12 @@
 # מדפסת חברים — Builder Plan
 
-This document defines the multi-agent implementation sequence for the
+> **Archived plan (completed 2026-07-04).** Builders 2–8 are implemented.
+> Builder 9 remains useful as a QA checklist, but this file no longer assigns
+> active ownership. Use `AGENTS.md` for current instructions.
+
+This document records the multi-agent implementation sequence used for the
 JustifyMyPrinter / מדפסת חברים project. Each builder has a specific role,
-tool, and file ownership scope. Read this before making any edits.
+tool, and historical file ownership scope.
 
 ## Collision rules (all builders must follow)
 
@@ -63,18 +67,14 @@ tool, and file ownership scope. Read this before making any edits.
 
 **Must not:** modify any file.
 
-**Key things to audit:**
-- Order status values in code vs. spec (critical mismatch).
-- User status 'approved' vs. 'active' mismatch.
-- `api/products.js` GET requires auth — blocks public catalog.
-- `api/orders.js` still writes to `notifications` table.
-- `js/state.js` still fetches `messages`, `conversations`, `notifications`.
-- `api/init.js` creates `messages` and `notifications` tables.
-- Registration missing: phone, how_you_know_admin, message_to_admin fields.
-- No mark-multiple-orders-as-paid endpoint.
-- No price approval flow.
-- No cancellation reason field on orders table.
-- Passwords stored in plaintext.
+**Original audit findings (resolved):**
+- Order and user statuses were aligned with the spec, with legacy normalization.
+- Product/category GETs were made public for active records.
+- Notification writes and frontend message/notification fetches were removed.
+- Legacy message/notification tables remain intentionally for compatibility.
+- Registration metadata, multi-pay, price approval, and cancellation reasons
+  were implemented.
+- Passwords now use scrypt; legacy plaintext is upgraded after successful login.
 
 ---
 

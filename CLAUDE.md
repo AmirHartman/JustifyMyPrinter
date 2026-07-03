@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) and other coding
 agents when working with this repository.
 
 > **Full project context:** see `docs/PROJECT_CONTEXT.md` and `docs/PRODUCT_SPEC.md`.
-> **Builder sequence and file ownership:** see `docs/BUILDER_PLAN.md`.
+> **Historical implementation sequence:** see `docs/BUILDER_PLAN.md`.
 > **Deployment notes:** see `docs/RENDER_DEPLOYMENT_NOTES.md`.
 
 ---
@@ -16,7 +16,7 @@ managing 3D-printed product orders between an admin (the printer owner, Amir)
 and "friends" (customers). The UI is entirely in Hebrew (RTL).
 
 This is not a landing page and not a generic shop. It manages catalog, orders,
-friends, admin dashboard, costs, revenue, expenses, and eventually filament
+friends, admin dashboard, costs, revenue, expenses, and filament
 inventory.
 
 ---
@@ -110,11 +110,14 @@ The function signature is identical — each file exports a single `(req, res)` 
 - `api/init.js` — `POST` creates all tables and upserts seed data (idempotent).
 - `api/orders.js` — order CRUD. `?id=:id` for single-order ops; `?mine=true` for friend's own.
 - `api/products.js` — product CRUD (admin only for write). `?id=:id` for single-product ops.
+- `api/categories.js` — public active-category list; admin category CRUD.
 - `api/users.js` — user management (admin only). `?id=:id` for single-user ops.
 - `api/filaments.js` — filament management. `?id=:id` for single-filament ops.
+- `api/expenses.js` — admin-only expense CRUD.
 - `api/messages.js` — authenticated compatibility stub returning `410 Gone`.
 - `api/notifications.js` — authenticated compatibility stub returning `410 Gone`.
-- `api/settings.js` — key/value settings store (admin only). `?key=pricing`.
+- `api/settings.js` — pricing/contact settings. Pricing is admin-only; sanitized
+  WhatsApp contact settings are public.
 
 ### Auth & roles
 
@@ -129,13 +132,17 @@ Two roles:
 User statuses: `pending` (awaiting approval), `active` (can order),
 `inactive` (deactivated), `rejected` (with reason).
 
+Registration stores `gender` as `male` or `female`. The authenticated session
+returns it so direct Hebrew address can use the appropriate grammatical form.
+
 New registrations start as `status: 'pending'` and must be approved by admin.
 Pending users can view the catalog but cannot order.
 
 ### Database schema (Neon PostgreSQL)
 
 Tables: `users`, `products`, `orders`, `sessions`, `filaments`, `settings`,
-`messages` (deprecated), `notifications` (deprecated).
+`expenses`, `categories`, `messages` (deprecated), and `notifications`
+(deprecated).
 
 See `api/init.js` for full column definitions. All schema changes use
 `ADD COLUMN IF NOT EXISTS` to be safe to re-run.
@@ -144,14 +151,15 @@ See `api/init.js` for full column definitions. All schema changes use
 
 ## Implementation status
 
-Builders 2–8 completed the runtime, schema, auth, orders, WhatsApp, categories,
-catalog, and UI passes. `docs/BUILDER_PLAN.md` and the gap notes in the original
-project-context documents are historical builder instructions; verify current
-behavior in code and the Builder 9 QA handoff before release.
+The runtime, schema, auth, orders, WhatsApp, category/catalog, and UI passes are
+implemented. `docs/BUILDER_PLAN.md` is historical and no longer assigns active
+file ownership. Verify current behavior in code.
+
+There is no automated test script; use targeted syntax, API, and browser checks.
 
 ---
 
-## General rules for all builders
+## General rules for all agents
 
 - Write builder plans, analyses, progress updates, summaries, test results, and
   final handoffs in English unless the user explicitly requests another language.
@@ -162,6 +170,6 @@ behavior in code and the Builder 9 QA handoff before release.
 - Store secrets only in env variables. Never expose them.
 - Only admin can see admin data. Users see only their own data.
 - Prefer extending existing endpoints over creating new API files.
-- Keep changes small and focused per builder pass.
+- Keep changes small and focused.
 - Use `ADD COLUMN IF NOT EXISTS` for all schema changes.
 - Do not delete `messages`/`notifications` DB tables yet — just stop using them.

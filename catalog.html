@@ -20,7 +20,6 @@
       </div>
       <div class="topbar-actions">
         <div class="user-bar" aria-label="משתמש מחובר">
-          <a class="admin-return-button" href="dashboard.html">חזרה לניהול</a>
           <span id="current-user">תצוגת חבר</span>
           <button class="ghost-button" id="logout-button" type="button">יציאה</button>
         </div>
@@ -51,28 +50,82 @@
     </main>
 
     <dialog id="order-dialog">
-      <form method="dialog" class="order-form" id="order-form">
+      <form method="dialog" class="order-form order-wizard" id="order-form" data-step="review">
         <button class="icon-button close-button" type="button" aria-label="סגירה">×</button>
-        <h2 id="order-product-name">הזמנה חדשה</h2>
-        <p id="order-product-description"></p>
         <input type="hidden" name="productId" />
         <input type="hidden" name="friendName" />
-        <p class="order-greeting" id="order-greeting"></p>
-        <div class="form-row">
+
+        <div class="wizard-steps" aria-hidden="true">
+          <span class="wizard-step-dot" data-step-dot="review"></span>
+          <span class="wizard-step-dot" data-step-dot="tip"></span>
+          <span class="wizard-step-dot" data-step-dot="summary"></span>
+          <span class="wizard-step-dot" data-step-dot="thanks"></span>
+        </div>
+
+        <section class="wizard-panel" data-panel="review">
+          <h2 id="order-product-name">הזמנה חדשה</h2>
+          <p id="order-product-description"></p>
+          <p class="order-greeting" id="order-greeting"></p>
           <label>
             כמות
             <input name="quantity" required type="number" min="1" value="1" />
           </label>
-          <label>
-            סכום לתשלום
-            <input name="price" required type="number" min="0.01" step="0.01" />
-          </label>
-        </div>
-        <p class="minimum-note" id="minimum-note"></p>
-        <menu>
-          <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
-          <button class="primary-button" id="submit-order" type="submit">יצירת הזמנה</button>
-        </menu>
+          <div class="cost-review">
+            <div class="cost-review-row"><span>עלות ליחידה</span><span id="review-unit-cost"></span></div>
+            <div class="cost-review-row cost-review-total"><span>עלות כוללת (מינימום)</span><span id="review-total-cost"></span></div>
+          </div>
+          <menu>
+            <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
+            <button class="primary-button" type="button" data-wizard-next="tip">המשך</button>
+          </menu>
+        </section>
+
+        <section class="wizard-panel" data-panel="tip" hidden>
+          <h2 id="tip-title">האם תרצה לפרגן? 💛</h2>
+          <p class="tip-pitch">
+            ההדפסה עולה לי בזמן, בחומרים ובבלאי על המדפסת. כל שקל מעבר לעלות
+            עוזר לי לשדרג ציוד, לקנות עוד גלילי פילמנט ולהמשיך לגדול עם הפרויקט
+            הקטן הזה — אבל זה לגמרי אופציונלי, ההחלטה כולה שלך.
+          </p>
+          <div class="tip-buttons">
+            <button class="tip-button" type="button" data-tip-add="1">+1 ₪</button>
+            <button class="tip-button" type="button" data-tip-add="5">+5 ₪</button>
+            <button class="tip-button" type="button" data-tip-add="10">+10 ₪</button>
+            <button class="ghost-button btn-sm" type="button" id="tip-reset">איפוס</button>
+          </div>
+          <div class="cost-review">
+            <div class="cost-review-row"><span>עלות בסיס</span><span id="tip-base-cost"></span></div>
+            <div class="cost-review-row"><span>פרגון</span><span id="tip-extra-cost"></span></div>
+            <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="tip-total-cost"></span></div>
+          </div>
+          <menu>
+            <button class="ghost-button" type="button" data-wizard-back="review">חזרה</button>
+            <button class="primary-button" type="button" data-wizard-next="summary">המשך</button>
+          </menu>
+        </section>
+
+        <section class="wizard-panel" data-panel="summary" hidden>
+          <h2>סיכום ההזמנה</h2>
+          <div class="cost-review">
+            <div class="cost-review-row"><span>מוצר</span><span id="summary-product-name"></span></div>
+            <div class="cost-review-row"><span>כמות</span><span id="summary-quantity"></span></div>
+            <div class="cost-review-row"><span>עלות בסיס</span><span id="summary-base-cost"></span></div>
+            <div class="cost-review-row"><span>פרגון</span><span id="summary-tip-cost"></span></div>
+            <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="summary-total-cost"></span></div>
+          </div>
+          <menu>
+            <button class="ghost-button" type="button" data-wizard-back="tip">חזרה</button>
+            <button class="primary-button" id="submit-order" type="submit">אישור ושליחת ההזמנה</button>
+          </menu>
+        </section>
+
+        <section class="wizard-panel" data-panel="thanks" hidden>
+          <h2>תודה רבה! 🎉</h2>
+          <p>ההזמנה נקלטה בהצלחה. אני אעדכן אותך בוואטסאפ לגבי הסטטוס וההדפסה.</p>
+          <menu>
+            <button class="primary-button" type="button" id="close-thanks">סגירה</button>
+          </menu>
+        </section>
       </form>
     </dialog>
 

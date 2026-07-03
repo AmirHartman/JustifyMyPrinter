@@ -20,13 +20,13 @@ export function showRegisterError(message) {
   el.classList.add("is-visible");
 }
 
-export function showRegisterPending(fullName, email) {
+export function showRegisterPending(fullName) {
   const el = document.querySelector("#register-pending");
   if (!el) return;
   el.innerHTML = `
     <strong>תודה ${fullName}!</strong><br>
     הבקשה שלך נשלחה בהצלחה ומחכה לאישור המנהל.<br>
-    תקבל עדכון לכתובת <strong>${email}</strong> כשהחשבון שלך יאושר.
+    אפשר להתחבר ולצפות בקטלוג כבר עכשיו. נעדכן אותך כשהחשבון יאושר.
   `;
   el.classList.add("is-visible");
   document.querySelector("#register-form")?.classList.remove("is-active");
@@ -59,10 +59,25 @@ export function showLoginStatus(status, reason) {
 export function applyAuth() {
   document.body.dataset.auth = store.currentUser ? "signed-in" : "signed-out";
   document.body.dataset.role = store.currentUser?.role ?? "friend";
+  document.body.dataset.gender = store.currentUser?.gender ?? "";
 
   const userLabel = document.querySelector("#current-user");
   if (userLabel && store.currentUser) {
     userLabel.innerHTML = `שלום <strong>${store.currentUser.name}</strong> 👋`;
+  }
+
+  const welcomeEyebrow = document.querySelector("#ws-welcome-eyebrow");
+  if (welcomeEyebrow && store.currentUser) {
+    welcomeEyebrow.textContent = store.currentUser.gender === "female"
+      ? "ברוכה הבאה פנימה"
+      : "ברוך הבא פנימה";
+  }
+
+  const tipTitle = document.querySelector("#tip-title");
+  if (tipTitle && store.currentUser) {
+    tipTitle.textContent = store.currentUser.gender === "female"
+      ? "האם תרצי לפרגן? 💛"
+      : "האם תרצה לפרגן? 💛";
   }
 
   const hero  = document.querySelector("#landing-store-button-hero");
@@ -92,7 +107,9 @@ export function applyMode() {
 
   if (store.appMode === "friend") {
     catalogTitle.textContent       = "מה אפשר להדפיס?";
-    catalogDescription.textContent = "בחר מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה.";
+    catalogDescription.textContent = store.currentUser?.gender === "female"
+      ? "בחרי מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה."
+      : "בחר מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה.";
   } else {
     catalogTitle.textContent       = "קטלוג מוצרים";
     catalogDescription.textContent = "בחר מוצר, כמות וסכום לתשלום. המינימום הוא עלות ההדפסה.";

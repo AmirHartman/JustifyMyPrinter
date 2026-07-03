@@ -1,7 +1,10 @@
 import { api } from "./api.js";
 import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
-import { openOrderDialog, updateOrderMinimum, getOrderFriendName, openCustomOrderDialog } from "./orders.js";
+import {
+  openOrderDialog, updateReviewCosts, getOrderFriendName, openCustomOrderDialog,
+  addTip, resetTip, goToStep, getTipAmount, getOrderTotal,
+} from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
 import { formatCurrency, createAiProductDraft, calculateProductCost } from "./utils.js";
 
@@ -67,8 +70,8 @@ registerForm?.addEventListener("submit", async (event) => {
   const data                = new FormData(registerForm);
   const name                = String(data.get("name") ?? "").trim();
   const fullName            = String(data.get("fullName") ?? "").trim();
-  const email               = String(data.get("email") ?? "").trim();
   const phone               = String(data.get("phone") ?? "").trim();
+  const gender              = String(data.get("gender") ?? "").trim();
   const howYouKnowAdmin     = String(data.get("howYouKnowAdmin") ?? "").trim();
   const registrationMessage = String(data.get("registrationMessage") ?? "").trim();
   const password            = String(data.get("password") ?? "");
@@ -76,8 +79,8 @@ registerForm?.addEventListener("submit", async (event) => {
 
   if (name.length < 2)             { showRegisterError("שם משתמש צריך להיות לפחות שני תווים."); return; }
   if (fullName.length < 2)         { showRegisterError("נא להזין שם מלא."); return; }
-  if (!email.includes("@"))        { showRegisterError("נא להזין כתובת אימייל תקינה."); return; }
   if (phone.length < 7)            { showRegisterError("נא להזין מספר טלפון תקין."); return; }
+  if (!["male", "female"].includes(gender)) { showRegisterError("נא לבחור מגדר."); return; }
   if (password.length < 4)         { showRegisterError("הסיסמה צריכה להיות לפחות 4 תווים."); return; }
   if (password !== confirmPassword) { showRegisterError("הסיסמאות לא תואמות."); return; }
 
@@ -91,7 +94,7 @@ registerForm?.addEventListener("submit", async (event) => {
     result = await api("/api/auth", {
       method: "POST",
       body: JSON.stringify({
-        action: "register", name, fullName, email, phone, howYouKnowAdmin, registrationMessage,
+        action: "register", name, fullName, phone, gender, howYouKnowAdmin, registrationMessage,
         password, confirmPassword,
       }),
     });
@@ -103,7 +106,7 @@ registerForm?.addEventListener("submit", async (event) => {
   }
 
   registerForm.reset();
-  showRegisterPending(fullName, email);
+  showRegisterPending(fullName);
 });
 
 document.querySelector("#logout-button")?.addEventListener("click", async () => {
@@ -148,7 +151,23 @@ document.querySelector("#reset-demo")?.addEventListener("click", async () => {
 // ── Order dialog ──────────────────────────────────────────────
 document.querySelector(".close-button")?.addEventListener("click", () => orderDialog?.close());
 document.querySelector("#cancel-order")?.addEventListener("click", () => orderDialog?.close());
-orderForm?.quantity?.addEventListener("input", updateOrderMinimum);
+orderForm?.quantity?.addEventListener("input", updateReviewCosts);
+
+orderForm?.querySelectorAll("[data-wizard-next]").forEach((button) => {
+  button.addEventListener("click", () => goToStep(button.dataset.wizardNext));
+});
+orderForm?.querySelectorAll("[data-wizard-back]").forEach((button) => {
+  button.addEventListener("click", () => goToStep(button.dataset.wizardBack));
+});
+orderForm?.querySelectorAll("[data-tip-add]").forEach((button) => {
+  button.addEventListener("click", () => addTip(Number(button.dataset.tipAdd)));
+});
+document.querySelector("#tip-reset")?.addEventListener("click", () => resetTip());
+
+document.querySelector("#close-thanks")?.addEventListener("click", () => {
+  orderDialog?.close();
+  setView(store.appMode === "admin" ? "orders" : "catalog");
+});
 
 orderForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -156,16 +175,9 @@ orderForm?.addEventListener("submit", async (event) => {
   const product = store.products.find((p) => p.id === data.get("productId"));
   if (!product) return;
 
-  const quantity = Number(data.get("quantity"));
-  const price    = Number(data.get("price"));
-  const minimum  = product.cost * quantity;
-
-  if (Math.round(price * 100) < Math.round(minimum * 100)) {
-    orderForm.price.setCustomValidity(`המינימום להזמנה הזו הוא ${formatCurrency(minimum)}`);
-    orderForm.reportValidity();
-    return;
-  }
-  orderForm.price.setCustomValidity("");
+  const quantity     = Number(data.get("quantity"));
+  const supportAmount = getTipAmount();
+  const price         = getOrderTotal();
 
   try {
     const order = await api("/api/orders", {
@@ -175,12 +187,13 @@ orderForm?.addEventListener("submit", async (event) => {
         friendName: getOrderFriendName(data),
         quantity,
         price,
+        baseCost: product.cost * quantity,
+        supportAmount,
       }),
     });
     store.orders.unshift(order);
     render();
-    orderDialog.close();
-    setView(store.appMode === "admin" ? "orders" : "catalog");
+    goToStep("thanks");
   } catch (err) {
     alert(`שגיאה ביצירת הזמנה: ${err.message}`);
   }

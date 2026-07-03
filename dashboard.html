@@ -66,12 +66,16 @@
               <input name="fullName" required autocomplete="name" placeholder="השם המלא שלך" />
             </label>
             <label>
-              אימייל
-              <input name="email" type="email" required autocomplete="email" placeholder="כתובת אימייל" />
-            </label>
-            <label>
               טלפון
               <input name="phone" type="tel" required autocomplete="tel" placeholder="050-1234567" />
+            </label>
+            <label>
+              מגדר
+              <select name="gender" required>
+                <option value="" selected disabled>בחירה</option>
+                <option value="male">גבר</option>
+                <option value="female">אישה</option>
+              </select>
             </label>
             <label>
               איך הגעת לפרוייקט?
@@ -207,7 +211,6 @@
                 <tr>
                   <th>שם משתמש</th>
                   <th>שם מלא</th>
-                  <th>אימייל</th>
                   <th>הזמנות</th>
                   <th>הכנסה</th>
                   <th>שולם</th>
@@ -229,7 +232,6 @@
                 <tr>
                   <th>שם משתמש</th>
                   <th>שם מלא</th>
-                  <th>אימייל</th>
                   <th>תאריך הרשמה</th>
                   <th>פעולות</th>
                 </tr>

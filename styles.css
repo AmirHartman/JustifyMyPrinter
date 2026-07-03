@@ -153,7 +153,6 @@ body[data-mode="friend"] .admin-tabs {
 .tab,
 .icon-button,
 .auth-mode-button,
-.admin-return-button,
 .back-link {
   display: inline-flex;
   align-items: center;
@@ -702,26 +701,6 @@ body[data-mode="friend"] .admin-tabs {
 .user-bar span strong {
   color: var(--ink);
   font-weight: 800;
-}
-
-.admin-return-button {
-  display: none;
-}
-
-body[data-role="admin"] .admin-return-button {
-  display: inline-flex;
-  min-height: 40px;
-  margin-left: 14px;
-  padding: 0 15px;
-  color: #fff;
-  background: var(--danger);
-  border-color: var(--danger);
-  font-weight: 800;
-  font-size: var(--text-sm);
-}
-
-body[data-role="admin"] .admin-return-button:hover {
-  background: #983337;
 }
 
 .summary-strip {
@@ -1542,10 +1521,94 @@ dialog::backdrop {
   line-height: 1;
 }
 
-.minimum-note {
+/* ── Order wizard steps ────────────────────────────────────── */
+.wizard-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: -6px 0 4px;
+}
+
+.wizard-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+  transition: background 0.15s ease;
+}
+
+.wizard-step-dot.is-active {
+  background: var(--teal);
+}
+
+.wizard-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-panel[hidden] {
+  display: none;
+}
+
+.tip-pitch {
+  font-size: var(--text-sm);
   color: var(--muted);
-  font-size: var(--text-xs);
-  margin-bottom: 0;
+  line-height: 1.6;
+  background: rgba(15, 127, 122, 0.08);
+  border-right: 3px solid var(--teal);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0;
+}
+
+.tip-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tip-button {
+  flex: 1;
+  min-width: 64px;
+  border: 1px solid var(--teal);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--teal-dark);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.tip-button:hover {
+  background: var(--teal);
+  color: #fff;
+}
+
+.cost-review {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.cost-review-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.cost-review-total {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: var(--text-base);
 }
 
 .form-row {
@@ -1620,10 +1683,6 @@ menu {
   .user-bar a {
     flex: 1;
     justify-content: center;
-  }
-
-  body[data-role="admin"] .admin-return-button {
-    margin-left: 0;
   }
 
   .landing-product-wall,

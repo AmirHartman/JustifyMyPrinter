@@ -48,7 +48,7 @@ User registration must collect:
 - full name;
 - display name / nickname (username);
 - phone;
-- email;
+- gender (used for gender-aware Hebrew wording);
 - password (confirm password);
 - how the user knows the admin (e.g. "friend of Lior");
 - short message to the admin.
@@ -59,8 +59,8 @@ User statuses:
 - `inactive` — deactivated;
 - `rejected` — rejected with reason.
 
-> **Gap (Builder 4):** Current code uses 'approved' for the active state and
-> is missing phone, "how do you know me", and "message to admin" fields.
+> Implemented: the API uses these canonical states, captures these registration
+> fields, and normalizes legacy `approved` values to `active`.
 
 ## 4. Site structure
 
@@ -126,8 +126,8 @@ Product fields:
 
 Categories must be dynamic, editable in admin, and products may belong to multiple.
 
-> **Gap (Builder 7):** `category` is currently a single text field in the DB.
-> Dynamic multi-category support needs a schema change and admin UI.
+> Implemented with an admin-managed `categories` table and product
+> `category_ids`. The legacy single `category` field remains for compatibility.
 
 ## 6. Orders
 
@@ -155,9 +155,7 @@ Order approval:
 | `completed`        | Delivered and done                                  |
 | `cancelled`        | Cancelled (reason required)                         |
 
-> **Gap (Builder 5):** Current code uses a different set of statuses
-> (`new, approved, printing, ready, delivered, rejected`). Statuses must be
-> migrated to the canonical set above without losing existing order data.
+> Implemented. Legacy order status values are normalized at API boundaries.
 
 Payment is separate from status:
 - `paid: true/false` (manual, no online payment in MVP).
@@ -225,8 +223,9 @@ Admin can mark one or multiple orders as paid.
 
 ## 8. WhatsApp communication
 
-**No internal messaging and no email notifications in MVP.**
-Existing internal messaging must be removed (Builder 6 owns this).
+**No internal messaging or automated notifications in MVP.**
+Internal messaging is disabled. Compatibility endpoints return `410 Gone`, and
+the frontend uses WhatsApp links/templates.
 
 WhatsApp is the communication channel.
 
@@ -357,7 +356,7 @@ Post-release (can wait):
 - full transparent fund page;
 - printer connection;
 - online payment;
-- automatic email/WhatsApp notifications;
+- automatic WhatsApp notifications;
 - friend-submitted idea board;
 - advanced visual polish;
 - cart.

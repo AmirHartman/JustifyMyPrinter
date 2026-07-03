@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         full_name TEXT NOT NULL DEFAULT '',
-        email TEXT NOT NULL DEFAULT '',
+        gender TEXT NOT NULL DEFAULT 'male',
         role TEXT NOT NULL DEFAULT 'friend',
         password TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
@@ -56,7 +56,8 @@ module.exports = async (req, res) => {
 
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT ''`;
-    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT NOT NULL DEFAULT 'male'`;
+    await sql`ALTER TABLE users DROP COLUMN IF EXISTS email`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT NULL`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS how_you_know_admin TEXT NOT NULL DEFAULT ''`;
@@ -261,12 +262,12 @@ module.exports = async (req, res) => {
     if (canBootstrapAdmin) {
       const passwordHash = await hashPassword(bootstrapPassword);
       const inserted = await sql`
-        INSERT INTO users (id, name, full_name, email, role, password, status)
+        INSERT INTO users (id, name, full_name, gender, role, password, status)
         VALUES (
           ${String(process.env.ADMIN_BOOTSTRAP_ID || 'bootstrap-admin').trim()},
           ${bootstrapName},
           ${String(process.env.ADMIN_BOOTSTRAP_FULL_NAME || bootstrapName).trim()},
-          ${String(process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim()},
+          'male',
           'admin',
           ${passwordHash},
           'active'
@@ -284,8 +285,8 @@ module.exports = async (req, res) => {
       const password = isProduction ? process.env.DEMO_USER_PASSWORD : u.password;
       const passwordHash = await hashPassword(password);
       await sql`
-        INSERT INTO users (id, name, full_name, email, role, password, status)
-        VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.email}, ${u.role}, ${passwordHash}, ${u.status})
+        INSERT INTO users (id, name, full_name, gender, role, password, status)
+        VALUES (${u.id}, ${u.name}, ${u.fullName}, ${u.gender}, ${u.role}, ${passwordHash}, ${u.status})
         ON CONFLICT (id) DO NOTHING
       `;
     }

@@ -1,62 +1,67 @@
 # AGENTS.md — מדפסת חברים / JustifyMyPrinter
 
-This file provides the builder sequence and ground rules for AI coding agents
-working on this repository. It is the short companion to `docs/BUILDER_PLAN.md`,
-which has the full task breakdown.
+Current operating guidance for AI coding agents. Read `docs/PRODUCT_SPEC.md` for
+requirements and `CLAUDE.md` for architecture and commands.
+`docs/BUILDER_PLAN.md` is an archived implementation plan, not active ownership.
 
-## Start here (every builder)
+## Current stack
 
-1. Read `docs/PROJECT_CONTEXT.md` — what this app is and current state.
-2. Read `docs/PRODUCT_SPEC.md` — what it must do.
-3. Read `docs/BUILDER_PLAN.md` — who owns what; do not edit files owned by
-   another builder without coordination.
-4. Read `CLAUDE.md` — architecture, local dev, deployment, known gaps.
-5. Read `docs/RENDER_DEPLOYMENT_NOTES.md` — Render setup and free-tier rules.
+- Plain HTML and vanilla JavaScript ES modules.
+- Express (`server.js`) with handlers in `api/`.
+- Neon PostgreSQL.
+- Render deployment through `npm start`.
+- Hebrew, right-to-left product UI.
 
-Builder communication, including plans, analyses, progress updates, summaries,
-test results, and final handoffs, must be in English unless the user explicitly
-requests another language. Product UI and user-facing copy remain Hebrew RTL.
+## Before changing code
 
-## Builder sequence
+1. Inspect the relevant implementation; code is authoritative for current behavior.
+2. Check intended behavior in `docs/PRODUCT_SPEC.md`.
+3. Treat builder-number references and migration notes as history.
+4. Preserve unrelated user changes.
 
-| # | Name | Tool | Role |
-|---|------|------|------|
-| 0 | Documentation Bootstrapper | Claude Code | Docs only ✅ done |
-| 1 | Repo Audit / Coordinator | Claude Code | Read-only audit |
-| 2 | Render Runtime / Backend | Codex | `server.js`, `package.json` |
-| 3 | DB / API / Schema | Codex | `api/init.js`, `api/_db.js`, `api/settings.js` |
-| 4 | Auth / Users / Permissions | Claude Code | `api/auth.js`, `api/users.js`, `api/_middleware.js` |
-| 5 | Orders / Pricing / Payments | Claude Code | `api/orders.js` |
-| 6 | Remove Messages / Add WhatsApp | Codex | `api/messages.js`, `api/notifications.js`, `js/whatsapp.js` |
-| 7 | Products / Categories / Catalog | Claude Code | `api/products.js`, `catalog.html` |
-| 8 | UI / RTL / Mobile / Dashboard | Claude Code | HTML pages, `styles.css`, `js/render.js`, `js/app.js` |
-| 9 | QA / Regression / Release | Codex | Read-only QA |
+Agent communication should be in English unless the user requests another
+language. Product copy remains Hebrew unless explicitly changed.
 
-## Hard constraints (non-negotiable)
+## Implemented behavior to preserve
 
-- **Database:** Neon PostgreSQL. Do not replace.
-- **Deployment:** Render with `npm start` (`node server.js`). No new Vercel functions.
-- **No paid services** without owner (Amir) approval.
-- **Secrets:** never commit `DATABASE_URL`, API keys, or env values.
-- **RTL/Hebrew:** preserve Hebrew UI on all changes.
-- **Public catalog:** active products must be visible without login.
-- **Pending users:** can view catalog but cannot order.
-- **Internal messages:** deprecated — do not expand. Replace with WhatsApp links.
-- **No online payment** in MVP — manual paid/unpaid only.
-- **Schema changes:** use `ADD COLUMN IF NOT EXISTS`. No destructive migrations.
+- Active products and categories are publicly browsable.
+- Registration creates a `pending` friend. Only `active` friends and admins can
+  order; `inactive` and `rejected` users cannot.
+- User states: `pending`, `active`, `inactive`, `rejected`.
+- Order states: `new`, `waiting_approval`, `waiting_print`, `printing`,
+  `ready_delivery`, `completed`, `cancelled`. Legacy values are normalized.
+- External/custom orders support admin pricing and friend price approval.
+- Pre-print cancellation requires a reason.
+- Admin can mark one or multiple orders paid.
+- Categories are dynamic, admin-managed, and products support multiple categories.
+- Internal messages/notifications are disabled (`410 Gone`); WhatsApp links and
+  Hebrew templates are used instead. Legacy DB tables remain.
+- Passwords use scrypt hashes; legacy plaintext is upgraded after successful login.
+- Demo data and production admin bootstrap are opt-in through environment variables.
 
-## Key known gaps (summary)
+## Hard constraints
 
-Full details in `CLAUDE.md` §Known code gaps.
+- Do not replace Neon, Express, or the vanilla frontend without approval.
+- Do not add Vercel functions; Vercel files are legacy artifacts.
+- No paid services without owner approval.
+- Never expose or commit secrets or environment values.
+- Preserve Hebrew RTL and mobile usability.
+- Enforce authorization in APIs, not only in UI.
+- Keep admin data admin-only and friend order data owner-scoped.
+- No online payment processing in MVP; use manual paid/unpaid state.
+- Prefer existing endpoints and small changes.
+- Keep schema changes additive and idempotent; avoid destructive migrations.
+- Do not drop legacy `messages` or `notifications` tables without an explicit request.
 
-- Order statuses in code don't match the spec → Builder 5.
-- User status 'approved' should be 'active' → Builder 4.
-- Public catalog requires auth → Builder 7.
-- Pending users could order (not blocked in API) → Builders 4/5.
-- Internal messaging still live → Builder 6.
-- Missing registration fields (phone, etc.) → Builder 4.
-- No mark-multiple-orders-paid endpoint → Builder 5.
-- No price approval flow → Builder 5.
-- No cancellation reason field → Builders 3/5.
-- Categories are a text field, not dynamic → Builders 3/7.
-- Passwords in plaintext → post-MVP.
+## Commands
+
+```bash
+npm install
+cp env.local.example .env.local
+npm run dev
+curl -X POST http://localhost:3000/api/init
+```
+
+Production uses `npm start`; health is `GET /healthz`; optional static export is
+`npm run build`. There is currently no automated test script, so use targeted
+syntax, API, and browser checks.

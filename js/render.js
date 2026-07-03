@@ -461,7 +461,6 @@ function renderUsersAdmin() {
           ${user.status !== "active" ? `<span class="status-badge status-${escapeHtml(user.status)}">${USER_STATUS_LABELS[user.status] ?? user.status}</span>` : ""}
         </td>
         <td>${escapeHtml(user.fullName ?? "")}</td>
-        <td>${escapeHtml(user.email ?? "")}</td>
         <td class="stat-cell">${stats.count}</td>
         <td class="stat-cell stat-revenue">${formatCurrency(stats.revenue)}</td>
         <td class="stat-cell">${formatCurrency(stats.paid)}</td>
@@ -526,13 +525,13 @@ function renderUsersAdmin() {
       `;
 
       const editCell = document.createElement("td");
-      editCell.colSpan = 9;
+      editCell.colSpan = 8;
       editCell.innerHTML = `
         <form class="user-edit-form">
           <div class="user-edit-fields">
             <label>שם משתמש<input name="name" value="${escapeHtml(user.name)}" required /></label>
             <label>שם מלא<input name="fullName" value="${escapeHtml(user.fullName ?? "")}" /></label>
-            <label>אימייל<input name="email" type="email" value="${escapeHtml(user.email ?? "")}" /></label>
+            <label>מגדר<select name="gender"><option value="male">גבר</option><option value="female">אישה</option></select></label>
             <label>סיסמה חדשה (השאר ריק כדי לשמור על הקיימת)<input name="password" type="password" placeholder="סיסמה חדשה" autocomplete="new-password" /></label>
             <label>תפקיד<select name="role">${ROLE_OPTIONS}</select></label>
             <label>סטטוס<select name="status">${STATUS_OPTIONS}</select></label>
@@ -547,6 +546,7 @@ function renderUsersAdmin() {
       // Set select values
       editCell.querySelector("[name=role]").value   = user.role   ?? "friend";
       editCell.querySelector("[name=status]").value = user.status ?? "active";
+      editCell.querySelector("[name=gender]").value = user.gender ?? "male";
 
       const form = editCell.querySelector("form");
       form.addEventListener("submit", async (e) => {
@@ -556,7 +556,7 @@ function renderUsersAdmin() {
         const payload = {
           name:     fd.get("name"),
           fullName: fd.get("fullName"),
-          email:    fd.get("email"),
+          gender:   fd.get("gender"),
           role:     fd.get("role"),
           status,
         };
@@ -606,7 +606,6 @@ function renderUsersAdmin() {
       row.innerHTML = `
         <td>${escapeHtml(user.name)}</td>
         <td>${escapeHtml(user.fullName ?? "")}</td>
-        <td>${escapeHtml(user.email ?? "")}</td>
         <td>${new Date(user.createdAt).toLocaleDateString("he-IL")}</td>
         <td class="actions-cell"></td>
       `;

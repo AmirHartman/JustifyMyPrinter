@@ -270,6 +270,9 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: `המינימום להזמנה הזו הוא ${baseCost.toFixed(2)}` });
       }
       const requiresApproval = orderType !== 'catalog' || Boolean(product?.requires_admin_approval);
+      const supportAmount = orderType === 'catalog' && baseCost != null && finalAmount != null
+        ? Math.max(finalAmount - baseCost, 0)
+        : Math.max(Number(body.supportAmount) || 0, 0);
       const status = requiresApproval ? 'new' : 'waiting_print';
       const id = randomUUID();
       const selectedColors = JSON.stringify(Array.isArray(body.selectedColors) ? body.selectedColors : []);
@@ -286,7 +289,7 @@ module.exports = async (req, res) => {
           ${String(body.requestDescription ?? '').trim()},
           ${String(body.externalModelLink ?? '').trim()}, ${quantity}, ${selectedColors},
           ${String(body.userNotes ?? '').trim()}, '', ${baseCost},
-          ${Number(body.supportAmount) || 0}, ${finalAmount}, ${finalAmount ?? 0.01},
+          ${supportAmount}, ${finalAmount}, ${finalAmount ?? 0.01},
           ${numberOrNull(body.estimatedMaterialWeight ?? product?.grams)},
           ${numberOrNull(body.estimatedPrintTime ?? product?.print_hours)},
           ${requiresApproval}, FALSE, ${status}, FALSE, NOW(), NOW()

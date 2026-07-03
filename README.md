@@ -51,8 +51,8 @@ The app runs as `npm start` → `node server.js`. Point Render at this repo with
 Set `DATABASE_URL` (or `DB_JMP_DATABASE_URL`), `INIT_SECRET`,
 `ADMIN_WHATSAPP_PHONE`, `ADMIN_WHATSAPP_LABEL`, and `NODE_ENV=production` in
 the Render environment. Use `ADMIN_BOOTSTRAP_NAME`,
-`ADMIN_BOOTSTRAP_FULL_NAME`, `ADMIN_BOOTSTRAP_EMAIL`, and
-`ADMIN_BOOTSTRAP_PASSWORD` only when creating the first admin. Render supplies
+`ADMIN_BOOTSTRAP_FULL_NAME` and `ADMIN_BOOTSTRAP_PASSWORD` only when creating
+the first admin. Render supplies
 `PORT`.
 See `docs/RENDER_DEPLOYMENT_NOTES.md` for full setup.
 

@@ -44,7 +44,6 @@ Set these in the Render dashboard under **Environment**:
 | `DEMO_USER_PASSWORD`  | Required with `SEED_DEMO_USERS`; never use a seeded default |
 | `ADMIN_BOOTSTRAP_NAME` | Optional first-admin login name |
 | `ADMIN_BOOTSTRAP_FULL_NAME` | Optional first-admin display name |
-| `ADMIN_BOOTSTRAP_EMAIL` | Optional first-admin email |
 | `ADMIN_BOOTSTRAP_PASSWORD` | Required with `ADMIN_BOOTSTRAP_NAME` to create the first admin |
 | `ADMIN_WHATSAPP_PHONE` | Public contact number shown to signed-in friends |
 | `ADMIN_WHATSAPP_LABEL` | Public display label for that WhatsApp contact |
@@ -95,8 +94,8 @@ Set these in the Render dashboard under **Environment**:
 | `vercel.json`                | Legacy  | `{"framework": null}` — safe to ignore     |
 | `.github/workflows/deploy-pages.yml` | Legacy/Optional | Publishes a static preview only; it does not deploy the Express API or replace Render |
 
-Builder 2 (Runtime) should verify whether `deploy-pages.yml` is still intentionally
-used or can be disabled. Do not delete it without confirming with the owner.
+Whether `deploy-pages.yml` is still intentionally used has not been established.
+Do not delete it without confirming with the owner.
 
 ## Local development
 
@@ -122,10 +121,9 @@ Configure Render's health check path as `/healthz`. It returns a small JSON
 response without querying Neon or exposing configuration. The root path also
 remains available and returns `index.html`.
 
-## Notes for future builders
+## Runtime notes
 
-- `package.json` already has `express` in dependencies and the correct start script.
-  Builder 2 should verify this is sufficient for Render and that no additional
-  build step is needed.
+- `package.json` has `express` and the correct `npm start` command. No frontend
+  build step is required for the Render service.
 - Do not add a `Procfile` — Render uses the `start` script from `package.json`.
 - If a `render.yaml` is added for infra-as-code, document it here.

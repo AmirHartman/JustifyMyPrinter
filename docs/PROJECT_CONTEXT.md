@@ -55,7 +55,7 @@ costs, income, expenses, and WhatsApp communication. Admin can also use the site
 as a normal user named Amir and place personal orders so personal prints are
 counted in material usage.
 
-## Current project state (as of Builder 0 — 2026-07-03)
+## Current project state (updated 2026-07-04)
 
 The codebase already includes:
 - **Neon** PostgreSQL database connection (`api/_db.js`);
@@ -70,23 +70,19 @@ The codebase already includes:
 - settings/pricing config (`api/settings.js`);
 - **Express server** (`server.js`) — the app runs as `node server.js`, not as Vercel functions;
 - **Render** is the current deployment target (see `docs/RENDER_DEPLOYMENT_NOTES.md`);
-- an internal messaging/notification system that **must be removed** and replaced with WhatsApp.
-
-Known gaps vs. the spec (for future builders):
-- Order statuses in code do not match the spec (see `docs/PRODUCT_SPEC.md` §6).
-- User status 'approved' in code should be 'active' per spec.
-- Public catalog requires auth — spec says active products are publicly visible.
-- No phone field in registration.
-- No "how do you know the admin" field in registration.
-- No mark-multiple-orders-as-paid endpoint.
-- No price approval flow for external/custom orders.
-- No WhatsApp links anywhere yet.
-- Product categories are a single text field, not dynamic multi-category.
-- Passwords stored in plaintext — should be hashed.
+- disabled compatibility endpoints for legacy messages and notifications;
+- WhatsApp links and Hebrew templates;
+- canonical user/order statuses with legacy-value normalization;
+- public active catalog/category browsing and active-user order enforcement;
+- complete registration metadata and the admin approval flow;
+- external/custom price approval and required cancellation reasons;
+- single- and multi-order paid actions;
+- dynamic, admin-managed, multi-category products;
+- scrypt password hashes with upgrade-on-login for legacy plaintext values.
 
 ## WhatsApp replaces internal messages
 
-Internal site messaging and email notifications are **cancelled for MVP**, not just postponed.
+Internal site messaging and automated notifications are **cancelled for MVP**, not just postponed.
 
 The app uses WhatsApp as the main communication channel:
 - WhatsApp buttons on friend profiles;
@@ -95,8 +91,9 @@ The app uses WhatsApp as the main communication channel:
   delivery coordination, and payment summaries;
 - **no WhatsApp API in MVP** — only manual sending through wa.me / WhatsApp Web.
 
-Existing internal messaging UI/data flows must be removed or disabled and replaced
-with WhatsApp links/templates. Builder 6 owns this work.
+Internal messaging UI/data flows are disabled and replaced with WhatsApp
+links/templates. Compatibility endpoints return `410 Gone`; legacy database
+tables remain for safe migration.
 
 ## Language and UX
 

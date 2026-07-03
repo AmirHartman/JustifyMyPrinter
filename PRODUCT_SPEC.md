@@ -40,7 +40,7 @@ User registration should include:
 - full name;
 - display name / nickname;
 - phone;
-- email;
+- gender (used for gender-aware Hebrew wording);
 - password;
 - how the user knows the admin, e.g. “friend of Lior”;
 - short message to the admin.
@@ -208,7 +208,7 @@ MVP has no online payment.
 
 ## 8. WhatsApp communication
 
-No internal messaging and no email notifications in MVP. Existing internal messaging should be removed.
+No internal messaging or automated notifications in MVP. Existing internal messaging should be removed.
 
 WhatsApp is the communication channel.
 
@@ -377,7 +377,7 @@ Can wait until after first release:
 - full transparent fund page;
 - printer connection;
 - online payment;
-- automatic email/WhatsApp notifications;
+- automatic WhatsApp notifications;
 - friend-submitted idea board;
 - advanced visual polish;
 - cart.

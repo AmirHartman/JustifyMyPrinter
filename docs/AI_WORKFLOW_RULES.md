@@ -1,12 +1,13 @@
 # מדפסת חברים — AI Workflow Rules
 
 > **Canonical location.** This file in `docs/` is the authoritative version.
-> The root-level `AI_WORKFLOW_RULES.md` is a legacy copy and may be outdated.
+> The root-level `AI_WORKFLOW_RULES.md` points here to avoid duplication.
 
 ## Source of truth
 
 Use `docs/PROJECT_CONTEXT.md` and `docs/PRODUCT_SPEC.md` as the source of truth.
-Always read `docs/BUILDER_PLAN.md` before making edits to understand file ownership.
+Inspect current code before editing. `docs/BUILDER_PLAN.md` is historical and
+does not assign active file ownership.
 
 ## Language
 
@@ -19,7 +20,7 @@ Always read `docs/BUILDER_PLAN.md` before making edits to understand file owners
   changes the product language requirement.
 - Coding-agent prompts should be token-efficient but clear and actionable.
 
-## Non-negotiable defaults for all builders
+## Non-negotiable defaults for all agents
 
 | Rule | Detail |
 |------|--------|
@@ -73,24 +74,23 @@ Constraints:
 Return: summary, files changed, and test steps.
 ```
 
-### Remove internal messages / add WhatsApp (Builder 6)
+### Change WhatsApp communication
 
 ```
-Replace the internal messaging feature with WhatsApp-based communication.
-- Remove/disable: internal message UI and data flows (api/messages.js, api/notifications.js,
-  references in js/state.js, js/render.js, api/orders.js status notifications).
-- Add: wa.me links with prefilled Hebrew messages for user profile, order status update,
-  price approval, delivery coordination, and payment summary.
+Change the existing WhatsApp-based communication.
+- Keep internal message/notification compatibility endpoints disabled.
+- Use wa.me links with prefilled Hebrew messages for user profile, order status
+  update, price approval, delivery coordination, and payment summary.
 - No WhatsApp API.
 - Preserve auth, permissions, Hebrew RTL, and mobile UX.
 - Do not drop the messages/notifications DB tables yet — just stop using them.
 Return: files changed and test steps.
 ```
 
-### Auth / approval flow (Builder 4)
+### Auth / approval flow
 
 ```
-Fix auth and user approval flow:
+Preserve and extend the existing auth and user approval flow:
 - Anyone can register.
 - New users start as status='pending'.
 - Pending users can view catalog but cannot order.
@@ -98,15 +98,15 @@ Fix auth and user approval flow:
 - Inactive/rejected users cannot order.
 - Only admin can access admin pages.
 - Admin can also use the site as a normal user.
-- Rename 'approved' status to 'active' in api/users.js and DB if needed.
-- Add missing registration fields: phone, how_you_know_admin, message_to_admin.
+- Keep legacy 'approved' normalization to 'active'.
+- Preserve registration fields: phone, how_you_know_admin, registration_message.
 Return: changed files, migration notes, and test steps.
 ```
 
-### Order flow / statuses (Builder 5)
+### Order flow / statuses
 
 ```
-Align order flow with the spec in docs/PRODUCT_SPEC.md §6:
+Preserve and extend the order flow in docs/PRODUCT_SPEC.md §6:
 Canonical statuses: new, waiting_approval, waiting_print, printing,
   ready_delivery, completed, cancelled.
 Payment is separate: paid true/false.
@@ -118,26 +118,24 @@ Admin can mark multiple orders from one friend as paid in a single API call.
 Return: changed files, migration plan for existing orders, and test steps.
 ```
 
-### Public catalog (Builder 7)
+### Public catalog
 
 ```
-Fix product catalog visibility:
+Preserve product catalog visibility:
 - GET /api/products must return active products without requiring auth.
 - Authenticated admin sees all products (including inactive).
 - Authenticated friend sees only active products.
 - Unauthenticated visitors also see active products (no 401).
-This requires removing requireAuth from the GET handler in api/products.js.
 Return: changed file and test steps.
 ```
 
-### Products / categories (Builder 7)
+### Products / categories
 
 ```
-Implement dynamic product categories:
-- Replace single 'category' text field with a proper categories system.
+Change the existing dynamic product category system:
 - Categories are admin-managed, not hard-coded.
 - Products may belong to multiple categories.
 - Public catalog can filter by category.
-Avoid breaking existing product data.
+Preserve the legacy category field unless an explicit migration removes it.
 Return: schema change plan, files affected, and test steps.
 ```
