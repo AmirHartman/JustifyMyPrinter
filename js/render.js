@@ -26,6 +26,15 @@ const USER_STATUS_LABELS = {
   rejected: "נדחה",
 };
 
+const EXPENSE_CATEGORY_LABELS = {
+  filament:           "פילמנט",
+  parts_maintenance:  "חלקים / תחזוקה",
+  accessories:        "אביזרים",
+  paid_models:        "מודלים בתשלום",
+  electricity:        "חשמל",
+  general:            "כללי",
+};
+
 // ── Public entry point ────────────────────────────────────────
 
 export function render() {
@@ -37,9 +46,11 @@ export function render() {
   renderCategoriesAdmin();
   renderSummary();
   renderOverview();
+  renderFinanceOverview();
   renderWelcome();
   renderFilaments();
   renderPricingForm();
+  renderExpenses();
 }
 
 // ── Catalog (friend view) ─────────────────────────────────────
@@ -895,6 +906,150 @@ function buildOverviewCard(key, label, count, onClick) {
   `;
   card.addEventListener("click", onClick);
   return card;
+}
+
+// ── Finance / expenses (admin view) ───────────────────────────
+// All figures here are estimates from order/expense data, not a formal
+// accounting report — labels must say so ("משוערת") per product spec.
+
+function isSameMonth(dateValue, ref) {
+  if (!dateValue) return false;
+  const d = new Date(dateValue);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+}
+
+function computeFinanceSummary() {
+  const now = new Date();
+  const liveOrders   = store.orders.filter((o) => o.status !== "cancelled");
+  const paidOrders   = liveOrders.filter((o) => o.paid);
+  const unpaidOrders = liveOrders.filter((o) => !o.paid);
+
+  const paidIncome    = paidOrders.reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
+  const unpaidTotal   = unpaidOrders.reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
+  const supportTotal  = paidOrders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
+  const totalExpenses = store.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const reinvestmentBalance = paidIncome - totalExpenses;
+
+  const monthIncome = paidOrders
+    .filter((o) => isSameMonth(o.createdAt, now))
+    .reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
+  const monthExpenses = store.expenses
+    .filter((e) => isSameMonth(e.expenseDate, now))
+    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const monthBalance = monthIncome - monthExpenses;
+
+  return {
+    paidIncome, unpaidTotal, supportTotal, totalExpenses, reinvestmentBalance,
+    monthIncome, monthExpenses, monthBalance,
+  };
+}
+
+function buildFinanceCard(label, value, tone) {
+  const card = document.createElement("div");
+  card.className = "finance-card";
+  const toneClass = tone === "positive" ? "stat-positive" : tone === "negative" ? "stat-negative" : "";
+  card.innerHTML = `
+    <span class="finance-card-value ${toneClass}">${formatCurrency(value)}</span>
+    <span class="finance-card-label">${label}</span>
+  `;
+  return card;
+}
+
+function renderFinanceCards(containerId, cards) {
+  const grid = document.querySelector(`#${containerId}`);
+  if (!grid) return;
+  grid.replaceChildren();
+  cards.forEach(({ label, value, tone }) => grid.append(buildFinanceCard(label, value, tone)));
+}
+
+function renderFinanceOverview() {
+  if (!document.querySelector("#finance-overview-grid")) return;
+  const s = computeFinanceSummary();
+  renderFinanceCards("finance-overview-grid", [
+    { label: "הכנסות החודש (ששולמו)", value: s.monthIncome, tone: "positive" },
+    { label: "הוצאות החודש", value: s.monthExpenses, tone: "negative" },
+    { label: "חוב לא שולם (סה״כ)", value: s.unpaidTotal, tone: s.unpaidTotal > 0 ? "negative" : undefined },
+    { label: "יתרת השקעה חוזרת (משוערת)", value: s.reinvestmentBalance, tone: s.reinvestmentBalance >= 0 ? "positive" : "negative" },
+  ]);
+}
+
+function renderFinanceSummary() {
+  if (!document.querySelector("#finance-summary-grid")) return;
+  const s = computeFinanceSummary();
+  renderFinanceCards("finance-summary-grid", [
+    { label: "הכנסות מהזמנות ששולמו (סה״כ)", value: s.paidIncome, tone: "positive" },
+    { label: "חוב לא שולם (סה״כ)", value: s.unpaidTotal, tone: s.unpaidTotal > 0 ? "negative" : undefined },
+    { label: "סה״כ תמיכה שהתקבלה", value: s.supportTotal, tone: "positive" },
+    { label: "סה״כ הוצאות", value: s.totalExpenses, tone: "negative" },
+    { label: "יתרת השקעה חוזרת (משוערת)", value: s.reinvestmentBalance, tone: s.reinvestmentBalance >= 0 ? "positive" : "negative" },
+    { label: "הכנסות החודש", value: s.monthIncome, tone: "positive" },
+    { label: "הוצאות החודש", value: s.monthExpenses, tone: "negative" },
+    { label: "יתרה משוערת החודש", value: s.monthBalance, tone: s.monthBalance >= 0 ? "positive" : "negative" },
+  ]);
+}
+
+function renderExpenses() {
+  renderFinanceSummary();
+
+  const tbody = document.querySelector("#expenses-table-body");
+  if (!tbody) return;
+
+  document.querySelector("#expenses-empty")
+    ?.classList.toggle("is-visible", store.expenses.length === 0);
+
+  tbody.replaceChildren();
+  store.expenses.forEach((expense) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${expense.expenseDate ? new Date(expense.expenseDate).toLocaleDateString("he-IL") : ""}</td>
+      <td>${escapeHtml(expense.description)}</td>
+      <td>${escapeHtml(EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category)}</td>
+      <td class="stat-cell stat-negative">${formatCurrency(expense.amount)}</td>
+      <td>${escapeHtml(expense.notes ?? "")}</td>
+      <td class="actions-cell"></td>
+    `;
+
+    const cell = row.querySelector(".actions-cell");
+
+    const editBtn = document.createElement("button");
+    editBtn.className   = "ghost-button btn-sm";
+    editBtn.type        = "button";
+    editBtn.textContent = "ערוך";
+    editBtn.addEventListener("click", () => openExpenseEditForm(expense));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+    deleteBtn.type        = "button";
+    deleteBtn.textContent = "מחק";
+    deleteBtn.addEventListener("click", () => deleteExpense(expense.id));
+
+    cell.append(editBtn, " ", deleteBtn);
+    tbody.append(row);
+  });
+}
+
+async function deleteExpense(expenseId) {
+  if (!window.confirm("למחוק הוצאה זו? פעולה זו אינה הפיכה.")) return;
+  try {
+    await api(`/api/expenses?id=${encodeURIComponent(expenseId)}`, { method: "DELETE" });
+    store.expenses = store.expenses.filter((e) => e.id !== expenseId);
+    render();
+  } catch (err) {
+    alert(`שגיאה במחיקת הוצאה: ${err.message}`);
+  }
+}
+
+function openExpenseEditForm(expense) {
+  const form = document.querySelector("#expense-form");
+  if (!form) return;
+  form.elements["expenseId"].value   = expense.id;
+  form.elements["description"].value = expense.description;
+  form.elements["category"].value    = expense.category ?? "general";
+  form.elements["amount"].value      = expense.amount;
+  form.elements["expenseDate"].value = expense.expenseDate ? String(expense.expenseDate).slice(0, 10) : "";
+  form.elements["notes"].value       = expense.notes ?? "";
+  form.hidden = false;
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // ── Shared rendering helpers ──────────────────────────────────

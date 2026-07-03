@@ -25,6 +25,7 @@ app.all('/api/filaments',     require('./api/filaments'));
 app.all('/api/messages',      require('./api/messages'));
 app.all('/api/notifications', require('./api/notifications'));
 app.all('/api/settings',      require('./api/settings'));
+app.all('/api/expenses',      require('./api/expenses'));
 app.all('/api/init',          require('./api/init'));
 
 // Unknown /api/* paths → structured 404, never falls through to the HTML catch-all.

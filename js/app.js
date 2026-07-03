@@ -653,6 +653,69 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
   }
 });
 
+// ── Expense form (admin) ────────────────────────────────────────
+document.querySelector("#add-expense-btn")?.addEventListener("click", () => {
+  const form = document.querySelector("#expense-form");
+  if (!form) return;
+  form.reset();
+  form.elements["expenseId"].value = "";
+  form.elements["expenseDate"].value = new Date().toISOString().slice(0, 10);
+  form.hidden = false;
+  setView("finance");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.querySelector("#expense-form-cancel")?.addEventListener("click", () => {
+  const form = document.querySelector("#expense-form");
+  if (form) { form.reset(); form.hidden = true; }
+});
+
+document.querySelector("#expense-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const id   = String(data.get("expenseId") ?? "").trim();
+  const isEdit = Boolean(id);
+
+  const payload = {
+    description: String(data.get("description") ?? "").trim(),
+    category:    String(data.get("category") ?? "general").trim(),
+    amount:      Number(data.get("amount")) || 0,
+    expenseDate: String(data.get("expenseDate") ?? "").trim(),
+    notes:       String(data.get("notes") ?? "").trim(),
+  };
+
+  const btn = form.querySelector("[type='submit']");
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "שומר...";
+
+  try {
+    if (isEdit) {
+      const updated = await api(`/api/expenses?id=${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      const idx = store.expenses.findIndex((e) => e.id === id);
+      if (idx !== -1) store.expenses[idx] = updated;
+    } else {
+      const created = await api("/api/expenses", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      store.expenses.unshift(created);
+    }
+    form.reset();
+    form.hidden = true;
+    render();
+  } catch (err) {
+    alert(`שגיאה בשמירת הוצאה: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+});
+
 // ── Category form (admin) ──────────────────────────────────────
 document.querySelector("#add-category-btn")?.addEventListener("click", () => {
   const form = document.querySelector("#category-form");
