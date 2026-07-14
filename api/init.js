@@ -156,6 +156,14 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS margin_percent NUMERIC(5,3)`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS internal BOOLEAN NOT NULL DEFAULT FALSE`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_deducted BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS custom_text TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS product_snapshot JSONB`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS proposed_alternative_color JSONB`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS color_alternative_status TEXT NOT NULL DEFAULT 'none'`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS color_alternative_proposed_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS color_alternative_responded_at TIMESTAMPTZ`;
+    await sql`UPDATE orders SET color_alternative_status = 'none'
+      WHERE color_alternative_status IS NULL OR color_alternative_status NOT IN ('none', 'needed', 'pending', 'approved', 'rejected')`;
     await sql`UPDATE orders SET paid_at = created_at WHERE paid = TRUE AND paid_at IS NULL`;
 
     // ── Extended product columns ──────────────────────────────
@@ -188,6 +196,17 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_status TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_warnings JSONB NOT NULL DEFAULT '[]'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_synced_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS catalog_kind TEXT NOT NULL DEFAULT 'printed'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS risk_level TEXT NOT NULL DEFAULT 'medium'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS custom_text_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`UPDATE products SET risk_level = CASE
+      WHEN risk_percent IS NULL THEN 'medium'
+      WHEN risk_percent <= 0.12 THEN 'low'
+      WHEN risk_percent >= 0.20 THEN 'high'
+      ELSE 'medium' END
+      WHERE risk_level IS NULL OR risk_level NOT IN ('low', 'medium', 'high')
+        OR (risk_level = 'medium' AND risk_percent IS NOT NULL AND (risk_percent <= 0.12 OR risk_percent >= 0.20))`;
+    await sql`UPDATE products SET catalog_kind = 'printed' WHERE catalog_kind NOT IN ('printed', 'idea') OR catalog_kind IS NULL`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS products_print_sync_key_unique ON products (print_sync_key) WHERE print_sync_key IS NOT NULL`;
 
     // ── Categories table (dynamic, admin-managed) ─────────────
@@ -237,18 +256,24 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE filaments ADD COLUMN IF NOT EXISTS spool_price NUMERIC(10,2)`;
     await sql`ALTER TABLE filaments ADD COLUMN IF NOT EXISTS spool_grams INTEGER NOT NULL DEFAULT 1000`;
     await sql`ALTER TABLE filaments ADD COLUMN IF NOT EXISTS remaining_grams NUMERIC(10,2)`;
+    await sql`UPDATE filaments SET spool_price = price_per_kg * spool_grams / 1000 WHERE spool_price IS NULL`;
+    await sql`UPDATE filaments SET price_per_kg = spool_price * 1000 / spool_grams WHERE spool_price IS NOT NULL AND spool_grams > 0`;
 
     await sql`CREATE TABLE IF NOT EXISTS owner_ledger (
       id TEXT PRIMARY KEY, kind TEXT NOT NULL, description TEXT NOT NULL,
       amount NUMERIC(10,2) NOT NULL, occurred_at DATE NOT NULL DEFAULT CURRENT_DATE,
       order_id TEXT, expense_id TEXT, notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE owner_ledger ADD COLUMN IF NOT EXISTS public_visible BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE owner_ledger ADD COLUMN IF NOT EXISTS public_label TEXT NOT NULL DEFAULT ''`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS owner_ledger_order_kind_idx ON owner_ledger(order_id, kind) WHERE order_id IS NOT NULL`;
     await sql`CREATE TABLE IF NOT EXISTS goals (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, target_amount NUMERIC(10,2) NOT NULL,
       saved NUMERIC(10,2) NOT NULL DEFAULT 0, achieved_at TIMESTAMPTZ,
       sort_order INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS public_visible BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS public_label TEXT NOT NULL DEFAULT ''`;
     await sql`CREATE TABLE IF NOT EXISTS maintenance_events (
       id TEXT PRIMARY KEY, part_id TEXT NOT NULL, event_type TEXT NOT NULL DEFAULT 'replace',
       hours_at_event NUMERIC(10,2) NOT NULL, performed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -294,7 +319,7 @@ module.exports = async (req, res) => {
       )
     `;
 
-    const DEFAULT_PRICING = { marginPercent: 0.50, minOrderPrice: 5, roundingMode: 'ceil' };
+    const DEFAULT_PRICING = { marginPercent: 0.50, minOrderPrice: 5, roundingMode: 'ceil', riskPercentByLevel: { low: 0.08, medium: 0.15, high: 0.25 } };
     await sql`
       INSERT INTO settings (key, value)
       VALUES ('pricing', ${JSON.stringify(DEFAULT_PRICING)})
@@ -303,7 +328,8 @@ module.exports = async (req, res) => {
     await sql`UPDATE settings SET value = jsonb_build_object(
       'marginPercent', COALESCE(value->'marginPercent', '0.5'::jsonb),
       'minOrderPrice', COALESCE(value->'minOrderPrice', value->'minPrice', '5'::jsonb),
-      'roundingMode', '"ceil"'::jsonb
+      'roundingMode', '"ceil"'::jsonb,
+      'riskPercentByLevel', COALESCE(value->'riskPercentByLevel', value->'riskPercents', '{"low":0.08,"medium":0.15,"high":0.25}'::jsonb)
     ) WHERE key = 'pricing'`;
 
     let adminCreated = false;

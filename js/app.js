@@ -3,10 +3,10 @@ import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
 import {
   openOrderDialog, updateReviewCosts, getOrderFriendName, openCustomOrderDialog,
-  addTip, resetTip, goToStep, getTipAmount, getOrderTotal,
+  addTip, resetTip, goToStep, getTipAmount, getOrderTotal, getOrderOptions,
 } from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
-import { formatCurrency, calculateProductCost, createProductDescriptionSuggestion } from "./utils.js";
+import { formatCurrency, calculateProductCost } from "./utils.js";
 
 // ── DOM references ────────────────────────────────────────────
 const loginForm     = document.querySelector("#login-form");
@@ -16,12 +16,14 @@ const registerError = document.querySelector("#register-error");
 const orderDialog   = document.querySelector("#order-dialog");
 const orderForm     = document.querySelector("#order-form");
 const productForm   = document.querySelector("#product-form");
-const productDrawer = document.querySelector("#product-drawer");
 const orderDrawer   = document.querySelector("#order-drawer");
-const RISK_PERCENT_BY_LEVEL = Object.freeze({ low: 0.08, medium: 0.15, high: 0.25 });
+const DEFAULT_RISK_PERCENT_BY_LEVEL = Object.freeze({ low: 0.08, medium: 0.15, high: 0.25 });
+let productFormDirty = false;
 
 function riskPercentFromForm() {
-  return RISK_PERCENT_BY_LEVEL[productForm?.elements["riskLevel"]?.value] ?? RISK_PERCENT_BY_LEVEL.medium;
+  const level = productForm?.elements["riskLevel"]?.value ?? "medium";
+  const configured = store.pricingSettings?.riskPercentByLevel ?? store.pricingSettings?.riskPercents;
+  return Number(configured?.[level] ?? DEFAULT_RISK_PERCENT_BY_LEVEL[level] ?? DEFAULT_RISK_PERCENT_BY_LEVEL.medium);
 }
 
 function riskLevelFromPercent(value) {
@@ -65,12 +67,6 @@ loginForm?.addEventListener("submit", async (event) => {
     loginError.classList.add("is-visible");
     submitBtn.disabled    = false;
     submitBtn.textContent = origLabel;
-    return;
-  }
-
-  if (result.status === "rejected") {
-    loginForm.reset();
-    showLoginStatus(result.status, result.reason);
     return;
   }
 
@@ -166,6 +162,7 @@ document.querySelectorAll(".sub-tab").forEach((btn) => {
 document.querySelector("#reset-demo")?.addEventListener("click", async () => {
   await loadData();
   render();
+  syncPricingRiskFields();
 });
 
 // ── Order dialog ──────────────────────────────────────────────
@@ -198,6 +195,7 @@ orderForm?.addEventListener("submit", async (event) => {
   const quantity     = Number(data.get("quantity"));
   const supportAmount = getTipAmount();
   const price         = getOrderTotal();
+  const orderOptions  = getOrderOptions();
 
   try {
     const order = await api("/api/orders", {
@@ -209,9 +207,12 @@ orderForm?.addEventListener("submit", async (event) => {
         price,
         baseCost: product.cost * quantity,
         supportAmount,
+        selectedColors: orderOptions.selectedColors,
+        customText: orderOptions.customText,
       }),
     });
-    store.orders.unshift(order);
+    if (store.appMode === "admin") store.orders.unshift(order);
+    else store.myOrders.unshift(order);
     render();
     goToStep("thanks");
   } catch (err) {
@@ -286,38 +287,6 @@ document.querySelector("#sync-print-files-btn")?.addEventListener("click", async
   }
 });
 
-document.querySelector("#open-print-files-btn")?.addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  button.disabled = true;
-  try {
-    await api("/api/print-sync?action=open-folder", { method: "POST", body: "{}" });
-  } catch (err) {
-    alert(`לא ניתן לפתוח את התיקייה: ${err.message}`);
-  } finally {
-    button.disabled = false;
-  }
-});
-
-function updateDescriptionSuggestion() {
-  const hint = document.querySelector("#product-description-suggestion");
-  const button = document.querySelector("#suggest-product-description-btn");
-  const suggestion = createProductDescriptionSuggestion(productForm?.elements["name"]?.value);
-  if (!hint || !button) return;
-  hint.textContent = suggestion ? `הצעה: ${suggestion}` : "יש להזין שם מוצר כדי לקבל הצעת תיאור.";
-  hint.hidden = false;
-  button.disabled = !suggestion;
-}
-
-productForm?.elements["name"]?.addEventListener("input", updateDescriptionSuggestion);
-document.querySelector("#suggest-product-description-btn")?.addEventListener("click", () => {
-  const suggestion = createProductDescriptionSuggestion(productForm?.elements["name"]?.value);
-  if (!suggestion || !productForm) return;
-  const field = productForm.elements["description"];
-  if (field.value.trim() && !confirm("להחליף את התיאור הקיים בהצעה החדשה?")) return;
-  field.value = suggestion;
-  field.focus();
-});
-
 productForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data      = new FormData(productForm);
@@ -326,6 +295,8 @@ productForm?.addEventListener("submit", async (event) => {
 
   const materials = collectMaterialRows();
   const images    = collectImageRows();
+  const possibleColors = collectColorOptions("possible");
+  const requiredColors = collectColorOptions("required");
 
   // If the legacy single-image field is filled but no gallery images added, treat it as gallery main image
   const legacyImage = String(data.get("image") ?? "").trim();
@@ -346,24 +317,24 @@ productForm?.addEventListener("submit", async (event) => {
     printHours:         Number(data.get("printHours")) || 0,
     printProfile:       String(data.get("printProfile") ?? "regular"),
     purgeGrams:         Number(data.get("purgeGrams")) || 0,
+    additionalCopyHours: data.get("additionalCopyHours") === "" ? null : Number(data.get("additionalCopyHours")),
+    riskLevel:          String(data.get("riskLevel") ?? "medium"),
     riskPercent:        riskPercentFromForm(),
     minUnitPrice:       data.get("minUnitPrice") === "" ? null : Number(data.get("minUnitPrice")),
     materials,
     images,
-    active:             data.get("productActive") !== null,
+    catalogKind:        String(data.get("catalogKind") ?? "printed"),
+    possibleColors,
+    requiredColors,
+    allowMultiple:      data.get("allowMultiple") !== null,
+    customTextEnabled:  data.get("customTextEnabled") !== null,
+    internalPrintNotes: String(data.get("internalPrintNotes") ?? "").trim(),
     manualPriceEnabled: data.get("manualPriceEnabled") !== null,
     manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
     calculatedCost:     computedCostFromForm(),
   };
-
-  if (payload.active) {
-    const hasImage = Boolean(payload.image);
-    const ready = payload.name && payload.description && hasImage && payload.categoryIds.length && materials.length && payload.printHours > 0 && payload.grams > 0;
-    if (!ready) {
-      alert("לפני פרסום יש למלא שם, תיאור, תמונה, קטגוריה, פילמנט ונתוני הדפסה.");
-      return;
-    }
-  }
+  if (payload.catalogKind === "idea") payload.requiresAdminApproval = true;
+  payload.grams = materials.reduce((sum, material) => sum + Number(material.grams || 0), 0) + payload.purgeGrams;
 
   // Resolve effective cost
   if (payload.manualPriceEnabled && payload.manualPrice) {
@@ -380,18 +351,20 @@ productForm?.addEventListener("submit", async (event) => {
       });
       const idx = store.products.findIndex((p) => p.id === editId);
       if (idx !== -1) store.products[idx] = updated;
+      productFormDirty = false;
       resetProductForm();
       render();
-      productDrawer?.close();
+      closeProductEditor();
     } else {
       const product = await api("/api/products", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       store.products.push(product);
+      productFormDirty = false;
       resetProductForm();
       render();
-      productDrawer?.close();
+      closeProductEditor();
     }
   } catch (err) {
     alert(`שגיאה ב${isEdit ? "עדכון" : "הוספת"} מוצר: ${err.message}`);
@@ -439,13 +412,83 @@ function collectCategoryRows() {
   return Array.from(boxes).map((box) => box.value);
 }
 
+function collectColorOptions(kind) {
+  const selector = `#product-${kind}-colors input[type='checkbox']:checked`;
+  return Array.from(document.querySelectorAll(selector)).map((box) => box.value);
+}
+
+function renderColorOptions(possibleColors = [], requiredColors = []) {
+  const selections = { possible: new Set(possibleColors), required: new Set(requiredColors) };
+  for (const kind of ["possible", "required"]) {
+    const container = document.querySelector(`#product-${kind}-colors`);
+    if (!container) continue;
+    container.replaceChildren();
+    if (!store.filaments.length) {
+      const note = document.createElement("span");
+      note.className = "form-hint";
+      note.textContent = "אין חומרים מוגדרים. אפשר להוסיף אותם בהגדרות החומרים.";
+      container.append(note);
+      continue;
+    }
+    store.filaments.forEach((filament) => {
+      const label = document.createElement("label");
+      label.className = "checkbox-label";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = filament.id;
+      checkbox.checked = selections[kind].has(filament.id) || selections[kind].has(filament.name);
+      checkbox.style.width = "auto";
+      const swatch = document.createElement("span");
+      swatch.className = "color-swatch";
+      swatch.style.background = filament.colorHex || "#ccc";
+      swatch.style.border = "1px solid #777";
+      label.append(checkbox, swatch, ` ${filament.name}${filament.active === false ? " (לא פעיל)" : ""}`);
+      container.append(label);
+    });
+  }
+}
+
+function updateProductReadiness(serverMissing = null) {
+  const target = document.querySelector("#product-readiness-details");
+  if (!target || !productForm) return;
+  const kind = productForm.elements["catalogKind"]?.value ?? "printed";
+  const materials = collectMaterialRows();
+  const localChecks = [
+    [String(productForm.elements["name"]?.value ?? "").trim(), "שם מוצר"],
+    [String(productForm.elements["description"]?.value ?? "").trim(), "תיאור"],
+    [collectImageRows().length > 0, "לפחות תמונה אחת"],
+    [collectCategoryRows().length > 0, "קטגוריה פעילה"],
+  ];
+  if (kind === "printed") {
+    localChecks.push(
+      [Number(productForm.elements["printHours"]?.value) > 0, "זמן הדפסה"],
+      [materials.length > 0 && materials.every((item) => item.filamentId && item.grams > 0), "חומר ומשקל חיובי"],
+      [Boolean(computedCostFromForm()) || (productForm.elements["manualPriceEnabled"]?.checked && Number(productForm.elements["manualPrice"]?.value) > 0), "מחיר תקין"],
+    );
+  }
+  const missing = localChecks.filter(([ready]) => !ready).map(([, label]) => label);
+  if (Array.isArray(serverMissing)) {
+    const labels = {
+      name: "שם מוצר", description: "תיאור", image: "תמונה", category: "קטגוריה פעילה",
+      printHours: "זמן הדפסה", materials: "חומר ומשקל", price: "מחיר תקין",
+    };
+    serverMissing.forEach((item) => {
+      const key = typeof item === "string" ? item : item?.field;
+      const label = labels[key] ?? (typeof item === "string" ? item : item?.label);
+      if (label && !missing.includes(label)) missing.push(label);
+    });
+  }
+  const readyLabel = kind === "idea" ? "הרעיון מוכן להצגה ויופיע כפריט הדורש בדיקה ואישור מחיר." : "המוצר מוכן לפרסום אוטומטי.";
+  target.innerHTML = missing.length
+    ? `<p>הפריט יישמר כמוסתר עד להשלמת:</p><ul>${missing.map((item) => `<li>${item}</li>`).join("")}</ul>`
+    : `<p>${readyLabel}</p>`;
+}
+
 function collectImageRows() {
   const rows = document.querySelectorAll("#product-image-rows .image-row");
-  const mainRadio = document.querySelector("#product-image-rows input[name='mainImage']:checked");
-  const mainIdx   = mainRadio ? Number(mainRadio.dataset.idx) : 0;
   return Array.from(rows).map((row, i) => ({
     url:    String(row.querySelector("input[type='url']")?.value ?? "").trim(),
-    isMain: i === mainIdx,
+    isMain: row.querySelector("input[name='mainImage']")?.checked || (i === 0 && !document.querySelector("#product-image-rows input[name='mainImage']:checked")),
   })).filter((img) => img.url);
 }
 
@@ -455,6 +498,8 @@ function computedCostFromForm() {
     printProfile: document.querySelector("#product-form [name='printProfile']")?.value ?? "regular",
     materials:    collectMaterialRows(),
     purgeGrams: Number(document.querySelector("#product-form [name='purgeGrams']")?.value) || 0,
+    additionalCopyHours: document.querySelector("#product-form [name='additionalCopyHours']")?.value === "" ? null : Number(document.querySelector("#product-form [name='additionalCopyHours']")?.value),
+    riskLevel: document.querySelector("#product-form [name='riskLevel']")?.value ?? "medium",
     riskPercent: riskPercentFromForm(),
     minUnitPrice: document.querySelector("#product-form [name='minUnitPrice']")?.value === "" ? null : Number(document.querySelector("#product-form [name='minUnitPrice']")?.value),
   };
@@ -468,24 +513,42 @@ function resetProductForm() {
   document.querySelector("#edit-product-id").value = "";
   document.querySelector("#product-materials-rows").replaceChildren();
   document.querySelector("#product-image-rows").replaceChildren();
-  document.querySelector("#cost-preview-breakdown").innerHTML =
-    `<span style="color:var(--muted);font-size:var(--text-sm)">מלא שעות הדפסה וחומרים כדי לראות חישוב.</span>`;
+  document.querySelector("#cost-preview-before-profit").innerHTML = `<span class="form-hint">מלא זמן וחומרים כדי לראות חישוב.</span>`;
+  document.querySelector("#cost-preview-after-profit").innerHTML = `<span class="form-hint">המחיר הסופי יוצג כאן.</span>`;
   document.querySelector("#manual-price-field")?.setAttribute("hidden", "");
   document.querySelector("#product-submit-btn").textContent = "הוספת מוצר";
-  document.querySelector("#product-drawer-title").textContent = "מוצר חדש";
-  document.querySelector("#product-active-toggle").checked = false;
-  document.querySelector("#product-description-suggestion")?.setAttribute("hidden", "");
+  document.querySelector("#product-editor-title").textContent = "מוצר חדש";
   document.querySelector("#product-import-summary")?.setAttribute("hidden", "");
   renderCategoryCheckboxes([]);
+  renderColorOptions([], []);
+  productFormDirty = false;
+  updateProductReadiness();
 }
 
-function openProductDrawer() {
-  if (typeof productDrawer?.showModal === "function") productDrawer.showModal();
+function openProductEditor() {
+  activateSubTab("product-catalog");
+  document.querySelector("#product-catalog-list")?.setAttribute("hidden", "");
+  document.querySelector("#product-editor")?.removeAttribute("hidden");
+  document.querySelector("#add-product-btn")?.setAttribute("hidden", "");
+  document.querySelector("#sync-print-files-btn")?.setAttribute("hidden", "");
+  document.querySelector("#product-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeProductEditor(force = false) {
+  if (!force && productFormDirty && !confirm("יש שינויים שלא נשמרו. לצאת מהטופס?")) return false;
+  productFormDirty = false;
+  document.querySelector("#product-editor")?.setAttribute("hidden", "");
+  document.querySelector("#product-catalog-list")?.removeAttribute("hidden");
+  document.querySelector("#add-product-btn")?.removeAttribute("hidden");
+  document.querySelector("#sync-print-files-btn")?.removeAttribute("hidden");
+  return true;
 }
 
 document.querySelector("#add-product-btn")?.addEventListener("click", () => {
   resetProductForm();
-  openProductDrawer();
+  addMaterialRow();
+  addImageRow();
+  openProductEditor();
 });
 
 // Exposed globally so render.js store-edit cards can call it
@@ -503,11 +566,16 @@ window.openProductEditForm = function openProductEditForm(product) {
   productForm.elements["printProfile"].value = product.printProfile ?? "regular";
   productForm.elements["minUnitPrice"].value = product.minUnitPrice ?? "";
   productForm.elements["purgeGrams"].value = product.purgeGrams ?? 0;
+  productForm.elements["additionalCopyHours"].value = product.additionalCopyHours ?? "";
   productForm.elements["riskLevel"].value = product.riskLevel ?? riskLevelFromPercent(product.riskPercent);
+  productForm.elements["catalogKind"].value = product.catalogKind ?? "printed";
+  productForm.elements["allowMultiple"].checked = product.allowMultiple !== false;
+  productForm.elements["customTextEnabled"].checked = Boolean(product.customTextEnabled);
+  productForm.elements["internalPrintNotes"].value = product.internalPrintNotes ?? "";
   document.querySelector("#edit-product-id").value = product.id;
-  document.querySelector("#product-active-toggle").checked = product.active !== false;
   document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
   renderCategoryCheckboxes(product.categoryIds ?? []);
+  renderColorOptions(product.possibleColors ?? [], product.requiredColors ?? []);
 
   if (product.manualPriceEnabled) {
     productForm.elements["manualPriceEnabled"].checked = true;
@@ -528,7 +596,8 @@ window.openProductEditForm = function openProductEditForm(product) {
   // Rebuild image rows
   const imagesContainer = document.querySelector("#product-image-rows");
   imagesContainer.replaceChildren();
-  (product.images ?? []).forEach((img, i) => addImageRow(img.url, img.isMain, i));
+  const productImages = product.images?.length ? product.images : product.image ? [{ url: product.image, isMain: true }] : [];
+  productImages.forEach((img, i) => addImageRow(img.url, img.isMain, i));
 
   const importSummary = document.querySelector("#product-import-summary");
   if (importSummary && product.printSync) {
@@ -538,21 +607,22 @@ window.openProductEditForm = function openProductEditForm(product) {
   }
 
   document.querySelector("#product-submit-btn").textContent  = "שמור שינויים";
-  document.querySelector("#product-drawer-title").textContent = `עריכת מוצר: ${product.name}`;
+  document.querySelector("#product-editor-title").textContent = `עריכת מוצר: ${product.name}`;
 
   updateCostPreview();
-  updateDescriptionSuggestion();
-  openProductDrawer();
+  updateProductReadiness(product.missingRequirements);
+  productFormDirty = false;
+  openProductEditor();
 };
 
-// ── Product drawer close / cancel ──────────────────────────────
-document.querySelector("#product-drawer-close")?.addEventListener("click", () => {
-  resetProductForm();
-  productDrawer?.close();
+document.querySelector("#product-editor-back")?.addEventListener("click", () => closeProductEditor());
+document.querySelector("#product-editor-cancel")?.addEventListener("click", () => {
+  if (closeProductEditor()) resetProductForm();
 });
-document.querySelector("#product-drawer-cancel")?.addEventListener("click", () => {
-  resetProductForm();
-  productDrawer?.close();
+
+window.addEventListener("beforeunload", (event) => {
+  if (!productFormDirty || document.querySelector("#product-editor")?.hidden) return;
+  event.preventDefault();
 });
 
 // ── Order drawer close ──────────────────────────────────────────
@@ -647,6 +717,7 @@ function addImageRow(url = "", isMain = false, idx = null) {
   urlInput.type        = "url";
   urlInput.placeholder = "https://example.com/image.jpg";
   urlInput.value       = url;
+  urlInput.addEventListener("input", updateProductReadiness);
 
   const radioLabel = document.createElement("label");
   radioLabel.className = "radio-label";
@@ -666,6 +737,7 @@ function addImageRow(url = "", isMain = false, idx = null) {
     // Make first remaining row's radio checked
     const firstRadio = document.querySelector("#product-image-rows input[type='radio']");
     if (firstRadio) firstRadio.checked = true;
+    updateProductReadiness();
   });
 
   row.append(urlInput, radioLabel, deleteBtn);
@@ -676,46 +748,64 @@ document.querySelector("#add-image-row-btn")?.addEventListener("click", () => ad
 
 // ── Live cost preview ─────────────────────────────────────────
 function updateCostPreview() {
-  const panel = document.querySelector("#cost-preview-breakdown");
-  if (!panel || !store.pricingSettings) return;
+  const beforePanel = document.querySelector("#cost-preview-before-profit");
+  const afterPanel = document.querySelector("#cost-preview-after-profit");
+  if (!beforePanel || !afterPanel || !store.pricingSettings) return;
 
   const product = {
     printHours:   Number(productForm?.elements["printHours"]?.value) || 0,
     printProfile: productForm?.elements["printProfile"]?.value ?? "regular",
     materials:    collectMaterialRows(),
     purgeGrams: Number(productForm?.elements["purgeGrams"]?.value) || 0,
+    additionalCopyHours: productForm?.elements["additionalCopyHours"]?.value === "" ? null : Number(productForm?.elements["additionalCopyHours"]?.value),
+    riskLevel: productForm?.elements["riskLevel"]?.value ?? "medium",
     riskPercent: riskPercentFromForm(),
     minUnitPrice: productForm?.elements["minUnitPrice"]?.value === "" ? null : Number(productForm?.elements["minUnitPrice"]?.value),
   };
 
   if (!product.printHours && !product.materials.length) {
-    panel.innerHTML = `<span style="color:var(--muted);font-size:var(--text-sm)">מלא שעות הדפסה וחומרים כדי לראות חישוב.</span>`;
+    beforePanel.innerHTML = `<span class="form-hint">מלא זמן וחומרים כדי לראות חישוב.</span>`;
+    afterPanel.innerHTML = `<span class="form-hint">המחיר הסופי יוצג כאן.</span>`;
+    updateProductReadiness();
     return;
   }
 
   const b = calculateProductCost(product, store.filaments, store.pricingSettings);
 
-  panel.innerHTML = `
+  beforePanel.innerHTML = `
     <div class="cost-preview-row"><span>עלות חומרים</span><span>${formatCurrency(b.materialCost)}</span></div>
     <div class="cost-preview-row"><span>עלות חשמל</span><span>${formatCurrency(b.electricityCost)}</span></div>
     <div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(b.wearCost)}</span></div>
     <div class="cost-preview-row"><span>עלות מדפסת</span><span>${formatCurrency(b.machineCost)}</span></div>
-    <div class="cost-preview-row"><span>עלות ייצור לפני רווח</span><span>${formatCurrency(b.costWithRisk)}</span></div>
     <div class="cost-preview-row"><span>סיכון (${Math.round(b.riskPercent * 100)}%)</span><span>${formatCurrency(b.riskCost)}</span></div>
+    <div class="cost-preview-final"><span>עלות ייצור לפני רווח</span><span>${formatCurrency(b.costWithRisk)}</span></div>
+  `;
+  afterPanel.innerHTML = `
     <div class="cost-preview-row"><span>רווח</span><span>${formatCurrency(b.marginAmount)}</span></div>
     <div class="cost-preview-row"><span>מינימום מוצר</span><span>${formatCurrency(b.productFloor)}</span></div>
     <div class="cost-preview-row"><span>מינימום הזמנה</span><span>${formatCurrency(b.minOrderPrice)}</span></div>
     <div class="cost-preview-final"><span>מחיר לאחר רווח, מעוגל מעלה</span><span>${formatCurrency(b.finalCost)}</span></div>
   `;
+  updateProductReadiness();
 }
 
 // Wire live preview to form inputs (input covers number fields; change covers select)
 productForm?.addEventListener("input",  (e) => {
-  if (e.target.matches("[name='printHours']")) updateCostPreview();
+  productFormDirty = true;
+  if (e.target.matches("[name='printHours'], [name='additionalCopyHours'], [name='purgeGrams'], [name='minUnitPrice'], [name='manualPrice']")) updateCostPreview();
+  else updateProductReadiness();
 });
 productForm?.addEventListener("change", (e) => {
-  if (e.target.matches("[name='printProfile']")) updateCostPreview();
-  if (e.target.matches("[name='riskLevel']")) updateCostPreview();
+  productFormDirty = true;
+  if (e.target.closest("#product-required-colors") && e.target.checked) {
+    const possible = document.querySelector(`#product-possible-colors input[value="${CSS.escape(e.target.value)}"]`);
+    if (possible) possible.checked = true;
+  }
+  if (e.target.matches("[name='catalogKind']") && e.target.value === "idea") {
+    productForm.elements["requiresAdminApproval"].checked = true;
+  }
+  if (e.target.matches("[name='printProfile'], [name='riskLevel']")) updateCostPreview();
+  else updateProductReadiness();
 });
 
 // ── Manual price toggle ───────────────────────────────────────
@@ -731,7 +821,9 @@ document.querySelector("#add-filament-btn")?.addEventListener("click", () => {
   form.reset();
   form.elements["filamentId"].value = "";
   form.elements["active"].checked = true;
+  form.elements["materialType"].value = "PLA";
   form.hidden = false;
+  updateFilamentPreview();
   setView("settings");
   activateSubTab("settings-filaments");
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -740,6 +832,41 @@ document.querySelector("#add-filament-btn")?.addEventListener("click", () => {
 document.querySelector("#filament-form-cancel")?.addEventListener("click", () => {
   const form = document.querySelector("#filament-form");
   if (form) { form.reset(); form.hidden = true; }
+});
+
+function updateFilamentPreview() {
+  const form = document.querySelector("#filament-form");
+  if (!form) return;
+  const swatch = document.querySelector("#filament-color-preview");
+  if (swatch) {
+    swatch.style.background = form.elements["colorHex"]?.value || "#000000";
+    swatch.style.border = "1px solid #777";
+  }
+  const spoolPrice = Number(form.elements["spoolPrice"]?.value);
+  const spoolGrams = Number(form.elements["spoolGrams"]?.value);
+  const target = document.querySelector("#filament-cost-per-gram");
+  if (target) target.textContent = spoolPrice > 0 && spoolGrams > 0
+    ? `עלות לגרם: ${formatCurrency(spoolPrice / spoolGrams)}`
+    : "עלות לגרם: —";
+}
+
+function syncMaterialTypeSuggestions() {
+  const list = document.querySelector("#material-type-suggestions");
+  if (!list) return;
+  const types = new Set(["PLA", "PETG", "TPU", "ABS", "ASA", "PC", "PA"]);
+  store.filaments.forEach((filament) => {
+    const type = String(filament.materialType ?? "").trim();
+    if (type) types.add(type);
+  });
+  list.replaceChildren(...Array.from(types).sort().map((type) => {
+    const option = document.createElement("option");
+    option.value = type;
+    return option;
+  }));
+}
+
+document.querySelector("#filament-form")?.addEventListener("input", (event) => {
+  if (event.target.matches("[name='colorHex'], [name='spoolPrice'], [name='spoolGrams']")) updateFilamentPreview();
 });
 
 document.querySelector("#filament-form")?.addEventListener("submit", async (event) => {
@@ -753,9 +880,8 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
     name:         String(data.get("name") ?? "").trim(),
     materialType: String(data.get("materialType") ?? "PLA").trim(),
     colorHex:     String(data.get("colorHex") ?? "#000000").trim(),
-    pricePerKg:   Number(data.get("pricePerKg")) || 0,
-    spoolPrice:   data.get("spoolPrice") === "" ? null : Number(data.get("spoolPrice")),
-    spoolGrams:   Number(data.get("spoolGrams")) || 1000,
+    spoolPrice:   Number(data.get("spoolPrice")),
+    spoolGrams:   Number(data.get("spoolGrams")),
     remainingGrams: data.get("remainingGrams") === "" ? null : Number(data.get("remainingGrams")),
     note:         String(data.get("note") ?? "").trim(),
     active:       data.get("active") !== null,
@@ -784,6 +910,7 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
     form.reset();
     form.hidden = true;
     render();
+    syncMaterialTypeSuggestions();
   } catch (err) {
     alert(`שגיאה בשמירת חומר: ${err.message}`);
   } finally {
@@ -946,6 +1073,16 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
     marginPercent: Number(data.get("marginPercent")) / 100,
     minOrderPrice: Number(data.get("minOrderPrice")),
     roundingMode: "ceil",
+    riskPercentByLevel: {
+      low: Number(data.get("riskLowPercent")) / 100,
+      medium: Number(data.get("riskMediumPercent")) / 100,
+      high: Number(data.get("riskHighPercent")) / 100,
+    },
+    riskPercents: {
+      low: Number(data.get("riskLowPercent")) / 100,
+      medium: Number(data.get("riskMediumPercent")) / 100,
+      high: Number(data.get("riskHighPercent")) / 100,
+    },
   };
 
   try {
@@ -955,6 +1092,7 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
     });
     store.pricingSettings = saved;
     render();
+    syncPricingRiskFields();
     updateCostPreview();
     document.querySelector("#pricing-save-status").textContent = "ההגדרות נשמרו";
   } catch (err) {
@@ -964,6 +1102,15 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
     btn.textContent = origLabel;
   }
 });
+
+function syncPricingRiskFields() {
+  const form = document.querySelector("#pricing-form");
+  if (!form || !store.pricingSettings) return;
+  const values = store.pricingSettings.riskPercentByLevel ?? store.pricingSettings.riskPercents ?? DEFAULT_RISK_PERCENT_BY_LEVEL;
+  form.elements["riskLowPercent"].value = Number(values.low ?? DEFAULT_RISK_PERCENT_BY_LEVEL.low) * 100;
+  form.elements["riskMediumPercent"].value = Number(values.medium ?? DEFAULT_RISK_PERCENT_BY_LEVEL.medium) * 100;
+  form.elements["riskHighPercent"].value = Number(values.high ?? DEFAULT_RISK_PERCENT_BY_LEVEL.high) * 100;
+}
 
 document.querySelector("#goal-form")?.addEventListener("submit", async (event) => {
   event.preventDefault(); const data = new FormData(event.target);
@@ -1051,4 +1198,6 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
 
   setView(store.appMode === "admin" ? "overview" : "catalog");
   render();
+  syncPricingRiskFields();
+  syncMaterialTypeSuggestions();
 })();

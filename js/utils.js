@@ -26,10 +26,16 @@ export function calculateProductCost(product, filaments, pricingSettings, option
                   ?? pricingSettings?.printProfiles?.regular
                   ?? { wattsAvg: 0, riskPercent: 0 };
 
+  const pricePerGram = (filament) => {
+    const spoolPrice = Number(filament?.spoolPrice);
+    const spoolGrams = Number(filament?.spoolGrams);
+    if (Number.isFinite(spoolPrice) && spoolPrice >= 0 && spoolGrams > 0) return spoolPrice / spoolGrams;
+    return (Number(filament?.pricePerKg) || 0) / 1000;
+  };
   const materialCost = (product?.materials ?? []).reduce((sum, m) => {
     const f = (filaments ?? []).find((f) => f.id === m.filamentId);
-    return sum + (Number(m.grams) || 0) * quantity * (Number(f?.pricePerKg) || 0) / 1000;
-  }, (Number(product?.purgeGrams) || 0) * quantity * (Number(filaments?.[0]?.pricePerKg) || 0) / 1000);
+    return sum + (Number(m.grams) || 0) * quantity * pricePerGram(f);
+  }, (Number(product?.purgeGrams) || 0) * quantity * pricePerGram(filaments?.[0]));
 
   const electricityCost = totalHours * (Number(profile.wattsAvg) || 0) / 1000
     * (Number(pricingSettings?.electricityPricePerKwh) || 0);
@@ -57,23 +63,4 @@ export function calculateProductCost(product, filaments, pricingSettings, option
     productionCost, subtotal: productionCost, riskCost, riskPercent, costWithRisk,
     marginPercent, marginAmount: shopPrice - costWithRisk, pricedCost, productFloor,
     minOrderPrice, floorApplied, shopPrice, finalCost: shopPrice, totalHours };
-}
-
-export function createProductDescriptionSuggestion(name) {
-  const product = String(name ?? '').trim().replace(/\s+/g, ' ');
-  if (product.length < 2) return '';
-
-  const lower = product.toLowerCase();
-  const feminine = /^(ארגונית|קופסה|תושבת|תווית|צלחת|מסילה|ידית|מחיצה|קערה|תחתית)\b/.test(lower);
-  const pronoun = feminine ? 'היא' : 'הוא';
-  const useCase = /מעמד|סטנד|מחזק|מחזיק/.test(lower)
-    ? 'עוזר לשמור על הפריט במקום נגיש ומסודר'
-    : /ארגונית|סדר|מגירה|קופסה/.test(lower)
-      ? 'עוזר לשמור על הסביבה מסודרת ונוחה לשימוש'
-      : /וו|תלייה|מתלה/.test(lower)
-        ? 'יוצר פתרון תלייה פשוט ונוח לשימוש יומיומי'
-        : /קליפס|תופסן/.test(lower)
-          ? 'נותן פתרון קטן וחכם לשימוש היומיומי'
-          : 'מעניק פתרון שימושי ונעים לשימוש יומיומי';
-  return `${product} ${pronoun} מוצר מודפס ושימושי ש${useCase}. העיצוב הפשוט והפרקטי מתאים לבית, למשרד או לכל מקום שבו צריך פתרון קטן שעושה סדר.`;
 }

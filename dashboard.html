@@ -173,7 +173,6 @@
             <p>קטלוג, קטגוריות וביצועים.</p>
           </div>
           <div class="section-actions">
-            <button class="ghost-button btn-sm" id="open-print-files-btn" type="button">פתיחת תיקיית הדפסות</button>
             <button class="ghost-button btn-sm" id="sync-print-files-btn" type="button">סנכרון קבצי הדפסה</button>
             <button class="primary-button btn-sm" id="add-product-btn" type="button">+ מוצר חדש</button>
           </div>
@@ -186,8 +185,104 @@
         </div>
 
         <div class="sub-view is-active" id="product-catalog-sub">
-          <div class="store-edit-grid" id="store-edit-grid"></div>
-          <p class="empty-state" id="store-edit-empty">אין מוצרים בקטלוג.</p>
+          <div id="product-catalog-list">
+            <div class="store-edit-grid" id="store-edit-grid"></div>
+            <p class="empty-state" id="store-edit-empty">אין מוצרים בקטלוג.</p>
+          </div>
+
+          <section id="product-editor" hidden aria-labelledby="product-editor-title">
+            <div class="section-heading section-heading--sub">
+              <div>
+                <button class="ghost-button btn-sm" type="button" id="product-editor-back">→ חזרה לרשימת המוצרים</button>
+                <h3 id="product-editor-title">מוצר חדש</h3>
+                <p>הפרסום נקבע אוטומטית לפי שלמות הפרטים. אפשר לשמור גם מוצר שעדיין חסרים לו פרטים.</p>
+              </div>
+            </div>
+
+            <form class="product-form" id="product-form">
+              <section class="product-materials-section" aria-labelledby="product-print-data-title">
+                <h4 id="product-print-data-title">1. נתונים הכרחיים להדפסה</h4>
+                <div class="product-import-summary" id="product-import-summary" hidden></div>
+                <p class="form-hint">אפשר לסנכרן קובץ 3MF או להזין ידנית זמן, פרופיל, חומרים ומשקלים.</p>
+                <label>זמן הדפסה (שעות)<input name="printHours" type="number" min="0" step="0.01" value="0" /></label>
+                <label>זמן נוסף לכל עותק (שעות)<input name="additionalCopyHours" type="number" min="0" step="0.01" placeholder="ברירת המחדל היא זמן ההדפסה המלא" /></label>
+                <label>פרופיל הדפסה<select name="printProfile" id="product-print-profile"><option value="regular">רגיל</option><option value="ams">AMS / ריבוי צבעים</option><option value="complex">מורכב</option></select></label>
+                <label>Purge משוער (גרם)<input name="purgeGrams" type="number" min="0" step="0.1" value="0" /></label>
+                <div>
+                  <strong>פילמנט ומשקל להדפסה</strong>
+                  <button class="ghost-button btn-sm" type="button" id="add-material-row-btn">+ הוסף חומר</button>
+                </div>
+                <div id="product-materials-rows"></div>
+              </section>
+
+              <section class="product-materials-section" aria-labelledby="product-pricing-title">
+                <h4 id="product-pricing-title">2. תמחור</h4>
+                <label>רמת סיכון<select name="riskLevel" id="product-risk-level"><option value="low">נמוך</option><option value="medium" selected>בינוני</option><option value="high">גבוה</option></select></label>
+                <label>מחיר מינימום ליחידה<input name="minUnitPrice" type="number" min="0" step="0.01" placeholder="ללא רצפה נוספת" /></label>
+                <label class="checkbox-label"><input name="manualPriceEnabled" type="checkbox" id="manual-price-toggle" style="width:auto" /> קביעת מחיר ידנית</label>
+                <label id="manual-price-field" hidden>מחיר ידני (₪)<input name="manualPrice" type="number" min="0" step="0.01" placeholder="0" /></label>
+                <div id="cost-preview-panel">
+                  <div class="cost-preview-panel">
+                    <strong>עלות לפני רווח</strong>
+                    <div id="cost-preview-before-profit"><span class="form-hint">מלא זמן וחומרים כדי לראות חישוב.</span></div>
+                  </div>
+                  <div class="cost-preview-panel">
+                    <strong>מחיר לאחר רווח</strong>
+                    <div id="cost-preview-after-profit"><span class="form-hint">המחיר הסופי יוצג כאן.</span></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="product-materials-section" aria-labelledby="product-catalog-data-title">
+                <h4 id="product-catalog-data-title">3. פרטי קטלוג</h4>
+                <label>סוג פריט<select name="catalogKind"><option value="printed">מוצר שכבר הודפס</option><option value="idea">רעיון / מודל שטרם נוסה</option></select></label>
+                <label>שם מוצר<input name="name" required placeholder="למשל: מחזיק מפתחות לקיר" /></label>
+                <label>תיאור מלא<textarea name="description" rows="4" placeholder="מהו המוצר, למי הוא מתאים ומה חשוב לדעת"></textarea></label>
+                <div>
+                  <strong>קטגוריות</strong>
+                  <div id="product-category-rows"></div>
+                </div>
+                <div class="product-gallery-section">
+                  <div>
+                    <strong>גלריית תמונות</strong>
+                    <button class="ghost-button btn-sm" type="button" id="add-image-row-btn">+ הוסף תמונה</button>
+                  </div>
+                  <div id="product-image-rows"></div>
+                </div>
+                <input name="image" type="hidden" />
+              </section>
+
+              <section class="product-materials-section" aria-labelledby="product-options-title">
+                <h4 id="product-options-title">4. אפשרויות הזמנה</h4>
+                <p class="form-hint">סמן אילו חומרים יכולים להיבחר כצבע, ואילו מהם הכרחיים להדפסה.</p>
+                <div><strong>צבעים אפשריים</strong><div id="product-possible-colors"></div></div>
+                <div><strong>צבעים נדרשים</strong><div id="product-required-colors"></div></div>
+                <label class="checkbox-label"><input name="allowMultiple" type="checkbox" checked style="width:auto" /> ניתן להזמין יותר מיחידה אחת</label>
+                <label class="checkbox-label"><input name="customTextEnabled" type="checkbox" style="width:auto" /> ניתן להוסיף טקסט מותאם אישית</label>
+              </section>
+
+              <section class="product-materials-section" aria-labelledby="product-internal-title">
+                <h4 id="product-internal-title">5. הגדרות פנימיות ואופציונליות</h4>
+                <label>קישור מקור<input name="sourceUrl" type="url" placeholder="https://www.thingiverse.com/thing:..." /></label>
+                <label class="checkbox-label"><input name="requiresAdminApproval" type="checkbox" id="product-requires-approval" style="width:auto" /> דורש אישור מנהל לפני הדפסה</label>
+                <label>הערות הדפסה פנימיות<textarea name="internalPrintNotes" rows="3" placeholder="יוצג למנהל בלבד"></textarea></label>
+              </section>
+
+              <aside class="cost-preview-panel" id="product-readiness" role="status" aria-live="polite">
+                <strong>מוכנות לפרסום</strong>
+                <div id="product-readiness-details"></div>
+              </aside>
+
+              <input name="cost" type="hidden" value="0.01" />
+              <input name="grams" type="hidden" value="0" />
+              <input type="hidden" id="edit-product-id" name="editProductId" value="" />
+
+              <div class="side-drawer-actions">
+                <button class="primary-button" type="submit" id="product-submit-btn">הוספת מוצר</button>
+                <button class="ghost-button" type="button" id="product-editor-cancel">ביטול</button>
+              </div>
+            </form>
+          </section>
         </div>
 
         <div class="sub-view" id="product-categories-sub">
@@ -434,6 +529,12 @@
               <input name="marginPercent" type="number" min="0" max="500" step="1" placeholder="50" required />
             </label>
             <label>מינימום להזמנה (₪)<input name="minOrderPrice" type="number" min="0" step="0.01" placeholder="5" required /></label>
+            <fieldset>
+              <legend>תוספת סיכון לפי רמה</legend>
+              <label>סיכון נמוך (%)<input name="riskLowPercent" type="number" min="0" max="500" step="1" value="8" required /></label>
+              <label>סיכון בינוני (%)<input name="riskMediumPercent" type="number" min="0" max="500" step="1" value="15" required /></label>
+              <label>סיכון גבוה (%)<input name="riskHighPercent" type="number" min="0" max="500" step="1" value="25" required /></label>
+            </fieldset>
             <div class="cost-preview-panel"><strong>קבועי עלות (לקריאה בלבד)</strong><div id="pricing-readonly-breakdown"></div></div>
             <button class="primary-button" type="submit">שמור הגדרות</button>
             <p class="form-hint" id="pricing-save-status" role="status"></p>
@@ -455,24 +556,19 @@
               </label>
               <label>
                 סוג
-                <select name="materialType">
-                  <option value="PLA">PLA</option>
-                  <option value="PETG">PETG</option>
-                  <option value="TPU">TPU</option>
-                  <option value="ABS">ABS</option>
-                  <option value="אחר">אחר</option>
-                </select>
+                <input name="materialType" list="material-type-suggestions" required placeholder="PLA, PETG או סוג אחר" />
+                <datalist id="material-type-suggestions">
+                  <option value="PLA"></option><option value="PETG"></option><option value="TPU"></option><option value="ABS"></option><option value="ASA"></option><option value="PC"></option><option value="PA"></option>
+                </datalist>
               </label>
               <label>
                 צבע
+                <span class="color-swatch" id="filament-color-preview" aria-hidden="true" style="display:inline-block;background:#000000;border:1px solid #777"></span>
                 <input name="colorHex" type="color" value="#000000" required />
               </label>
-              <label>
-                מחיר לק״ג (₪)
-                <input name="pricePerKg" type="number" min="0" step="0.01" placeholder="נגזר ממחיר הגליל" />
-              </label>
-              <label>מחיר גליל (₪)<input name="spoolPrice" type="number" min="0" step="0.01" /></label>
-              <label>משקל גליל (גרם)<input name="spoolGrams" type="number" min="1" step="1" value="1000" /></label>
+              <label>מחיר גליל (₪)<input name="spoolPrice" type="number" min="0.01" step="0.01" required /></label>
+              <label>משקל גליל (גרם)<input name="spoolGrams" type="number" min="1" step="1" value="1000" required /></label>
+              <p class="form-hint" id="filament-cost-per-gram">עלות לגרם: —</p>
               <label>יתרה משוערת (גרם)<input name="remainingGrams" type="number" min="0" step="1" /></label>
               <label>
                 הערה
@@ -496,7 +592,9 @@
                   <th>צבע</th>
                   <th>שם</th>
                   <th>סוג</th>
-                  <th>מחיר לק״ג</th>
+                  <th>מחיר גליל</th>
+                  <th>משקל גליל</th>
+                  <th>עלות לגרם</th>
                   <th>יתרה</th>
                   <th>סטטוס</th>
                   <th>פעולות</th>
@@ -526,95 +624,6 @@
         </div>
       </section>
     </main>
-
-    <!-- ── Product drawer (add / edit) ── -->
-    <dialog id="product-drawer" class="side-drawer">
-      <div class="side-drawer-inner">
-        <button class="icon-button close-button" type="button" id="product-drawer-close" aria-label="סגירה">×</button>
-        <h2 id="product-drawer-title">מוצר חדש</h2>
-
-        <form class="product-form" id="product-form">
-          <label>
-            שם מוצר
-            <input name="name" required placeholder="למשל: מחזיק מפתחות לקיר" />
-          </label>
-          <label>
-            תיאור קצר
-            <textarea name="description" rows="3" placeholder="מה זה, למי זה מתאים, צבעים זמינים"></textarea>
-            <span class="form-hint" id="product-description-suggestion" hidden></span>
-            <button class="ghost-button btn-sm" id="suggest-product-description-btn" type="button">הצע תיאור לפי השם</button>
-          </label>
-          <label>
-            תמונה ראשית
-            <input name="image" type="url" placeholder="https://example.com/product-image.jpg" />
-          </label>
-
-          <div class="product-import-summary" id="product-import-summary" hidden></div>
-
-          <div class="product-materials-section">
-            <div>
-              <strong>קטגוריות</strong>
-            </div>
-            <div id="product-category-rows"></div>
-          </div>
-
-          <!-- Materials section -->
-          <div class="product-materials-section">
-            <div>
-              <strong>פילמנט להדפסה</strong>
-              <button class="ghost-button btn-sm" type="button" id="add-material-row-btn">+ הוסף חומר</button>
-            </div>
-            <div id="product-materials-rows"></div>
-          </div>
-
-          <div class="cost-preview-panel" id="cost-preview-panel">
-            <strong>זמן, חומר ומחיר מחושב</strong>
-            <div id="cost-preview-breakdown"><span style="color:var(--muted);font-size:var(--text-sm)">לאחר סנכרון 3MF ובחירת פילמנט יוצג כאן המחיר.</span></div>
-          </div>
-
-          <label class="checkbox-label">
-            <input name="productActive" type="checkbox" id="product-active-toggle" style="width:auto" />
-            הצג מוצר בקטלוג
-          </label>
-
-          <details class="product-advanced-settings">
-            <summary>הגדרות מתקדמות</summary>
-            <div class="product-advanced-settings__content">
-              <p class="form-hint">זמן ההדפסה, צריכת החומר וה־purge נמשכים מהקובץ. הצריכה כבר כוללת purge למנה, ולכן אינה מתווספת פעם נוספת.</p>
-              <label>רמת סיכון<select name="riskLevel" id="product-risk-level"><option value="low">נמוך</option><option value="medium" selected>בינוני</option><option value="high">גבוה</option></select></label>
-              <label>מחיר מינימום ליחידה<input name="minUnitPrice" type="number" min="0" step="0.01" placeholder="ללא רצפה נוספת" /></label>
-              <label>פרופיל הדפסה<select name="printProfile" id="product-print-profile"><option value="regular">רגיל</option><option value="ams">AMS / ריבוי צבעים</option><option value="complex">מורכב</option></select></label>
-              <label>קישור מקור<input name="sourceUrl" type="url" placeholder="https://www.thingiverse.com/thing:..." /></label>
-              <label class="checkbox-label"><input name="requiresAdminApproval" type="checkbox" id="product-requires-approval" style="width:auto" /> דורש אישור מנהל לפני הדפסה</label>
-              <label class="checkbox-label"><input name="manualPriceEnabled" type="checkbox" id="manual-price-toggle" style="width:auto" /> קביעת מחיר ידנית</label>
-              <label id="manual-price-field" hidden>מחיר ידני (₪)<input name="manualPrice" type="number" min="0" step="0.01" placeholder="0" /></label>
-            </div>
-          </details>
-
-          <!-- Image gallery section -->
-          <div class="product-gallery-section" hidden>
-            <div>
-              <strong>גלריית תמונות</strong>
-              <button class="ghost-button btn-sm" type="button" id="add-image-row-btn">+ הוסף תמונה</button>
-            </div>
-            <div id="product-image-rows"></div>
-          </div>
-
-          <input name="cost" type="hidden" value="0.01" />
-          <input name="grams" type="hidden" value="0" />
-          <input name="printHours" type="hidden" value="0" />
-          <input name="purgeGrams" type="hidden" value="0" />
-
-          <!-- Hidden: edit mode -->
-          <input type="hidden" id="edit-product-id" name="editProductId" value="" />
-
-          <div class="side-drawer-actions">
-            <button class="primary-button" type="submit" id="product-submit-btn">הוספת מוצר</button>
-            <button class="ghost-button" type="button" id="product-drawer-cancel">ביטול</button>
-          </div>
-        </form>
-      </div>
-    </dialog>
 
     <!-- ── Order drawer (details / price / cancel) ── -->
     <dialog id="order-drawer" class="side-drawer">

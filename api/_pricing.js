@@ -1,12 +1,28 @@
 const config = require('../config/pricing.json');
 
-const DEFAULT_SETTINGS = Object.freeze({ marginPercent: 0.5, minOrderPrice: 5, roundingMode: 'ceil' });
+const DEFAULT_SETTINGS = Object.freeze({
+  marginPercent: 0.5,
+  minOrderPrice: 5,
+  roundingMode: 'ceil',
+  riskPercentByLevel: Object.freeze({ low: 0.08, medium: 0.15, high: 0.25 }),
+});
+
+function normalizedRiskPercents(value = {}) {
+  const source = value.riskPercentByLevel || value.riskPercents || {};
+  const read = (level) => {
+    const candidate = source[level] ?? value[`${level}RiskPercent`];
+    const number = Number(candidate);
+    return Number.isFinite(number) && number >= 0 ? number : DEFAULT_SETTINGS.riskPercentByLevel[level];
+  };
+  return { low: read('low'), medium: read('medium'), high: read('high') };
+}
 
 function editableSettings(value = {}) {
   return {
     marginPercent: value.marginPercent == null ? DEFAULT_SETTINGS.marginPercent : Number(value.marginPercent),
     minOrderPrice: value.minOrderPrice == null ? DEFAULT_SETTINGS.minOrderPrice : Number(value.minOrderPrice),
     roundingMode: 'ceil',
+    riskPercentByLevel: normalizedRiskPercents(value),
   };
 }
 
@@ -36,13 +52,23 @@ function calculateProductCost(product = {}, filaments = [], settingsValue = {}, 
     const grams = Math.max(Number(material.grams) || 0, 0) * quantity;
     materialGrams += grams;
     const filament = filaments.find((item) => item.id === material.filamentId);
-    materialCost += grams * (Number(filament?.pricePerKg) || 0) / 1000;
+    const spoolPrice = Number(filament?.spoolPrice);
+    const spoolGrams = Number(filament?.spoolGrams);
+    const pricePerGram = Number.isFinite(spoolPrice) && spoolPrice > 0 && spoolGrams > 0
+      ? spoolPrice / spoolGrams
+      : (Number(filament?.pricePerKg) || 0) / 1000;
+    materialCost += grams * pricePerGram;
   }
   const electricityCost = totalHours * Number(profile.wattsAvg) / 1000 * Number(settings.electricityPricePerKwh);
   const wearCost = totalHours * wearPerHour(profileKey);
   const machineCost = totalHours * Number(settings.machine.priceIls) / Number(settings.machine.lifeHours);
   const productionCost = materialCost + electricityCost + wearCost + machineCost;
-  const riskPercent = product.riskPercent == null ? Number(profile.riskPercent) : Math.max(Number(product.riskPercent) || 0, 0);
+  const riskLevel = ['low', 'medium', 'high'].includes(product.riskLevel) ? product.riskLevel : 'medium';
+  const riskPercent = product.riskLevel
+    ? Number(settings.riskPercentByLevel[riskLevel])
+    : product.riskPercent == null
+      ? Number(settings.riskPercentByLevel[riskLevel] ?? profile.riskPercent)
+      : Math.max(Number(product.riskPercent) || 0, 0);
   const riskCost = productionCost * riskPercent;
   const costWithRisk = productionCost + riskCost;
   const internal = Boolean(options.internal);

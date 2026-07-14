@@ -43,13 +43,24 @@ module.exports = async (req, res) => {
       } else {
         const marginPercent = Number(body.marginPercent);
         const minOrderPrice = Number(body.minOrderPrice);
+        const riskPercentByLevel = body.riskPercentByLevel || body.riskPercents || {
+          low: body.lowRiskPercent,
+          medium: body.mediumRiskPercent,
+          high: body.highRiskPercent,
+        };
         if (!Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 5) {
           return res.status(400).json({ error: 'אחוז הרווח חייב להיות בין 0% ל־500%' });
         }
         if (!Number.isFinite(minOrderPrice) || minOrderPrice < 0) {
           return res.status(400).json({ error: 'מחיר המינימום להזמנה חייב להיות מספר לא־שלילי' });
         }
-        value = editableSettings({ marginPercent, minOrderPrice });
+        for (const level of ['low', 'medium', 'high']) {
+          const risk = Number(riskPercentByLevel[level]);
+          if (!Number.isFinite(risk) || risk < 0 || risk > 5) {
+            return res.status(400).json({ error: 'אחוזי הסיכון חייבים להיות בין 0% ל־500%' });
+          }
+        }
+        value = editableSettings({ marginPercent, minOrderPrice, riskPercentByLevel });
       }
       await sql`
         INSERT INTO settings (key, value)

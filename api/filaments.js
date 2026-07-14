@@ -1,6 +1,6 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
-const { parseBody, requireAuth, requireAdmin } = require('./_middleware');
+const { parseBody, requireAdmin } = require('./_middleware');
 
 function normalizeRow(row) {
   return {
@@ -11,6 +11,7 @@ function normalizeRow(row) {
     pricePerKg:   Number(row.price_per_kg),
     spoolPrice:   row.spool_price == null ? null : Number(row.spool_price),
     spoolGrams:   Number(row.spool_grams) || 1000,
+    costPerGram:  row.spool_price == null ? 0 : Number(row.spool_price) / (Number(row.spool_grams) || 1000),
     remainingGrams: row.remaining_grams == null ? null : Number(row.remaining_grams),
     active:       Boolean(row.active),
     note:         row.note ?? '',
@@ -30,15 +31,19 @@ module.exports = async (req, res) => {
       try {
         const body        = await parseBody(req);
         const sql         = getSql();
+        const currentRows = await sql`SELECT spool_price, spool_grams FROM filaments WHERE id = ${id}`;
+        if (!currentRows.length) return res.status(404).json({ error: 'Not found' });
         const name        = body.name        !== undefined ? String(body.name).trim()        : null;
         const materialType = body.materialType !== undefined ? String(body.materialType).trim() : null;
         const colorHex    = body.colorHex    !== undefined ? String(body.colorHex).trim()    : null;
-        const spoolPrice = body.spoolPrice !== undefined && body.spoolPrice !== '' ? Math.max(Number(body.spoolPrice) || 0, 0) : null;
-        const spoolGrams = body.spoolGrams !== undefined ? Math.max(Math.round(Number(body.spoolGrams) || 1), 1) : null;
-        const pricePerKg = spoolPrice != null
-          ? spoolPrice / (spoolGrams || 1000) * 1000
-          : body.pricePerKg !== undefined ? Math.max(Number(body.pricePerKg) || 0, 0) : null;
-        const remainingGrams = body.newSpool ? (spoolGrams || 1000)
+        const spoolPrice = body.spoolPrice !== undefined ? Number(body.spoolPrice) : null;
+        const spoolGrams = body.spoolGrams !== undefined ? Math.round(Number(body.spoolGrams)) : null;
+        if (spoolPrice !== null && (!Number.isFinite(spoolPrice) || spoolPrice <= 0)) return res.status(400).json({ error: 'מחיר גליל חייב להיות חיובי' });
+        if (spoolGrams !== null && (!Number.isFinite(spoolGrams) || spoolGrams <= 0)) return res.status(400).json({ error: 'משקל גליל חייב להיות חיובי' });
+        const effectivePrice = spoolPrice ?? Number(currentRows[0].spool_price);
+        const effectiveGrams = spoolGrams ?? Number(currentRows[0].spool_grams);
+        const pricePerKg = effectivePrice / effectiveGrams * 1000;
+        const remainingGrams = body.newSpool ? effectiveGrams
           : body.remainingGrams !== undefined ? Math.max(Number(body.remainingGrams) || 0, 0) : null;
         const active      = body.active      !== undefined ? Boolean(body.active)             : null;
         const note        = body.note        !== undefined ? String(body.note).trim()        : null;
@@ -86,7 +91,7 @@ module.exports = async (req, res) => {
 
   // ── /api/filaments — collection operations ────────────────────
   if (req.method === 'GET') {
-    const user = await requireAuth(req, res);
+    const user = await requireAdmin(req, res);
     if (!user) return;
     try {
       const sql = getSql();
@@ -107,9 +112,11 @@ module.exports = async (req, res) => {
       const name        = String(body.name ?? '').trim();
       const materialType = String(body.materialType ?? 'PLA').trim();
       const colorHex    = String(body.colorHex ?? '#000000').trim();
-      const spoolPrice = body.spoolPrice !== undefined && body.spoolPrice !== '' ? Math.max(Number(body.spoolPrice) || 0, 0) : null;
-      const spoolGrams = Math.max(Math.round(Number(body.spoolGrams) || 1000), 1);
-      const pricePerKg = spoolPrice != null ? spoolPrice / spoolGrams * 1000 : Math.max(Number(body.pricePerKg) || 0, 0);
+      const spoolPrice = Number(body.spoolPrice);
+      const spoolGrams = Math.round(Number(body.spoolGrams));
+      if (!Number.isFinite(spoolPrice) || spoolPrice <= 0) return res.status(400).json({ error: 'מחיר גליל חייב להיות חיובי' });
+      if (!Number.isFinite(spoolGrams) || spoolGrams <= 0) return res.status(400).json({ error: 'משקל גליל חייב להיות חיובי' });
+      const pricePerKg = spoolPrice / spoolGrams * 1000;
       const note        = String(body.note ?? '').trim();
 
       if (!name) return res.status(400).json({ error: 'Name required' });
