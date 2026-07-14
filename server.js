@@ -29,6 +29,7 @@ app.all('/api/expenses',      require('./api/expenses'));
 app.all('/api/insights',      require('./api/insights'));
 app.all('/api/ledger',        require('./api/ledger'));
 app.all('/api/goals',         require('./api/goals'));
+app.all('/api/transparency',  require('./api/transparency'));
 app.all('/api/maintenance',   require('./api/maintenance'));
 app.all('/api/print-sync',    require('./api/print-sync'));
 app.all('/api/init',          require('./api/init'));

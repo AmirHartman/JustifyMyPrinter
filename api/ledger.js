@@ -16,9 +16,17 @@ module.exports = async (req, res) => {
       const raw = Number(body.amount);
       if (!Number.isFinite(raw) || raw <= 0) return res.status(400).json({ error: 'Amount must be positive' });
       const amount = kind === 'investment' ? raw : -raw;
-      const rows = await sql`INSERT INTO owner_ledger (id, kind, description, amount, occurred_at, notes)
-        VALUES (${randomUUID()}, ${kind}, ${String(body.description || '').trim()}, ${amount}, ${body.occurredAt || new Date().toISOString().slice(0, 10)}, ${String(body.notes || '').trim()}) RETURNING *`;
+      const rows = await sql`INSERT INTO owner_ledger (id, kind, description, amount, occurred_at, notes, public_visible, public_label)
+        VALUES (${randomUUID()}, ${kind}, ${String(body.description || '').trim()}, ${amount}, ${body.occurredAt || new Date().toISOString().slice(0, 10)}, ${String(body.notes || '').trim()}, ${Boolean(body.publicVisible)}, ${String(body.publicLabel || '').trim()}) RETURNING *`;
       return res.status(201).json(rows[0]);
+    }
+    if (req.method === 'PUT' && id) {
+      const body = await parseBody(req);
+      const rows = await sql`UPDATE owner_ledger SET
+        public_visible = CASE WHEN ${body.publicVisible !== undefined} THEN ${Boolean(body.publicVisible)} ELSE public_visible END,
+        public_label = CASE WHEN ${body.publicLabel !== undefined} THEN ${String(body.publicLabel || '').trim()} ELSE public_label END
+        WHERE id = ${id} RETURNING *`;
+      return rows.length ? res.json(rows[0]) : res.status(404).json({ error: 'Not found' });
     }
     if (req.method === 'DELETE' && id) {
       const rows = await sql`DELETE FROM owner_ledger WHERE id = ${id} AND kind <> 'self_print' RETURNING id`;

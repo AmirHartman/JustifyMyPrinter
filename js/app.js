@@ -1117,13 +1117,13 @@ function syncPricingRiskFields() {
 
 document.querySelector("#goal-form")?.addEventListener("submit", async (event) => {
   event.preventDefault(); const data = new FormData(event.target);
-  await api("/api/goals", { method: "POST", body: JSON.stringify({ name: data.get("name"), targetAmount: Number(data.get("targetAmount")) }) });
+  await api("/api/goals", { method: "POST", body: JSON.stringify({ name: data.get("name"), targetAmount: Number(data.get("targetAmount")), publicVisible: data.get("publicVisible") === "on", publicLabel: data.get("publicLabel") }) });
   event.target.reset(); await loadData(); render();
 });
 
 document.querySelector("#ledger-form")?.addEventListener("submit", async (event) => {
   event.preventDefault(); const data = new FormData(event.target);
-  await api("/api/ledger", { method: "POST", body: JSON.stringify({ kind: data.get("kind"), description: data.get("description"), amount: Number(data.get("amount")) }) });
+  await api("/api/ledger", { method: "POST", body: JSON.stringify({ kind: data.get("kind"), description: data.get("description"), amount: Number(data.get("amount")), publicVisible: data.get("publicVisible") === "on", publicLabel: data.get("publicLabel") }) });
   event.target.reset(); await loadData(); render();
 });
 

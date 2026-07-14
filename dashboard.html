@@ -436,9 +436,9 @@
           <h3>טיפולים תקופתיים</h3><div id="maintenance-tasks-list" class="business-list"></div>
           <h3>סיכון אמפירי</h3><div id="risk-list" class="business-list"></div>
           <h3>יעדי צמיחה</h3><div id="goals-list" class="business-list"></div>
-          <form id="goal-form" class="filament-inline-form"><input name="name" required placeholder="שם יעד"><input name="targetAmount" type="number" min="1" required placeholder="סכום יעד"><button class="primary-button btn-sm">הוסף יעד</button></form>
+          <form id="goal-form" class="filament-inline-form"><input name="name" required placeholder="שם יעד"><input name="targetAmount" type="number" min="1" required placeholder="סכום יעד"><input name="publicLabel" placeholder="כותרת ציבורית (אופציונלי)"><label class="inline-check"><input name="publicVisible" type="checkbox"> הצג בשקיפות</label><button class="primary-button btn-sm">הוסף יעד</button></form>
           <h3>חשבון בעלים</h3><div id="ledger-list" class="business-list"></div>
-          <form id="ledger-form" class="filament-inline-form"><select name="kind"><option value="investment">השקעה</option><option value="withdrawal">משיכה</option></select><input name="description" required placeholder="תיאור"><input name="amount" type="number" min="0.01" step="0.01" required placeholder="סכום"><button class="primary-button btn-sm">הוסף תנועה</button></form>
+          <form id="ledger-form" class="filament-inline-form"><select name="kind"><option value="investment">השקעה</option><option value="withdrawal">משיכה</option></select><input name="description" required placeholder="תיאור"><input name="amount" type="number" min="0.01" step="0.01" required placeholder="סכום"><input name="publicLabel" placeholder="כותרת ציבורית (אופציונלי)"><label class="inline-check"><input name="publicVisible" type="checkbox"> הצג בשקיפות</label><button class="primary-button btn-sm">הוסף תנועה</button></form>
         </div>
 
         <div class="sub-view is-active" id="finance-summary-sub">

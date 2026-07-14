@@ -74,8 +74,18 @@ function renderBusinessInsights() {
     await api("/api/maintenance", { method: "POST", body: JSON.stringify({ partId: button.dataset.serviceId, eventType: "service" }) }); await loadData(); render();
   }));
   document.querySelector("#risk-list").innerHTML = insights.risk.map((item) => `<article class="business-row"><span>${escapeHtml(item.label)}</span><strong>${item.enoughData ? `${Math.round(item.actualPercent * 100)}% בפועל מול ${Math.round(item.configuredPercent * 100)}%` : `אין מספיק נתונים (${item.samples}/10)`}</strong></article>`).join("");
-  document.querySelector("#goals-list").innerHTML = store.goals.map((goal) => `<article class="business-row"><span>${escapeHtml(goal.name)}</span><progress max="${Number(goal.target_amount)}" value="${Number(goal.saved)}"></progress><strong>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target_amount)}</strong></article>`).join("") || "אין יעדים עדיין";
-  document.querySelector("#ledger-list").innerHTML = store.ledger.map((entry) => `<article class="business-row"><span>${escapeHtml(entry.description)}</span><strong>${formatCurrency(entry.amount)}</strong></article>`).join("");
+  const goalsList = document.querySelector("#goals-list");
+  goalsList.innerHTML = store.goals.map((goal) => `<article class="business-row"><span>${escapeHtml(goal.name)}<small>${goal.public_visible ? `מוצג לציבור כ־${escapeHtml(goal.public_label || goal.name)}` : "פרטי למנהל"}</small></span><progress max="${Number(goal.target_amount)}" value="${Number(goal.saved)}"></progress><strong>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target_amount)}</strong><button type="button" class="ghost-button btn-sm" data-goal-public="${escapeHtml(goal.id)}" data-public-visible="${goal.public_visible ? "true" : "false"}">${goal.public_visible ? "הסתר" : "פרסם"}</button></article>`).join("") || "אין יעדים עדיין";
+  goalsList.querySelectorAll("[data-goal-public]").forEach((button) => button.addEventListener("click", async () => {
+    await api(`/api/goals?id=${encodeURIComponent(button.dataset.goalPublic)}`, { method: "PUT", body: JSON.stringify({ publicVisible: button.dataset.publicVisible !== "true" }) });
+    await loadData(); render();
+  }));
+  const ledgerList = document.querySelector("#ledger-list");
+  ledgerList.innerHTML = store.ledger.map((entry) => `<article class="business-row"><span>${escapeHtml(entry.description)}<small>${entry.public_visible ? `מוצג לציבור כ־${escapeHtml(entry.public_label || entry.description)}` : "פרטי למנהל"}</small></span><strong>${formatCurrency(entry.amount)}</strong><button type="button" class="ghost-button btn-sm" data-ledger-public="${escapeHtml(entry.id)}" data-public-visible="${entry.public_visible ? "true" : "false"}">${entry.public_visible ? "הסתר" : "פרסם"}</button></article>`).join("");
+  ledgerList.querySelectorAll("[data-ledger-public]").forEach((button) => button.addEventListener("click", async () => {
+    await api(`/api/ledger?id=${encodeURIComponent(button.dataset.ledgerPublic)}`, { method: "PUT", body: JSON.stringify({ publicVisible: button.dataset.publicVisible !== "true" }) });
+    await loadData(); render();
+  }));
 }
 
 // ── Shared: resolve the user behind an order ──────────────────
@@ -1812,6 +1822,14 @@ function renderTransparency() {
     row.innerHTML = `<span>${escapeHtml(goal.label ?? goal.name ?? "יעד")}</span><progress max="${Number(goal.targetAmount ?? goal.target ?? 0)}" value="${Number(goal.currentAmount ?? goal.saved ?? 0)}"></progress><strong>${formatCurrency(goal.currentAmount ?? goal.saved ?? 0)} / ${formatCurrency(goal.targetAmount ?? goal.target ?? 0)}</strong>`;
     content.append(row);
   });
+  if ((data.investments ?? []).length) {
+    const heading = document.createElement("h3"); heading.textContent = "רכישות והשקעות שפורסמו"; content.append(heading);
+    (data.investments ?? []).forEach((investment) => {
+      const row = document.createElement("article"); row.className = "business-row";
+      row.innerHTML = `<span>${escapeHtml(investment.label ?? "השקעה בפרויקט")}</span><strong>${formatCurrency(investment.amount ?? 0)}</strong>`;
+      content.append(row);
+    });
+  }
 }
 
 function colorAlternativeLabel(order) {
