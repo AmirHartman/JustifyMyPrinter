@@ -530,9 +530,59 @@ function openOrderDrawer(order, opts = {}) {
   if (order.requestDescription) readOnlyBits.push(`<div><strong>בקשה:</strong> ${escapeHtml(order.requestDescription)}</div>`);
   if (order.externalModelLink) readOnlyBits.push(`<div><strong>קישור:</strong> <a href="${escapeHtml(order.externalModelLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(order.externalModelLink)}</a></div>`);
   if (order.selectedColors?.length) readOnlyBits.push(`<div><strong>צבעים:</strong> ${escapeHtml(order.selectedColors.join(", "))}</div>`);
+  if (order.customText) readOnlyBits.push(`<div><strong>טקסט מותאם:</strong> ${escapeHtml(order.customText)}</div>`);
+  if (order.colorAlternativeStatus && order.colorAlternativeStatus !== "none") {
+    readOnlyBits.push(`<div><strong>חלופת צבע:</strong> ${escapeHtml(colorAlternativeLabel(order))}</div>`);
+  }
   if (order.userNotes) readOnlyBits.push(`<div><strong>הערות לקוח:</strong> ${escapeHtml(order.userNotes)}</div>`);
   if (order.cancellationReason) readOnlyBits.push(`<div><strong>סיבת ביטול:</strong> ${escapeHtml(order.cancellationReason)}</div>`);
   readonlyEl.innerHTML = readOnlyBits.length ? `<div class="order-detail-readonly">${readOnlyBits.join("")}</div>` : "";
+
+  if (["needed", "pending", "rejected"].includes(order.colorAlternativeStatus)) {
+    const alternative = document.createElement("div");
+    alternative.className = "order-color-alternative-admin";
+    const heading = document.createElement("strong");
+    heading.textContent = order.colorAlternativeStatus === "pending" ? "עדכון חלופת הצבע" : "הצעת צבע חלופי";
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "צבע חלופי זמין");
+    const availableFilaments = store.filaments.filter((filament) =>
+      filament.active !== false && (filament.remainingGrams == null || Number(filament.remainingGrams) > 0));
+    availableFilaments.forEach((filament) => {
+      const option = document.createElement("option");
+      option.value = filament.id;
+      option.textContent = `${filament.name}${filament.remainingGrams == null ? "" : ` · ${Math.round(filament.remainingGrams)} גרם`}`;
+      if (filament.id === order.proposedAlternativeColorValue) option.selected = true;
+      select.append(option);
+    });
+    const propose = document.createElement("button");
+    propose.type = "button";
+    propose.className = "primary-button btn-sm";
+    propose.textContent = "שליחת הצעה לחבר";
+    propose.disabled = availableFilaments.length === 0;
+    propose.addEventListener("click", async () => {
+      propose.disabled = true;
+      try {
+        const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ action: "propose-color-alternative", proposedAlternativeColor: select.value }),
+        });
+        Object.assign(order, updated);
+        render();
+        dialog.close();
+      } catch (err) {
+        alert(`שגיאה בשליחת החלופה: ${err.message}`);
+        propose.disabled = availableFilaments.length === 0;
+      }
+    });
+    if (availableFilaments.length === 0) {
+      const empty = document.createElement("small");
+      empty.textContent = "אין כרגע פילמנט פעיל וזמין להצעה.";
+      alternative.append(heading, empty);
+    } else {
+      alternative.append(heading, select, propose);
+    }
+    readonlyEl.append(alternative);
+  }
 
   form.elements.baseCost.value    = order.baseCost ?? "";
   form.elements.supportAmount.value = order.supportAmount ?? 0;

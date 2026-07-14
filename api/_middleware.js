@@ -53,13 +53,19 @@ async function getSession(req) {
     const sql = getSql();
     const rows = await sql`
       SELECT s.user_id AS id, s.user_name AS name, s.user_role AS role,
-             u.status AS status, u.gender AS gender
+             u.status AS status, u.gender AS gender,
+             u.rejection_reason AS rejection_reason
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.token = ${token} AND s.expires_at > NOW()
     `;
     if (!rows[0]) return null;
-    return { ...rows[0], status: normalizeUserStatus(rows[0].status) };
+    return {
+      ...rows[0],
+      status: normalizeUserStatus(rows[0].status),
+      rejectionReason: rows[0].rejection_reason ?? '',
+      rejection_reason: undefined,
+    };
   } catch {
     return null;
   }

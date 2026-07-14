@@ -38,10 +38,6 @@ module.exports = async (req, res) => {
 
         const user = rows[0];
 
-        const status = normalizeUserStatus(user.status);
-        if (status === 'rejected') return res.json({ status: 'rejected', reason: user.rejection_reason ?? '' });
-        if (status === 'inactive') return res.status(403).json({ error: 'החשבון אינו פעיל. אנא צור קשר עם המנהל.' });
-
         const passwordCheck = await verifyPassword(password, user.pwd);
         if (!passwordCheck.valid) return res.status(401).json({ error: 'הסיסמה שגויה.' });
         if (passwordCheck.needsUpgrade) {
@@ -49,8 +45,9 @@ module.exports = async (req, res) => {
           await sql`UPDATE users SET password = ${passwordHash}, updated_at = NOW() WHERE id = ${user.id}`;
         }
 
-        // Pending users get a real session too — they can browse the catalog
-        // but api/orders.js requireActiveUser still blocks them from ordering.
+        const status = normalizeUserStatus(user.status);
+        // Every known account can sign in and see its own permission state.
+        // api/orders.js remains the authority that limits ordering to active users.
         const token     = randomUUID();
         const expiresAt = new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString();
         await sql`
@@ -58,7 +55,14 @@ module.exports = async (req, res) => {
           VALUES (${token}, ${user.id}, ${user.name}, ${user.role}, ${expiresAt})
         `;
         res.setHeader('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE}${SECURE}`);
-        return res.json({ id: user.id, name: user.name, role: user.role, status, gender: user.gender });
+        return res.json({
+          id: user.id,
+          name: user.name,
+          role: user.role,
+          status,
+          gender: user.gender,
+          rejectionReason: user.rejection_reason ?? '',
+        });
       } catch (err) {
         return res.status(500).json({ error: err.message });
       }

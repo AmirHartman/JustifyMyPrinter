@@ -28,10 +28,15 @@
 
     <main class="workspace-shell">
 
-      <div class="ws-pending-banner" id="ws-pending-banner" hidden>
-        <strong>החשבון שלך ממתין לאישור מנהל</strong>
-        <p>אפשר לעיין בקטלוג בינתיים, אבל עדיין אי אפשר להזמין עד שהבקשה תאושר.</p>
+      <div class="ws-pending-banner" id="ws-account-banner" role="status" hidden>
+        <strong id="ws-account-title"></strong>
+        <p id="ws-account-message"></p>
       </div>
+
+      <section class="ws-card ws-card-full" id="ws-transparency-card" hidden aria-labelledby="ws-transparency-title">
+        <div class="ws-card-head"><h3 id="ws-transparency-title">שקיפות הפרויקט</h3></div>
+        <div id="ws-transparency-content"></div>
+      </section>
 
       <!-- ── Hero ── -->
       <section class="ws-hero">

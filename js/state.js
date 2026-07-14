@@ -17,6 +17,7 @@ export const store = {
   insights:       null,
   goals:          [],
   ledger:         [],
+  transparency:   null,      // aggregate public-safe project data, when the endpoint is available
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -25,19 +26,20 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency] = await Promise.all([
     api("/api/products"),
     api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
     isAdmin      ? api("/api/users")                   : Promise.resolve([]),
     isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
-    store.currentUser ? api("/api/filaments")          : Promise.resolve([]),
+    isAdmin      ? api("/api/filaments")                  : Promise.resolve([]),
     isAdmin      ? api("/api/settings?key=pricing")    : Promise.resolve(null),
     store.currentUser ? api("/api/settings?key=contact") : Promise.resolve(null),
     isAdmin      ? api("/api/expenses")                : Promise.resolve([]),
     isAdmin      ? api("/api/insights")                : Promise.resolve(null),
     isAdmin      ? api("/api/goals")                   : Promise.resolve([]),
     isAdmin      ? api("/api/ledger")                  : Promise.resolve([]),
+    !isAdmin     ? api("/api/transparency").catch(() => null) : Promise.resolve(null),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -51,6 +53,7 @@ export async function loadData() {
   store.insights         = insights;
   store.goals            = goals;
   store.ledger           = ledger;
+  store.transparency     = transparency;
 }
 
 export function findProduct(productId) {
