@@ -1,7 +1,7 @@
 import { store, loadData, findProduct } from "./state.js";
 import { formatCurrency, escapeHtml, calculateProductCost } from "./utils.js";
 import { api } from "./api.js";
-import { openOrderDialog } from "./orders.js";
+import { openOrderDialog, openCustomOrderDialog } from "./orders.js";
 import { createWhatsAppLink, whatsappTemplates, STATUS_LABELS } from "./whatsapp.js";
 import { setView } from "./auth.js";
 
@@ -141,14 +141,13 @@ function getOrderEligibility() {
 
 function renderCatalog() {
   const catalogGrid  = document.querySelector("#catalog-grid");
+  const ideasGrid    = document.querySelector("#ideas-grid");
   const cardTemplate = document.querySelector("#product-card-template");
   if (!catalogGrid || !cardTemplate) return;
 
   renderCategoryFilters();
 
-  let visibleProducts = store.appMode === "admin"
-    ? store.products
-    : store.products.filter((p) => p.active !== false);
+  let visibleProducts = store.products.filter((product) => product.catalogStatus !== "incomplete");
 
   if (selectedCategoryId) {
     visibleProducts = visibleProducts.filter((p) => p.categoryIds?.includes(selectedCategoryId));
@@ -157,6 +156,7 @@ function renderCatalog() {
   const eligibility = getOrderEligibility();
 
   catalogGrid.replaceChildren();
+  ideasGrid?.replaceChildren();
   document.querySelector("#catalog-empty")
     ?.classList.toggle("is-visible", visibleProducts.length === 0);
 
@@ -165,12 +165,16 @@ function renderCatalog() {
     renderProductImage(card.querySelector(".product-image"), product);
     card.querySelector("h3").textContent = product.name;
     card.querySelector("p").textContent  = product.description;
-    card.querySelector(".cost").textContent = `עלות ייצור: ${formatCurrency(product.cost)}`;
+    const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
+    card.querySelector(".cost").textContent = isIdea || product.requiresAdminApproval
+      ? "מחיר לאחר בדיקה"
+      : formatCurrency(product.cost);
     renderStlLink(card, product);
     renderProductBadges(card, product);
     renderProductFacts(card, product);
 
     const orderBtn = card.querySelector("button");
+    orderBtn.textContent = product.inventoryAvailable === false ? "בקשת חלופה" : isIdea ? "בקשת בדיקה" : "הזמנה";
     if (eligibility.canOrder) {
       orderBtn.addEventListener("click", () => openOrderDialog(product.id));
     } else {
@@ -181,9 +185,144 @@ function renderCatalog() {
         orderBtn.addEventListener("click", () => { window.location.href = "dashboard.html"; });
       }
     }
-    catalogGrid.append(card);
+    const detailBtn = document.createElement("button");
+    detailBtn.type = "button";
+    detailBtn.className = "ghost-button btn-sm";
+    detailBtn.textContent = "פרטים נוספים";
+    detailBtn.setAttribute("aria-label", `פרטים נוספים על ${product.name}`);
+    detailBtn.addEventListener("click", () => openProductDetail(product, eligibility));
+    card.querySelector(".product-meta")?.prepend(detailBtn);
+    (isIdea && ideasGrid ? ideasGrid : catalogGrid).append(card);
   });
+
+  const hasIdeas = visibleProducts.some((product) => product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval));
+  const hasPrinted = visibleProducts.some((product) => !(product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval)));
+  const ideasSection = document.querySelector("#idea-products-section");
+  const printedSection = document.querySelector("#printed-products-section");
+  if (ideasSection) ideasSection.hidden = !hasIdeas;
+  if (printedSection) printedSection.hidden = !hasPrinted;
+
+  const pendingReorder = sessionStorage.getItem("pendingReorder");
+  if (pendingReorder) {
+    sessionStorage.removeItem("pendingReorder");
+    try {
+      const previous = JSON.parse(pendingReorder);
+      const currentProduct = findProduct(previous.productId);
+      if (currentProduct && currentProduct.catalogStatus !== "incomplete") {
+        openOrderDialog(currentProduct.id, previous);
+      } else {
+        openCustomOrderDialog();
+        const form = document.querySelector("#custom-order-form");
+        if (form) {
+          form.elements.requestDescription.value = `בקשה להדפסה חוזרת: ${previous.productName || "מוצר שאינו זמין עוד"}`;
+          form.elements.userNotes.value = [previous.selectedColor ? `צבע קודם: ${previous.selectedColor}` : "", previous.customText ? `טקסט קודם: ${previous.customText}` : ""].filter(Boolean).join("; ");
+          form.elements.quantity.value = Math.max(Number(previous.quantity) || 1, 1);
+        }
+      }
+    } catch { /* Ignore malformed local UI state. */ }
+  }
 }
+
+function normalizedProductImages(product) {
+  const images = (product.images ?? [])
+    .map((image) => typeof image === "string" ? { url: image, isMain: false } : image)
+    .filter((image) => image?.url);
+  if (product.image && !images.some((image) => image.url === product.image)) {
+    images.unshift({ url: product.image, isMain: images.length === 0 });
+  }
+  return images.sort((a, b) => Number(Boolean(b.isMain)) - Number(Boolean(a.isMain)));
+}
+
+function publicColorOptions(product) {
+  if (Array.isArray(product.colorOptions) && product.colorOptions.length) return product.colorOptions;
+  return (product.possibleColors ?? []).map((color) => ({ value: color, label: color, available: true }));
+}
+
+function openProductDetail(product, eligibility = getOrderEligibility()) {
+  const dialog = document.querySelector("#product-detail-dialog");
+  if (!dialog) return;
+  document.querySelector("#product-detail-title").textContent = product.name;
+  document.querySelector("#product-detail-description").textContent = product.description || "אין תיאור נוסף למוצר.";
+  const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
+  document.querySelector("#product-detail-price").textContent = isIdea || product.requiresAdminApproval
+    ? "המחיר ייקבע לאחר בדיקה"
+    : formatCurrency(product.cost);
+
+  const facts = [];
+  if (Number(product.printHours) > 0) facts.push(`זמן הדפסה משוער: כ־${product.printHours} שעות`);
+  if (Number(product.grams) > 0) facts.push(`משקל משוער: כ־${product.grams} גרם`);
+  if (product.allowMultiple === false) facts.push("ניתן להזמין יחידה אחת בלבד");
+  if (product.requiredColors?.length) facts.push(`צבעים נדרשים: ${product.requiredColors.join(", ")}`);
+  const factsContainer = document.querySelector("#product-detail-facts");
+  factsContainer.replaceChildren(...facts.map((text) => {
+    const span = document.createElement("span"); span.className = "product-fact"; span.textContent = text; return span;
+  }));
+
+  const colorsContainer = document.querySelector("#product-detail-colors");
+  colorsContainer.replaceChildren();
+  publicColorOptions(product).forEach((raw) => {
+    const option = typeof raw === "string" ? { label: raw, value: raw, available: true } : raw;
+    const item = document.createElement("span");
+    item.className = `product-fact${option.available === false ? " is-unavailable" : ""}`;
+    item.textContent = `${option.label ?? option.name ?? option.value}${option.available === false ? " — לא זמין כרגע" : ""}`;
+    colorsContainer.append(item);
+  });
+  document.querySelector("#product-detail-custom-text").hidden = !product.customTextEnabled;
+  const availability = document.querySelector("#product-detail-availability");
+  availability.textContent = product.inventoryAvailable === false
+    ? "לא זמין כרגע במלאי. אפשר לשלוח בקשה לחלופה; ההדפסה לא תתחיל ללא אישורך."
+      : isIdea || product.requiresAdminApproval ? "נדרשים בדיקה ואישור מחיר לפני תחילת ההדפסה." : "זמין להזמנה.";
+  const badges = document.querySelector("#product-detail-badges");
+  badges.replaceChildren();
+  if (isIdea || product.requiresAdminApproval) {
+    const badge = document.createElement("span");
+    badge.className = "product-badge product-badge-idea";
+    badge.textContent = isIdea ? "רעיון לבדיקה" : "דורש אישור מנהל";
+    badges.append(badge);
+  }
+  if (product.inventoryAvailable === false) {
+    const badge = document.createElement("span");
+    badge.className = "product-badge";
+    badge.textContent = "לא זמין כרגע";
+    badges.append(badge);
+  }
+
+  const source = document.querySelector("#product-detail-source");
+  const sourceUrl = product.sourceUrl || product.stlUrl;
+  source.hidden = !sourceUrl;
+  if (sourceUrl) source.href = sourceUrl;
+
+  const images = normalizedProductImages(product);
+  const main = document.querySelector("#product-detail-main-image");
+  const thumbs = document.querySelector("#product-detail-thumbnails");
+  const showImage = (image) => {
+    main.replaceChildren();
+    if (!image) { main.textContent = "אין תמונה זמינה"; return; }
+    const img = document.createElement("img"); img.src = image.url; img.alt = product.name; main.append(img);
+  };
+  showImage(images[0]);
+  thumbs.replaceChildren();
+  images.forEach((image, index) => {
+    const button = document.createElement("button"); button.type = "button"; button.className = "product-thumb";
+    button.setAttribute("aria-label", `הצגת תמונה ${index + 1} מתוך ${images.length}`);
+    const img = document.createElement("img"); img.src = image.url; img.alt = ""; button.append(img);
+    button.addEventListener("click", () => showImage(image)); thumbs.append(button);
+  });
+
+  const orderButton = document.querySelector("#product-detail-order");
+  orderButton.disabled = !eligibility.canOrder && !eligibility.clickable;
+  orderButton.textContent = eligibility.canOrder ? (product.inventoryAvailable === false ? "בקשת חלופה" : "מעבר להזמנה") : eligibility.label;
+  orderButton.onclick = () => {
+    dialog.close();
+    if (eligibility.canOrder) openOrderDialog(product.id);
+    else if (eligibility.clickable) window.location.href = "dashboard.html";
+  };
+  dialog.showModal();
+}
+
+document.querySelectorAll("[data-close-product-detail]").forEach((button) => {
+  button.addEventListener("click", () => document.querySelector("#product-detail-dialog")?.close());
+});
 
 // ── Orders (admin view): grouped cards, filter bar, drawer ────
 
@@ -824,8 +963,7 @@ function renderStoreEdit() {
 
     const card = document.createElement("article");
     card.className = "store-edit-card";
-    card.classList.toggle("store-edit-card--inactive", product.active === false);
-    card.classList.toggle("store-edit-card--inactive", product.inventoryAvailable === false);
+    card.classList.toggle("store-edit-card--inactive", product.catalogStatus === "incomplete");
 
     // ── Image ────────────────────────────────────────────
     const imageWrap = document.createElement("div");
@@ -853,7 +991,10 @@ function renderStoreEdit() {
         ? '<p class="store-edit-sync-notice">נתוני ההדפסה עודכנו מקובץ 3MF מקומי.</p>'
         : '';
     const stockNotice = product.inventoryAvailable === false
-      ? '<p class="store-edit-sync-notice">מוסתר אוטומטית מהקטלוג — הפילמנט החסר או הכמות הנדרשת אינם במלאי.</p>'
+      ? '<p class="store-edit-sync-notice">מוצג בקטלוג כ״לא זמין כרגע״ — הזמנה תדרוש בדיקה או חלופה.</p>'
+      : '';
+    const readinessNotice = product.catalogStatus === "incomplete"
+      ? `<p class="store-edit-sync-notice">טיוטה מוסתרת — חסר: ${escapeHtml((product.missingRequirements ?? []).join(", ") || "פרטי חובה")}</p>`
       : '';
     body.innerHTML = `
       <h3 class="store-edit-name">${escapeHtml(product.name)}</h3>
@@ -862,6 +1003,7 @@ function renderStoreEdit() {
         <span class="stat-muted">${product.grams}g</span>
       </div>
       ${syncNotice}
+      ${readinessNotice}
       ${stockNotice}
       <div class="store-edit-live-stats">
         <span>${orders.length} הזמנות</span>
@@ -872,15 +1014,6 @@ function renderStoreEdit() {
     // ── Footer ───────────────────────────────────────────
     const footer = document.createElement("div");
     footer.className = "store-edit-footer";
-
-    const activeLabel    = document.createElement("label");
-    activeLabel.className = "store-edit-active-toggle";
-    const activeCheckbox = document.createElement("input");
-    activeCheckbox.type    = "checkbox";
-    activeCheckbox.checked = product.active !== false;
-    activeCheckbox.disabled = product.inventoryAvailable === false;
-    activeCheckbox.addEventListener("change", () => updateProduct(product.id, { active: activeCheckbox.checked }));
-    activeLabel.append(activeCheckbox, " הצג בקטלוג");
 
     const editDetailsBtn = document.createElement("button");
     editDetailsBtn.className   = "ghost-button btn-sm";
@@ -896,7 +1029,7 @@ function renderStoreEdit() {
     deleteBtn.textContent = "מחיקה";
     deleteBtn.addEventListener("click", () => deleteProduct(product.id));
 
-    footer.append(activeLabel, editDetailsBtn, deleteBtn);
+    footer.append(editDetailsBtn, deleteBtn);
     body.append(footer);
     card.append(imageWrap, body);
     grid.append(card);
@@ -1473,8 +1606,8 @@ function renderWelcome() {
   const nameEl = document.querySelector("#ws-user-name");
   if (nameEl && store.currentUser) nameEl.textContent = store.currentUser.name;
 
-  const pendingBanner = document.querySelector("#ws-pending-banner");
-  if (pendingBanner) pendingBanner.hidden = store.currentUser?.status !== "pending";
+  renderAccountStatus();
+  renderTransparency();
 
   const open = store.myOrders.filter((o) => !["completed", "cancelled"].includes(o.status));
   const past = store.myOrders.filter((o) => ["completed", "cancelled"].includes(o.status));
@@ -1518,7 +1651,8 @@ function renderWsOrderList(container, orders, emptyMsg) {
   }
   orders.forEach((order) => {
     const product = store.products.find((p) => p.id === order.productId);
-    const title = product?.name ?? order.requestDescription ?? "בקשה מיוחדת";
+    const snapshot = order.productSnapshot ?? {};
+    const title = product?.name ?? snapshot.name ?? order.requestDescription ?? "בקשה מיוחדת";
     const amount = Number(order.finalAmount ?? order.price);
     const supportAmount = Number(order.supportAmount) || 0;
 
@@ -1529,6 +1663,10 @@ function renderWsOrderList(container, orders, emptyMsg) {
         <span class="ws-order-product">${escapeHtml(title)}</span>
         <span class="ws-order-meta">כמות ${order.quantity} · לתשלום ${formatCurrency(amount)}</span>
         ${supportAmount > 0 ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} פרגון — תודה! 💛</span>` : ""}
+        ${order.selectedColors?.length ? `<span class="ws-order-meta">צבע: ${escapeHtml(order.selectedColors.join(", "))}</span>` : ""}
+        ${order.customText ? `<span class="ws-order-meta">טקסט מותאם: ${escapeHtml(order.customText)}</span>` : ""}
+        ${order.colorAlternativeStatus && order.colorAlternativeStatus !== "none"
+          ? `<span class="ws-order-meta">חלופת צבע: ${escapeHtml(colorAlternativeLabel(order))}</span>` : ""}
         ${order.adminNotes ? `<span class="ws-order-meta">הערת אמיר: ${escapeHtml(order.adminNotes)}</span>` : ""}
         ${order.cancellationReason ? `<span class="ws-order-meta">סיבת ביטול: ${escapeHtml(order.cancellationReason)}</span>` : ""}
       </div>
@@ -1550,6 +1688,19 @@ function renderWsOrderList(container, orders, emptyMsg) {
       approveBtn.addEventListener("click", () => approveOrderPrice(order.id));
       actions.append(approveBtn);
     }
+    if (order.colorAlternativeStatus === "pending" && order.proposedAlternativeColor) {
+      const approveColor = document.createElement("button");
+      approveColor.className = "primary-button btn-sm";
+      approveColor.type = "button";
+      approveColor.textContent = `אישור ${order.proposedAlternativeColor}`;
+      approveColor.addEventListener("click", () => respondToColorAlternative(order.id, true));
+      const rejectColor = document.createElement("button");
+      rejectColor.className = "ghost-button btn-sm";
+      rejectColor.type = "button";
+      rejectColor.textContent = "דחיית החלופה";
+      rejectColor.addEventListener("click", () => respondToColorAlternative(order.id, false));
+      actions.append(approveColor, rejectColor);
+    }
     if (["new", "waiting_approval", "waiting_print"].includes(order.status)) {
       const cancelBtn = document.createElement("button");
       cancelBtn.className   = "ghost-button btn-sm";
@@ -1565,8 +1716,80 @@ function renderWsOrderList(container, orders, emptyMsg) {
       actions.append(cancelHint);
     }
 
+    const reorderBtn = document.createElement("button");
+    reorderBtn.className = "ghost-button btn-sm";
+    reorderBtn.type = "button";
+    reorderBtn.textContent = "להזמין שוב";
+    reorderBtn.addEventListener("click", () => reorder(order, product, title));
+    actions.append(reorderBtn);
+
     container.append(div);
   });
+}
+
+function renderAccountStatus() {
+  const banner = document.querySelector("#ws-account-banner");
+  const title = document.querySelector("#ws-account-title");
+  const message = document.querySelector("#ws-account-message");
+  if (!banner || !title || !message || !store.currentUser) return;
+  const status = store.currentUser.status ?? "pending";
+  const content = {
+    pending: ["החשבון שלך ממתין לאישור מנהל", "אפשר לעיין בקטלוג, אך אי אפשר להזמין עד שהבקשה תאושר."],
+    active: ["החשבון שלך פעיל", "אפשר להזמין מוצרים ולעקוב אחר ההזמנות מכאן."],
+    inactive: ["החשבון שלך אינו פעיל", "אפשר לעיין בקטלוג, אך לא ניתן לבצע הזמנות כרגע."],
+    rejected: ["בקשת ההצטרפות נדחתה", store.currentUser.rejectionReason ? `סיבת הדחייה: ${store.currentUser.rejectionReason}` : "לא ניתן לבצע הזמנות מחשבון זה."],
+  }[status] ?? ["מצב החשבון אינו ידוע", "אפשר לפנות למנהל ב־WhatsApp לקבלת עזרה."];
+  title.textContent = content[0];
+  message.textContent = content[1];
+  banner.dataset.status = status;
+  banner.hidden = false;
+}
+
+function renderTransparency() {
+  const card = document.querySelector("#ws-transparency-card");
+  const content = document.querySelector("#ws-transparency-content");
+  const data = store.transparency;
+  if (!card || !content || !data) return;
+  card.hidden = false;
+  const metrics = [
+    ["סך התמיכה שנאספה", formatCurrency(data.totalSupport ?? 0)],
+    ["הושקע מחדש בפרויקט", formatCurrency(data.reinvestedAmount ?? 0)],
+    ["הדפסות שהושלמו", String(data.completedPrints ?? 0)],
+  ];
+  content.innerHTML = `<div class="business-summary-grid">${metrics.map(([label, value]) => `<article class="finance-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}</div>`;
+  (data.goals ?? []).forEach((goal) => {
+    const row = document.createElement("article"); row.className = "business-row";
+    row.innerHTML = `<span>${escapeHtml(goal.label ?? goal.name ?? "יעד")}</span><progress max="${Number(goal.targetAmount ?? goal.target ?? 0)}" value="${Number(goal.currentAmount ?? goal.saved ?? 0)}"></progress><strong>${formatCurrency(goal.currentAmount ?? goal.saved ?? 0)} / ${formatCurrency(goal.targetAmount ?? goal.target ?? 0)}</strong>`;
+    content.append(row);
+  });
+}
+
+function colorAlternativeLabel(order) {
+  const labels = { needed: "ממתינה להצעת המנהל", pending: `הוצעה החלופה ${order.proposedAlternativeColor ?? ""}`, approved: "החלופה אושרה", rejected: "החלופה נדחתה" };
+  return labels[order.colorAlternativeStatus] ?? order.colorAlternativeStatus;
+}
+
+async function respondToColorAlternative(orderId, approve) {
+  try {
+    const updated = await api(`/api/orders?id=${encodeURIComponent(orderId)}`, {
+      method: "PUT", body: JSON.stringify({ action: approve ? "approve-color-alternative" : "reject-color-alternative" }),
+    });
+    const index = store.myOrders.findIndex((order) => order.id === orderId);
+    if (index !== -1) store.myOrders[index] = updated;
+    render();
+  } catch (err) { alert(`לא ניתן לעדכן את חלופת הצבע: ${err.message}`); }
+}
+
+function reorder(order, product, title) {
+  const previous = {
+    productId: order.productId,
+    productName: title,
+    quantity: order.quantity,
+    selectedColor: order.selectedColors?.[0] ?? "",
+    customText: order.customText ?? "",
+  };
+  sessionStorage.setItem("pendingReorder", JSON.stringify(previous));
+  window.location.href = "catalog.html";
 }
 
 async function approveOrderPrice(orderId) {
@@ -1610,13 +1833,18 @@ function renderFilaments() {
 
   tbody.replaceChildren();
   store.filaments.forEach((f) => {
+    const spoolPrice = Number(f.spoolPrice);
+    const spoolGrams = Number(f.spoolGrams);
+    const costPerGram = spoolPrice > 0 && spoolGrams > 0 ? spoolPrice / spoolGrams : Number(f.pricePerKg) / 1000;
     const row = document.createElement("tr");
     row.innerHTML = `
       <td><span class="color-swatch" style="background:${escapeHtml(f.colorHex)}"></span></td>
       <td>${escapeHtml(f.name)}</td>
       <td>${escapeHtml(f.materialType ?? '')}</td>
-      <td>${formatCurrency(f.pricePerKg)}/ק״ג</td>
-      <td>${f.remainingGrams == null ? "—" : `${Math.round(f.remainingGrams)} גרם (${Math.round(f.remainingGrams / f.spoolGrams * 100)}%)`}</td>
+      <td>${spoolPrice > 0 ? formatCurrency(spoolPrice) : "—"}</td>
+      <td>${spoolGrams > 0 ? `${Math.round(spoolGrams)} גרם` : "—"}</td>
+      <td>${Number.isFinite(costPerGram) ? `${formatCurrency(costPerGram)}/גרם` : "—"}</td>
+      <td>${f.remainingGrams == null ? "—" : `${Math.round(f.remainingGrams)} גרם${spoolGrams > 0 ? ` (${Math.round(f.remainingGrams / spoolGrams * 100)}%)` : ""}`}</td>
       <td>${f.active !== false
         ? '<span class="status-badge status-active">פעיל</span>'
         : '<span class="status-badge status-inactive">מושבת</span>'}</td>
@@ -1680,12 +1908,16 @@ function openFilamentEditForm(f) {
   form.elements["name"].value        = f.name;
   form.elements["materialType"].value = f.materialType ?? "PLA";
   form.elements["colorHex"].value    = f.colorHex;
-  form.elements["pricePerKg"].value  = f.pricePerKg;
   form.elements["spoolPrice"].value = f.spoolPrice ?? "";
   form.elements["spoolGrams"].value = f.spoolGrams ?? 1000;
   form.elements["remainingGrams"].value = f.remainingGrams ?? "";
   form.elements["note"].value        = f.note ?? "";
   form.elements["active"].checked    = f.active !== false;
+  const preview = document.querySelector("#filament-color-preview");
+  if (preview) preview.style.backgroundColor = f.colorHex;
+  const cost = Number(f.spoolPrice) > 0 && Number(f.spoolGrams) > 0 ? Number(f.spoolPrice) / Number(f.spoolGrams) : null;
+  const costLabel = document.querySelector("#filament-cost-per-gram");
+  if (costLabel) costLabel.textContent = cost == null ? "עלות לגרם: —" : `עלות לגרם: ${formatCurrency(cost)}`;
   form.hidden = false;
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -1699,6 +1931,10 @@ function renderPricingForm() {
 
   form.elements.marginPercent.value = (Number(s.marginPercent) || 0) * 100;
   form.elements.minOrderPrice.value = Number(s.minOrderPrice) || 0;
+  const risk = s.riskPercentByLevel ?? s.riskPercents ?? { low: 0.08, medium: 0.15, high: 0.25 };
+  if (form.elements.riskLowPercent) form.elements.riskLowPercent.value = Number(risk.low) * 100;
+  if (form.elements.riskMediumPercent) form.elements.riskMediumPercent.value = Number(risk.medium) * 100;
+  if (form.elements.riskHighPercent) form.elements.riskHighPercent.value = Number(risk.high) * 100;
   const wear = (s.wearParts ?? []).filter((p) => !p.amsOnly).reduce((sum, p) => sum + Number(p.priceIls) / Number(p.lifetimeHours), 0);
   const target = document.querySelector("#pricing-readonly-breakdown");
   if (target) target.innerHTML = `<div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(wear)}/שעה</span></div><div class="cost-preview-row"><span>עלות מדפסת</span><span>${formatCurrency(Number(s.machine?.priceIls) / Number(s.machine?.lifeHours))}/שעה</span></div>`;

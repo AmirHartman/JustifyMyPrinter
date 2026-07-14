@@ -26,6 +26,22 @@ function numberOrNull(value) {
   return value == null ? null : Number(value);
 }
 
+function colorValue(value) {
+  if (typeof value === 'string') return value.trim();
+  return String(value?.filamentId ?? value?.id ?? value?.value ?? '').trim();
+}
+
+function productMissingRequirements(product) {
+  const hasImage = Boolean(product.image || product.images?.length);
+  const hasCategory = Boolean(product.category || product.category_ids?.length);
+  if (!String(product.name || '').trim() || !String(product.description || '').trim() || !hasImage || !hasCategory) return true;
+  if ((product.catalog_kind || 'printed') === 'idea') return false;
+  return !(Number(product.print_hours) > 0)
+    || !Array.isArray(product.materials)
+    || !product.materials.length
+    || product.materials.some((item) => !item.filamentId || !(Number(item.grams) > 0));
+}
+
 function normalizeRow(row) {
   const finalAmount = numberOrNull(row.final_amount ?? row.price);
   return {
@@ -38,6 +54,16 @@ function normalizeRow(row) {
     externalModelLink: row.external_model_link ?? '',
     quantity: Number(row.quantity),
     selectedColors: row.selected_colors ?? [],
+    customText: row.custom_text ?? '',
+    productSnapshot: row.product_snapshot ?? null,
+    proposedAlternativeColor: typeof row.proposed_alternative_color === 'object'
+      ? row.proposed_alternative_color?.name || row.proposed_alternative_color?.value || null
+      : row.proposed_alternative_color ?? null,
+    proposedAlternativeColorValue: typeof row.proposed_alternative_color === 'object'
+      ? row.proposed_alternative_color?.value || null : null,
+    colorAlternativeStatus: row.color_alternative_status ?? 'none',
+    colorAlternativeProposedAt: row.color_alternative_proposed_at ?? null,
+    colorAlternativeRespondedAt: row.color_alternative_responded_at ?? null,
     userNotes: row.user_notes ?? '',
     adminNotes: row.admin_notes ?? '',
     baseCost: numberOrNull(row.base_cost),
@@ -72,7 +98,9 @@ function normalizeRow(row) {
 
 const SELECT_COLUMNS = `
   id, product_id, user_id, friend_name, order_type, request_description,
-  external_model_link, quantity, selected_colors, user_notes, admin_notes,
+  external_model_link, quantity, selected_colors, custom_text, product_snapshot,
+  proposed_alternative_color, color_alternative_status, color_alternative_proposed_at,
+  color_alternative_responded_at, user_notes, admin_notes,
   base_cost, support_amount, final_amount, price, estimated_material_weight,
   estimated_print_time, requires_user_price_approval, user_approved_price,
   cancellation_reason, status, paid, paid_at, production_cost, wear_component,
@@ -111,13 +139,41 @@ module.exports = async (req, res) => {
     if (req.method === 'PUT') {
       const body = await parseBody(req);
 
-      if (body.action === 'cancel' || body.action === 'approve-price') {
+      if (body.action === 'propose-color-alternative') {
+        const admin = await requireAdmin(req, res);
+        if (!admin) return;
+        try {
+          const sql = getSql();
+          const proposal = body.proposedAlternativeColor;
+          const proposalId = colorValue(proposal);
+          if (!proposalId) return res.status(400).json({ error: 'Alternative color is required' });
+          const filamentRows = await sql`SELECT id, name, color_hex, active, remaining_grams FROM filaments WHERE id = ${proposalId}`;
+          const filament = filamentRows[0];
+          if (!filament || !filament.active || Number(filament.remaining_grams ?? 1) <= 0) {
+            return res.status(400).json({ error: 'Alternative color must be an available filament' });
+          }
+          const safeProposal = JSON.stringify({ value: filament.id, name: filament.name, colorHex: filament.color_hex });
+          const updated = await sql`UPDATE orders SET
+            proposed_alternative_color = ${safeProposal}::jsonb,
+            color_alternative_status = 'pending',
+            color_alternative_proposed_at = NOW(), color_alternative_responded_at = NULL,
+            status = CASE WHEN status IN ('waiting_print', 'printing') THEN 'waiting_approval' ELSE status END,
+            updated_at = NOW()
+            WHERE id = ${id} AND color_alternative_status IN ('needed', 'pending', 'rejected')
+            RETURNING ${sql.unsafe(SELECT_COLUMNS)}`;
+          return updated.length ? res.json(normalizeRow(updated[0])) : res.status(400).json({ error: 'Order is not waiting for a color alternative' });
+        } catch (err) {
+          return res.status(500).json({ error: err.message });
+        }
+      }
+
+      if (['cancel', 'approve-price', 'approve-color-alternative', 'reject-color-alternative'].includes(body.action)) {
         const user = await requireAuth(req, res);
         if (!user) return;
         try {
           const sql = getSql();
           const rows = await sql`
-            SELECT user_id, friend_name, status, requires_user_price_approval
+            SELECT user_id, friend_name, status, requires_user_price_approval, color_alternative_status
             FROM orders WHERE id = ${id}
           `;
           const order = rows[0];
@@ -142,6 +198,19 @@ module.exports = async (req, res) => {
             return res.json(normalizeRow(updated[0]));
           }
 
+          if (body.action === 'approve-color-alternative' || body.action === 'reject-color-alternative') {
+            if (order.color_alternative_status !== 'pending') return res.status(400).json({ error: 'אין הצעת צבע שממתינה לתגובה' });
+            const approved = body.action === 'approve-color-alternative';
+            const updated = await sql`UPDATE orders SET
+              color_alternative_status = ${approved ? 'approved' : 'rejected'},
+              selected_colors = CASE WHEN ${approved} THEN jsonb_build_array(proposed_alternative_color->>'value') ELSE selected_colors END,
+              color_alternative_responded_at = NOW(),
+              status = CASE WHEN ${approved} AND requires_user_price_approval = FALSE THEN 'waiting_print' ELSE 'waiting_approval' END,
+              updated_at = NOW()
+              WHERE id = ${id} RETURNING ${sql.unsafe(SELECT_COLUMNS)}`;
+            return res.json(normalizeRow(updated[0]));
+          }
+
           // approve-price
           if (currentStatus !== 'waiting_approval' || !order.requires_user_price_approval) {
             return res.status(400).json({ error: 'הזמנה זו אינה ממתינה לאישור מחיר' });
@@ -149,7 +218,7 @@ module.exports = async (req, res) => {
           const updated = await sql`
             UPDATE orders SET
               user_approved_price = TRUE,
-              status = 'waiting_print',
+              status = CASE WHEN color_alternative_status IN ('needed', 'pending', 'rejected') THEN 'waiting_approval' ELSE 'waiting_print' END,
               updated_at = NOW()
             WHERE id = ${id}
             RETURNING ${sql.unsafe(SELECT_COLUMNS)}
@@ -174,6 +243,12 @@ module.exports = async (req, res) => {
         const marginPercent = body.marginPercent === '' || body.marginPercent == null ? null : Number(body.marginPercent);
         if (marginPercent != null && (!Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 5)) {
           return res.status(400).json({ error: 'אחוז הרווח חייב להיות בין 0% ל־500%' });
+        }
+        if (['waiting_print', 'printing'].includes(status)) {
+          const alternativeRows = await sql`SELECT color_alternative_status FROM orders WHERE id = ${id}`;
+          if (alternativeRows[0] && ['needed', 'pending', 'rejected'].includes(alternativeRows[0].color_alternative_status)) {
+            return res.status(409).json({ error: 'לא ניתן להתחיל הדפסה לפני אישור חלופת הצבע' });
+          }
         }
 
         const rows = await sql`
@@ -288,17 +363,22 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Invalid order type' });
       }
       const productId = String(body.productId ?? '').trim() || null;
-      const quantity = Math.max(Number(body.quantity) || 1, 1);
+      const quantity = Number(body.quantity ?? 1);
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > 50) return res.status(400).json({ error: 'Quantity must be an integer between 1 and 50' });
       let product = null;
       if (productId) {
         const rows = await sql`
-          SELECT cost, grams, print_hours, print_profile, materials, requires_admin_approval,
+          SELECT id, name, description, image, images, source_url, category, category_ids,
+                 catalog_kind, custom_text_enabled, possible_colors, required_colors,
+                 allow_multiple, cost, grams, print_hours, print_profile, materials, requires_admin_approval,
                  manual_price_enabled, manual_price, purge_grams, risk_percent,
-                 additional_copy_hours, minimum_unit_price
-          FROM products WHERE id = ${productId} AND active = TRUE
+                 risk_level, additional_copy_hours, minimum_unit_price
+          FROM products WHERE id = ${productId}
         `;
         product = rows[0] || null;
         if (!product) return res.status(404).json({ error: 'Product not found' });
+        if (productMissingRequirements(product)) return res.status(409).json({ error: 'Product is not ready for catalog ordering' });
+        if (!product.allow_multiple && quantity > 1) return res.status(400).json({ error: 'מוצר זה ניתן להזמנה ביחידה אחת בלבד' });
       }
       if (orderType === 'catalog' && !product) {
         return res.status(400).json({ error: 'Catalog orders require a product' });
@@ -306,14 +386,18 @@ module.exports = async (req, res) => {
 
       let breakdown = null;
       if (product) {
-        const filamentRows = await sql`SELECT id, price_per_kg FROM filaments`;
+        const filamentRows = await sql`SELECT id, name, color_hex, price_per_kg, spool_price, spool_grams, remaining_grams, active FROM filaments`;
         const settingRows = await sql`SELECT value FROM settings WHERE key = 'pricing'`;
         breakdown = calculateProductCost({
           printHours: Number(product.print_hours), printProfile: product.print_profile,
           materials: product.materials || [], purgeGrams: Number(product.purge_grams),
-          riskPercent: product.risk_percent, additionalCopyHours: product.additional_copy_hours,
+          riskPercent: product.risk_percent, riskLevel: product.risk_level, additionalCopyHours: product.additional_copy_hours,
           minUnitPrice: product.minimum_unit_price,
-        }, filamentRows.map((f) => ({ id: f.id, pricePerKg: Number(f.price_per_kg) })), settingRows[0]?.value || {}, { quantity });
+        }, filamentRows.map((f) => ({
+          id: f.id, pricePerKg: Number(f.price_per_kg), spoolPrice: Number(f.spool_price),
+          spoolGrams: Number(f.spool_grams), remainingGrams: f.remaining_grams == null ? null : Number(f.remaining_grams),
+          active: f.active !== false, name: f.name, colorHex: f.color_hex,
+        })), settingRows[0]?.value || {}, { quantity });
       }
       const baseCost = product
         ? product.manual_price_enabled && product.manual_price != null
@@ -321,15 +405,43 @@ module.exports = async (req, res) => {
         : numberOrNull(body.baseCost);
       const supportAmount = Math.max(Number(body.supportAmount) || 0, 0);
       const finalAmount = baseCost == null ? numberOrNull(body.finalAmount ?? body.price) : baseCost + supportAmount;
-      const requiresApproval = orderType !== 'catalog' || Boolean(product?.requires_admin_approval);
-      const status = requiresApproval ? 'new' : 'waiting_print';
+      const selectedColorsArray = Array.isArray(body.selectedColors) ? body.selectedColors.map(colorValue).filter(Boolean) : [];
+      const allowedColors = new Set((product?.possible_colors || []).map(colorValue).filter(Boolean));
+      if (product && selectedColorsArray.some((value) => !allowedColors.has(value))) {
+        return res.status(400).json({ error: 'Selected color is not available for this product' });
+      }
+      if (product && allowedColors.size > 0 && selectedColorsArray.length === 0) {
+        return res.status(400).json({ error: 'Please select a product color' });
+      }
+      const customText = String(body.customText ?? '').trim();
+      if (customText.length > 500) return res.status(400).json({ error: 'Custom text is too long' });
+      if (customText && !product?.custom_text_enabled) return res.status(400).json({ error: 'This product does not accept custom text' });
+      const availabilityRows = product ? await sql`SELECT id, name, color_hex, active, remaining_grams FROM filaments` : [];
+      const unavailableSelection = selectedColorsArray.some((value) => {
+        const filament = availabilityRows.find((item) => item.id === value);
+        return filament && (!filament.active || Number(filament.remaining_grams ?? 1) <= 0);
+      });
+      const unavailableMaterials = product?.materials?.some((material) => {
+        const filament = availabilityRows.find((item) => item.id === material.filamentId);
+        return !filament || !filament.active || (filament.remaining_grams != null && Number(filament.remaining_grams) < Number(material.grams || 0) * quantity);
+      });
+      const needsColorAlternative = Boolean(unavailableSelection || unavailableMaterials);
+      const requiresPriceApproval = orderType !== 'catalog' || Boolean(product?.requires_admin_approval) || product?.catalog_kind === 'idea';
+      const requiresApproval = requiresPriceApproval || needsColorAlternative;
+      const status = requiresApproval ? (needsColorAlternative ? 'waiting_approval' : 'new') : 'waiting_print';
       const id = randomUUID();
-      const selectedColors = JSON.stringify(Array.isArray(body.selectedColors) ? body.selectedColors : []);
+      const selectedColors = JSON.stringify(selectedColorsArray);
+      const productSnapshot = product ? JSON.stringify({
+        id: product.id, name: product.name, image: product.image, catalogKind: product.catalog_kind,
+        possibleColors: product.possible_colors || [], allowMultiple: product.allow_multiple !== false,
+        customTextEnabled: Boolean(product.custom_text_enabled), selectedColors: selectedColorsArray, customText,
+      }) : null;
 
       const rows = await sql`
         INSERT INTO orders (
           id, product_id, user_id, friend_name, order_type, request_description,
-          external_model_link, quantity, selected_colors, user_notes, admin_notes,
+          external_model_link, quantity, selected_colors, custom_text, product_snapshot,
+          color_alternative_status, user_notes, admin_notes,
           base_cost, support_amount, final_amount, price, estimated_material_weight,
           estimated_print_time, requires_user_price_approval, user_approved_price,
           production_cost, wear_component, machine_component, margin_component,
@@ -338,12 +450,13 @@ module.exports = async (req, res) => {
         ) VALUES (
           ${id}, ${productId}, ${user.id}, ${user.name}, ${orderType},
           ${String(body.requestDescription ?? '').trim()},
-          ${String(body.externalModelLink ?? '').trim()}, ${quantity}, ${selectedColors},
+          ${String(body.externalModelLink ?? '').trim()}, ${quantity}, ${selectedColors}, ${customText}, ${productSnapshot}::jsonb,
+          ${needsColorAlternative ? 'needed' : 'none'},
           ${String(body.userNotes ?? '').trim()}, '', ${baseCost},
           ${supportAmount}, ${finalAmount}, ${finalAmount ?? 0.01},
           ${numberOrNull(body.estimatedMaterialWeight ?? product?.grams)},
           ${numberOrNull(body.estimatedPrintTime ?? product?.print_hours)},
-          ${requiresApproval}, FALSE,
+          ${requiresPriceApproval}, FALSE,
           ${breakdown?.productionCost ?? null}, ${breakdown?.wearCost ?? null},
           ${breakdown?.machineCost ?? null}, ${breakdown?.marginAmount ?? null},
           ${breakdown?.totalHours ?? null}, ${product?.print_profile || 'regular'}, ${breakdown?.materialGrams ?? null},

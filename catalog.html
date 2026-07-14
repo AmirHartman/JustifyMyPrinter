@@ -45,9 +45,47 @@
 
       <div class="category-filters" id="category-filters" role="tablist" aria-label="סינון לפי קטגוריה"></div>
 
-      <div class="catalog-grid" id="catalog-grid"></div>
+      <section id="printed-products-section" aria-labelledby="printed-products-title">
+        <p class="eyebrow">מוכנים להזמנה</p>
+        <h2 id="printed-products-title">מוצרים שכבר הודפסו</h2>
+        <p>מוצרים שנבדקו בפועל, עם מחיר ידוע ותהליך הזמנה רגיל.</p>
+        <div class="catalog-grid" id="catalog-grid"></div>
+      </section>
+
+      <section id="idea-products-section" aria-labelledby="idea-products-title" hidden>
+        <p class="eyebrow">רעיונות לבדיקה</p>
+        <h2 id="idea-products-title">מודלים שעדיין לא נוסו</h2>
+        <p>אפשר לבקש אותם, אבל נדרשים בדיקת היתכנות ואישור מחיר לפני ההדפסה.</p>
+        <div class="catalog-grid" id="ideas-grid"></div>
+      </section>
       <p class="empty-state" id="catalog-empty">אין עדיין מוצרים בקטלוג. אפשר לבקש הדפסה מיוחדת למעלה.</p>
     </main>
+
+    <dialog id="product-detail-dialog" aria-labelledby="product-detail-title">
+      <div class="order-form">
+        <button class="icon-button close-button" type="button" data-close-product-detail aria-label="סגירת פרטי המוצר">×</button>
+        <div class="product-image" id="product-detail-main-image"></div>
+        <div id="product-detail-thumbnails" aria-label="גלריית תמונות"></div>
+        <div class="product-badges" id="product-detail-badges"></div>
+        <h2 id="product-detail-title"></h2>
+        <p id="product-detail-description"></p>
+        <div class="product-facts" id="product-detail-facts"></div>
+        <section aria-labelledby="product-detail-options-title">
+          <h3 id="product-detail-options-title">אפשרויות להזמנה</h3>
+          <div id="product-detail-colors"></div>
+          <p id="product-detail-custom-text" hidden>אפשר להוסיף טקסט מותאם אישית בהזמנה.</p>
+        </section>
+        <p id="product-detail-availability" role="status"></p>
+        <div class="product-meta">
+          <strong id="product-detail-price"></strong>
+          <a class="stl-link" id="product-detail-source" href="#" target="_blank" rel="noopener noreferrer" hidden>פתיחת מקור המודל</a>
+        </div>
+        <menu>
+          <button class="ghost-button" type="button" data-close-product-detail>חזרה לקטלוג</button>
+          <button class="primary-button" type="button" id="product-detail-order">מעבר להזמנה</button>
+        </menu>
+      </div>
+    </dialog>
 
     <dialog id="order-dialog">
       <form method="dialog" class="order-form order-wizard" id="order-form" data-step="review">
@@ -70,6 +108,16 @@
             כמות
             <input name="quantity" required type="number" min="1" value="1" />
           </label>
+          <fieldset id="order-color-fieldset" hidden>
+            <legend>בחירת צבע</legend>
+            <div id="order-color-options"></div>
+            <small id="order-color-help">צבע שאינו זמין יישלח כבקשה לחלופה ויחייב אישור לפני הדפסה.</small>
+          </fieldset>
+          <label id="order-custom-text-field" hidden>
+            טקסט מותאם אישית
+            <input name="customText" maxlength="500" autocomplete="off" />
+          </label>
+          <p id="order-availability-note" role="status"></p>
           <div class="cost-review">
             <div class="cost-review-row"><span>עלות ליחידה</span><span id="review-unit-cost"></span></div>
             <div class="cost-review-row cost-review-total"><span>עלות כוללת (מינימום)</span><span id="review-total-cost"></span></div>
@@ -109,6 +157,8 @@
           <div class="cost-review">
             <div class="cost-review-row"><span>מוצר</span><span id="summary-product-name"></span></div>
             <div class="cost-review-row"><span>כמות</span><span id="summary-quantity"></span></div>
+            <div class="cost-review-row" id="summary-color-row" hidden><span>צבע</span><span id="summary-color"></span></div>
+            <div class="cost-review-row" id="summary-custom-text-row" hidden><span>טקסט מותאם</span><span id="summary-custom-text"></span></div>
             <div class="cost-review-row"><span>עלות בסיס</span><span id="summary-base-cost"></span></div>
             <div class="cost-review-row"><span>פרגון</span><span id="summary-tip-cost"></span></div>
             <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="summary-total-cost"></span></div>

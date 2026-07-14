@@ -86,9 +86,10 @@ function publicProduct(product) {
     grams: product.grams,
     printHours: product.printHours,
     additionalCopyHours: product.additionalCopyHours,
-    possibleColors: product.possibleColors,
-    requiredColors: product.requiredColors,
+    possibleColors: product.colorOptions.map((option) => option.name),
+    requiredColors: product.requiredColorOptions.map((option) => option.name),
     colorOptions: product.colorOptions,
+    requiredColorOptions: product.requiredColorOptions,
     customTextEnabled: product.customTextEnabled,
     requiresAdminApproval: product.requiresAdminApproval || product.catalogKind === 'idea',
     allowMultiple: product.allowMultiple,
@@ -143,6 +144,16 @@ function withCurrentPrice(row, context) {
       name: filament?.name || (typeof value === 'string' ? value : value?.name || id),
       colorHex: filament?.colorHex || (typeof value === 'object' ? value?.colorHex : null),
       available: filament ? filament.active && (filament.remainingGrams == null || filament.remainingGrams > 0) : true,
+    };
+  }).filter((item) => item.value);
+  product.requiredColorOptions = product.requiredColors.map((value) => {
+    const id = colorValue(value);
+    const filament = context.filaments.find((item) => item.id === id);
+    return {
+      value: id,
+      name: filament?.name || (typeof value === 'string' ? value : value?.name || id),
+      colorHex: filament?.colorHex || (typeof value === 'object' ? value?.colorHex : null),
+      available: Boolean(filament?.active) && (filament?.remainingGrams == null || filament.remainingGrams > 0),
     };
   }).filter((item) => item.value);
   product.missingRequirements = missingRequirements(product);

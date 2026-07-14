@@ -171,7 +171,10 @@ document.querySelector("#cancel-order")?.addEventListener("click", () => orderDi
 orderForm?.quantity?.addEventListener("input", updateReviewCosts);
 
 orderForm?.querySelectorAll("[data-wizard-next]").forEach((button) => {
-  button.addEventListener("click", () => goToStep(button.dataset.wizardNext));
+  button.addEventListener("click", () => {
+    if (button.dataset.wizardNext === "tip" && !orderForm.reportValidity()) return;
+    goToStep(button.dataset.wizardNext);
+  });
 });
 orderForm?.querySelectorAll("[data-wizard-back]").forEach((button) => {
   button.addEventListener("click", () => goToStep(button.dataset.wizardBack));
