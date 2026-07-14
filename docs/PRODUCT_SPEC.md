@@ -117,12 +117,28 @@ Product fields:
 - possible colors;
 - required colors;
 - requires admin approval before printing (flag);
-- active/displayed state;
+- catalog kind (`printed` or `idea`) and an automatically derived publication
+  state;
 - external model source link;
 - internal STL/3MF file if available;
 - internal print notes/instructions;
 - selectable options: color, quantity, custom text, future size/options;
 - whether multiple units are allowed.
+
+Catalog publication is automatic. There is no manual "show in catalog"
+control. A product with all required fields is public; an incomplete product is
+kept as an admin draft with an explicit missing-requirements list and cannot be
+activated manually. Readiness rules may differ between a known printed product
+and an untested idea. A published product remains visible when filament is
+temporarily unavailable and is marked "not currently available" instead of
+disappearing. Public product responses are explicit DTOs and never include
+internal print notes, inventory quantities, spool costs, or pricing internals.
+
+The admin product editor is a full-page form ordered by printing necessity. It
+supports possible and required colors, multiple images and a primary image,
+quantity restrictions, extra print time per copy, internal notes, risk level,
+custom text, and readiness feedback. Product descriptions are entered manually;
+the application does not generate them.
 
 Categories must be dynamic, editable in admin, and products may belong to multiple.
 
@@ -170,6 +186,7 @@ Order fields:
 - future: attached file;
 - quantity;
 - selected color(s);
+- optional custom text when enabled by the product;
 - user notes;
 - internal admin notes;
 - status (canonical set above);
@@ -185,6 +202,18 @@ Order fields:
 - created date;
 - updated date;
 - delivered/completed date.
+
+Catalog order options are validated again by the API. The selected color must
+belong to the product, quantity must be one when multiple units are disabled,
+and custom text is accepted only for products that enable it. Order snapshots
+preserve the product/options context, while reorder always uses the product's
+current price and requires a new confirmation.
+
+When a requested color is unavailable, the order records a separate color
+alternative approval state. The admin proposes an available filament; the
+friend approves or rejects it in the personal area. An order cannot move to the
+print queue or printing while an alternative is needed, pending, or rejected.
+This workflow does not add new canonical order statuses.
 
 MVP: one order = one product/request. No cart.
 
@@ -204,8 +233,14 @@ Pricing inputs:
 - manual admin override;
 - transparent price that covers production cost and includes a modest default
   margin; optional support is added above that price.
-- admin-editable default margin and minimum order price; products may also have
+- admin-editable margin percentages for low, medium, and high product risk,
+  plus minimum order price; products may also have
   an optional per-unit minimum. Existing order price snapshots never change.
+
+The admin calculation presents production cost before profit and the final
+price after profit in separate cards. Material cost is derived from spool price
+and spool weight (cost per gram); there is no independently editable price-per-
+kilogram field.
 
 Known catalog product:
 - clear price upfront; can auto-approve.
@@ -292,7 +327,10 @@ MVP: medium accuracy, designed for future full accuracy.
 Filament spool fields:
 - material type; color; brand/manufacturer;
 - starting weight; estimated remaining weight;
-- spool cost; cost per kg/gram; active/available state.
+- spool price; spool weight; derived cost per gram; active/available state.
+
+Material type is free-form so new types can be added without a schema or code
+change. The admin form previews the selected color immediately.
 
 Behavior:
 - friends see available and unavailable colors;
@@ -311,9 +349,12 @@ purchase goals (future); transparent support fund.
 Friends may see: base order cost; their own added support; total support fund
 collected; what money was reinvested into; future purchase goals.
 
-Transparency page: total support collected; future purchase goals; purchases
-made from the fund; number of prints completed; optionally top supporter names
-(no amounts, opt-in).
+Transparency view: total support collected; amount reinvested; purchase goals
+and progress; purchases/investments explicitly marked public by the admin; and
+number of prints completed. Goals and ledger entries have an optional public
+label, so internal descriptions need not be exposed. The endpoint returns only
+aggregate or explicitly published records and never returns member orders,
+personal payments, internal ledger details, or internal profit/pricing data.
 
 Friends must not see other friends' personal order/payment details.
 
@@ -356,7 +397,6 @@ Post-release (can wait):
 - file uploads;
 - advanced inventory;
 - monthly reports;
-- full transparent fund page;
 - printer connection;
 - online payment;
 - automatic WhatsApp notifications;
