@@ -3,7 +3,7 @@ const { getSql } = require('./_db');
 const USER_STATUSES = ['pending', 'active', 'inactive', 'rejected'];
 const ORDER_STATUSES = [
   'new', 'waiting_approval', 'waiting_print', 'printing',
-  'ready_delivery', 'completed', 'cancelled',
+  'ready_delivery', 'completed', 'failed', 'cancelled',
 ];
 
 const LEGACY_USER_STATUS = { approved: 'active' };

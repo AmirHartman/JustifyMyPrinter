@@ -202,7 +202,10 @@ Pricing inputs:
 - wear/maintenance;
 - automatic recommended price;
 - manual admin override;
-- transparent base cost + optional support.
+- transparent price that covers production cost and includes a modest default
+  margin; optional support is added above that price.
+- admin-editable default margin and minimum order price; products may also have
+  an optional per-unit minimum. Existing order price snapshots never change.
 
 Known catalog product:
 - clear price upfront; can auto-approve.

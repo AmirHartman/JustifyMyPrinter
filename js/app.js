@@ -6,7 +6,7 @@ import {
   addTip, resetTip, goToStep, getTipAmount, getOrderTotal,
 } from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
-import { formatCurrency, createAiProductDraft, calculateProductCost } from "./utils.js";
+import { formatCurrency, calculateProductCost, createProductDescriptionSuggestion } from "./utils.js";
 
 // ── DOM references ────────────────────────────────────────────
 const loginForm     = document.querySelector("#login-form");
@@ -16,7 +16,24 @@ const registerError = document.querySelector("#register-error");
 const orderDialog   = document.querySelector("#order-dialog");
 const orderForm     = document.querySelector("#order-form");
 const productForm   = document.querySelector("#product-form");
-const aiProductIdea = document.querySelector("#ai-product-idea");
+const productDrawer = document.querySelector("#product-drawer");
+const orderDrawer   = document.querySelector("#order-drawer");
+const RISK_PERCENT_BY_LEVEL = Object.freeze({ low: 0.08, medium: 0.15, high: 0.25 });
+
+function riskPercentFromForm() {
+  return RISK_PERCENT_BY_LEVEL[productForm?.elements["riskLevel"]?.value] ?? RISK_PERCENT_BY_LEVEL.medium;
+}
+
+function riskLevelFromPercent(value) {
+  const risk = Number(value);
+  if (risk <= 0.1) return "low";
+  if (risk >= 0.2) return "high";
+  return "medium";
+}
+
+function activateSubTab(subName) {
+  document.querySelector(`.sub-tab[data-sub="${subName}"]`)?.click();
+}
 
 // ── Auth panel ────────────────────────────────────────────────
 document.querySelectorAll(".auth-mode-button").forEach((button) => {
@@ -134,12 +151,15 @@ document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => setView(tab.dataset.view));
 });
 
-// ── Users sub-tabs ────────────────────────────────────────────
+// ── Sub-tabs (scoped to the enclosing view, so several views can each
+// ── have their own independent group of sub-tabs) ──────────────
 document.querySelectorAll(".sub-tab").forEach((btn) => {
   btn.addEventListener("click", () => {
     const target = btn.dataset.sub;
-    document.querySelectorAll(".sub-tab").forEach((t) => t.classList.toggle("is-active", t === btn));
-    document.querySelectorAll(".sub-view").forEach((v) => v.classList.toggle("is-active", v.id === `${target}-sub`));
+    const scope  = btn.closest(".view");
+    if (!scope) return;
+    scope.querySelectorAll(".sub-tab").forEach((t) => t.classList.toggle("is-active", t === btn));
+    scope.querySelectorAll(".sub-view").forEach((v) => v.classList.toggle("is-active", v.id === `${target}-sub`));
   });
 });
 
@@ -243,14 +263,59 @@ customOrderForm?.addEventListener("submit", async (event) => {
 });
 
 // ── Product form (admin) ──────────────────────────────────────
-document.querySelector("#ai-draft-button")?.addEventListener("click", () => {
-  const draft = createAiProductDraft(aiProductIdea.value);
-  productForm.elements["name"].value        = draft.name;
-  productForm.elements["cost"].value        = draft.cost;
-  productForm.elements["grams"].value       = draft.grams;
-  productForm.elements["description"].value = draft.description;
-  productForm.elements["image"].value       = draft.image;
-  productForm.elements["stlUrl"].value      = draft.stlUrl;
+document.querySelector("#sync-print-files-btn")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "מסנכרן...";
+  try {
+    const result = await api("/api/print-sync", { method: "POST", body: "{}" });
+    await loadData();
+    render();
+    const draft = store.products.find((product) => product.printSync?.status === "needs_material");
+    if (draft && typeof window.openProductEditForm === "function") {
+      window.openProductEditForm(draft);
+      return;
+    }
+    alert(result.output || "הסנכרון הסתיים.");
+  } catch (err) {
+    alert(`הסנכרון נכשל: ${err.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+});
+
+document.querySelector("#open-print-files-btn")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await api("/api/print-sync?action=open-folder", { method: "POST", body: "{}" });
+  } catch (err) {
+    alert(`לא ניתן לפתוח את התיקייה: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+function updateDescriptionSuggestion() {
+  const hint = document.querySelector("#product-description-suggestion");
+  const button = document.querySelector("#suggest-product-description-btn");
+  const suggestion = createProductDescriptionSuggestion(productForm?.elements["name"]?.value);
+  if (!hint || !button) return;
+  hint.textContent = suggestion ? `הצעה: ${suggestion}` : "יש להזין שם מוצר כדי לקבל הצעת תיאור.";
+  hint.hidden = false;
+  button.disabled = !suggestion;
+}
+
+productForm?.elements["name"]?.addEventListener("input", updateDescriptionSuggestion);
+document.querySelector("#suggest-product-description-btn")?.addEventListener("click", () => {
+  const suggestion = createProductDescriptionSuggestion(productForm?.elements["name"]?.value);
+  if (!suggestion || !productForm) return;
+  const field = productForm.elements["description"];
+  if (field.value.trim() && !confirm("להחליף את התיאור הקיים בהצעה החדשה?")) return;
+  field.value = suggestion;
+  field.focus();
 });
 
 productForm?.addEventListener("submit", async (event) => {
@@ -275,13 +340,14 @@ productForm?.addEventListener("submit", async (event) => {
     grams:              data.get("grams"),
     description:        String(data.get("description") ?? "").trim(),
     image:              mainImageUrl,
-    stlUrl:             String(data.get("stlUrl") ?? "").trim(),
     sourceUrl:          String(data.get("sourceUrl") ?? "").trim(),
-    category:           String(data.get("category") ?? "").trim(),
     categoryIds:        collectCategoryRows(),
     requiresAdminApproval: data.get("requiresAdminApproval") !== null,
     printHours:         Number(data.get("printHours")) || 0,
     printProfile:       String(data.get("printProfile") ?? "regular"),
+    purgeGrams:         Number(data.get("purgeGrams")) || 0,
+    riskPercent:        riskPercentFromForm(),
+    minUnitPrice:       data.get("minUnitPrice") === "" ? null : Number(data.get("minUnitPrice")),
     materials,
     images,
     active:             data.get("productActive") !== null,
@@ -289,6 +355,15 @@ productForm?.addEventListener("submit", async (event) => {
     manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
     calculatedCost:     computedCostFromForm(),
   };
+
+  if (payload.active) {
+    const hasImage = Boolean(payload.image);
+    const ready = payload.name && payload.description && hasImage && payload.categoryIds.length && materials.length && payload.printHours > 0 && payload.grams > 0;
+    if (!ready) {
+      alert("לפני פרסום יש למלא שם, תיאור, תמונה, קטגוריה, פילמנט ונתוני הדפסה.");
+      return;
+    }
+  }
 
   // Resolve effective cost
   if (payload.manualPriceEnabled && payload.manualPrice) {
@@ -307,7 +382,7 @@ productForm?.addEventListener("submit", async (event) => {
       if (idx !== -1) store.products[idx] = updated;
       resetProductForm();
       render();
-      setView("store-edit");
+      productDrawer?.close();
     } else {
       const product = await api("/api/products", {
         method: "POST",
@@ -316,7 +391,7 @@ productForm?.addEventListener("submit", async (event) => {
       store.products.push(product);
       resetProductForm();
       render();
-      setView("items");
+      productDrawer?.close();
     }
   } catch (err) {
     alert(`שגיאה ב${isEdit ? "עדכון" : "הוספת"} מוצר: ${err.message}`);
@@ -379,6 +454,9 @@ function computedCostFromForm() {
     printHours:   Number(document.querySelector("#product-form [name='printHours']")?.value) || 0,
     printProfile: document.querySelector("#product-form [name='printProfile']")?.value ?? "regular",
     materials:    collectMaterialRows(),
+    purgeGrams: Number(document.querySelector("#product-form [name='purgeGrams']")?.value) || 0,
+    riskPercent: riskPercentFromForm(),
+    minUnitPrice: document.querySelector("#product-form [name='minUnitPrice']")?.value === "" ? null : Number(document.querySelector("#product-form [name='minUnitPrice']")?.value),
   };
   if (!store.pricingSettings) return null;
   const { finalCost } = calculateProductCost(product, store.filaments, store.pricingSettings);
@@ -394,11 +472,21 @@ function resetProductForm() {
     `<span style="color:var(--muted);font-size:var(--text-sm)">מלא שעות הדפסה וחומרים כדי לראות חישוב.</span>`;
   document.querySelector("#manual-price-field")?.setAttribute("hidden", "");
   document.querySelector("#product-submit-btn").textContent = "הוספת מוצר";
-  document.querySelector("#product-edit-cancel")?.setAttribute("hidden", "");
-  document.querySelector("#product-add-title").textContent = "הוספת מוצר";
-  document.querySelector("#product-active-toggle").checked = true;
+  document.querySelector("#product-drawer-title").textContent = "מוצר חדש";
+  document.querySelector("#product-active-toggle").checked = false;
+  document.querySelector("#product-description-suggestion")?.setAttribute("hidden", "");
+  document.querySelector("#product-import-summary")?.setAttribute("hidden", "");
   renderCategoryCheckboxes([]);
 }
+
+function openProductDrawer() {
+  if (typeof productDrawer?.showModal === "function") productDrawer.showModal();
+}
+
+document.querySelector("#add-product-btn")?.addEventListener("click", () => {
+  resetProductForm();
+  openProductDrawer();
+});
 
 // Exposed globally so render.js store-edit cards can call it
 window.openProductEditForm = function openProductEditForm(product) {
@@ -410,11 +498,12 @@ window.openProductEditForm = function openProductEditForm(product) {
   productForm.elements["grams"].value       = product.grams;
   productForm.elements["description"].value = product.description;
   productForm.elements["image"].value       = product.image ?? "";
-  productForm.elements["stlUrl"].value      = product.stlUrl ?? "";
   productForm.elements["sourceUrl"].value   = product.sourceUrl ?? "";
-  productForm.elements["category"].value    = product.category ?? "";
   productForm.elements["printHours"].value  = product.printHours ?? 0;
   productForm.elements["printProfile"].value = product.printProfile ?? "regular";
+  productForm.elements["minUnitPrice"].value = product.minUnitPrice ?? "";
+  productForm.elements["purgeGrams"].value = product.purgeGrams ?? 0;
+  productForm.elements["riskLevel"].value = product.riskLevel ?? riskLevelFromPercent(product.riskPercent);
   document.querySelector("#edit-product-id").value = product.id;
   document.querySelector("#product-active-toggle").checked = product.active !== false;
   document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
@@ -429,27 +518,45 @@ window.openProductEditForm = function openProductEditForm(product) {
   // Rebuild material rows
   const materialsContainer = document.querySelector("#product-materials-rows");
   materialsContainer.replaceChildren();
-  (product.materials ?? []).forEach((m) => addMaterialRow(m.filamentId, m.grams));
+  const syncedGrams = product.printSync?.materialGrams ?? [];
+  if ((product.materials ?? []).length) {
+    product.materials.forEach((m) => addMaterialRow(m.filamentId, m.grams));
+  } else {
+    syncedGrams.forEach((grams) => addMaterialRow("", grams));
+  }
 
   // Rebuild image rows
   const imagesContainer = document.querySelector("#product-image-rows");
   imagesContainer.replaceChildren();
   (product.images ?? []).forEach((img, i) => addImageRow(img.url, img.isMain, i));
 
+  const importSummary = document.querySelector("#product-import-summary");
+  if (importSummary && product.printSync) {
+    const grams = syncedGrams.reduce((sum, value) => sum + Number(value || 0), 0);
+    importSummary.textContent = `נקלט מ־3MF מקומי: ${Number(product.printHours || 0).toFixed(2)} שעות, ${grams.toFixed(2)} גרם. בחר פילמנט והשלם את פרטי הפרסום.`;
+    importSummary.hidden = false;
+  }
+
   document.querySelector("#product-submit-btn").textContent  = "שמור שינויים";
-  document.querySelector("#product-edit-cancel")?.removeAttribute("hidden");
-  document.querySelector("#product-add-title").textContent  = `עריכת מוצר: ${product.name}`;
+  document.querySelector("#product-drawer-title").textContent = `עריכת מוצר: ${product.name}`;
 
   updateCostPreview();
-  setView("product-add");
-  productForm.scrollIntoView({ behavior: "smooth", block: "start" });
+  updateDescriptionSuggestion();
+  openProductDrawer();
 };
 
-// ── Product edit cancel ───────────────────────────────────────
-document.querySelector("#product-edit-cancel")?.addEventListener("click", () => {
+// ── Product drawer close / cancel ──────────────────────────────
+document.querySelector("#product-drawer-close")?.addEventListener("click", () => {
   resetProductForm();
-  setView("store-edit");
+  productDrawer?.close();
 });
+document.querySelector("#product-drawer-cancel")?.addEventListener("click", () => {
+  resetProductForm();
+  productDrawer?.close();
+});
+
+// ── Order drawer close ──────────────────────────────────────────
+document.querySelector("#order-drawer-close")?.addEventListener("click", () => orderDrawer?.close());
 
 // ── Material rows ─────────────────────────────────────────────
 function addMaterialRow(filamentId = "", grams = "") {
@@ -460,6 +567,11 @@ function addMaterialRow(filamentId = "", grams = "") {
   row.className = "material-row";
 
   const select = document.createElement("select");
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "— בחירת פילמנט —";
+  placeholder.selected = !filamentId;
+  select.append(placeholder);
   store.filaments.forEach((f) => {
     const opt = document.createElement("option");
     opt.value = f.id;
@@ -571,6 +683,9 @@ function updateCostPreview() {
     printHours:   Number(productForm?.elements["printHours"]?.value) || 0,
     printProfile: productForm?.elements["printProfile"]?.value ?? "regular",
     materials:    collectMaterialRows(),
+    purgeGrams: Number(productForm?.elements["purgeGrams"]?.value) || 0,
+    riskPercent: riskPercentFromForm(),
+    minUnitPrice: productForm?.elements["minUnitPrice"]?.value === "" ? null : Number(productForm?.elements["minUnitPrice"]?.value),
   };
 
   if (!product.printHours && !product.materials.length) {
@@ -583,10 +698,14 @@ function updateCostPreview() {
   panel.innerHTML = `
     <div class="cost-preview-row"><span>עלות חומרים</span><span>${formatCurrency(b.materialCost)}</span></div>
     <div class="cost-preview-row"><span>עלות חשמל</span><span>${formatCurrency(b.electricityCost)}</span></div>
-    <div class="cost-preview-row"><span>בלאי ציוד (שעתי)</span><span>${formatCurrency(b.hourlyWearCost)}</span></div>
-    <div class="cost-preview-row"><span>בלאי קבוע</span><span>${formatCurrency(b.fixedWear)}</span></div>
-    <div class="cost-preview-row"><span>סיכון (${Math.round((store.pricingSettings?.printProfiles?.[product.printProfile]?.riskPercent ?? 0) * 100)}%)</span><span>${formatCurrency(b.riskCost)}</span></div>
-    <div class="cost-preview-final"><span>עלות מינימום מחושבת</span><span>${formatCurrency(b.finalCost)}</span></div>
+    <div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(b.wearCost)}</span></div>
+    <div class="cost-preview-row"><span>עלות מדפסת</span><span>${formatCurrency(b.machineCost)}</span></div>
+    <div class="cost-preview-row"><span>עלות ייצור לפני רווח</span><span>${formatCurrency(b.costWithRisk)}</span></div>
+    <div class="cost-preview-row"><span>סיכון (${Math.round(b.riskPercent * 100)}%)</span><span>${formatCurrency(b.riskCost)}</span></div>
+    <div class="cost-preview-row"><span>רווח</span><span>${formatCurrency(b.marginAmount)}</span></div>
+    <div class="cost-preview-row"><span>מינימום מוצר</span><span>${formatCurrency(b.productFloor)}</span></div>
+    <div class="cost-preview-row"><span>מינימום הזמנה</span><span>${formatCurrency(b.minOrderPrice)}</span></div>
+    <div class="cost-preview-final"><span>מחיר לאחר רווח, מעוגל מעלה</span><span>${formatCurrency(b.finalCost)}</span></div>
   `;
 }
 
@@ -596,6 +715,7 @@ productForm?.addEventListener("input",  (e) => {
 });
 productForm?.addEventListener("change", (e) => {
   if (e.target.matches("[name='printProfile']")) updateCostPreview();
+  if (e.target.matches("[name='riskLevel']")) updateCostPreview();
 });
 
 // ── Manual price toggle ───────────────────────────────────────
@@ -610,8 +730,10 @@ document.querySelector("#add-filament-btn")?.addEventListener("click", () => {
   if (!form) return;
   form.reset();
   form.elements["filamentId"].value = "";
+  form.elements["active"].checked = true;
   form.hidden = false;
-  setView("filaments");
+  setView("settings");
+  activateSubTab("settings-filaments");
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
@@ -632,7 +754,11 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
     materialType: String(data.get("materialType") ?? "PLA").trim(),
     colorHex:     String(data.get("colorHex") ?? "#000000").trim(),
     pricePerKg:   Number(data.get("pricePerKg")) || 0,
+    spoolPrice:   data.get("spoolPrice") === "" ? null : Number(data.get("spoolPrice")),
+    spoolGrams:   Number(data.get("spoolGrams")) || 1000,
+    remainingGrams: data.get("remainingGrams") === "" ? null : Number(data.get("remainingGrams")),
     note:         String(data.get("note") ?? "").trim(),
+    active:       data.get("active") !== null,
   };
 
   const btn = form.querySelector("[type='submit']");
@@ -675,6 +801,7 @@ document.querySelector("#add-expense-btn")?.addEventListener("click", () => {
   form.elements["expenseDate"].value = new Date().toISOString().slice(0, 10);
   form.hidden = false;
   setView("finance");
+  activateSubTab("finance-expenses");
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
@@ -737,7 +864,8 @@ document.querySelector("#add-category-btn")?.addEventListener("click", () => {
   form.elements["categoryId"].value = "";
   form.elements["active"].checked = true;
   form.hidden = false;
-  setView("categories");
+  setView("products");
+  activateSubTab("product-categories");
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
@@ -800,7 +928,8 @@ window.openCategoryEditForm = function openCategoryEditForm(category) {
   form.elements["sortOrder"].value   = category.sortOrder ?? 0;
   form.elements["active"].checked    = category.active !== false;
   form.hidden = false;
-  setView("categories");
+  setView("products");
+  activateSubTab("product-categories");
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 };
 
@@ -813,21 +942,10 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
   btn.disabled = true;
   btn.textContent = "שומר...";
 
-  const buildProfile = (prefix) => ({
-    label:       store.pricingSettings?.printProfiles?.[prefix]?.label ?? prefix,
-    wearPerHour:  Number(data.get(`${prefix}_wearPerHour`))  || 0,
-    fixedWear:    Number(data.get(`${prefix}_fixedWear`))    || 0,
-    riskPercent:  Number(data.get(`${prefix}_riskPercent`))  || 0,
-  });
-
   const settings = {
-    electricityPerHour: Number(data.get("electricityPerHour")) || 0,
-    roundingMode:       store.pricingSettings?.roundingMode ?? "ceil",
-    printProfiles: {
-      regular: buildProfile("regular"),
-      ams:     buildProfile("ams"),
-      complex: buildProfile("complex"),
-    },
+    marginPercent: Number(data.get("marginPercent")) / 100,
+    minOrderPrice: Number(data.get("minOrderPrice")),
+    roundingMode: "ceil",
   };
 
   try {
@@ -838,8 +956,48 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
     store.pricingSettings = saved;
     render();
     updateCostPreview();
+    document.querySelector("#pricing-save-status").textContent = "ההגדרות נשמרו";
   } catch (err) {
     alert(`שגיאה בשמירת הגדרות: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+});
+
+document.querySelector("#goal-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault(); const data = new FormData(event.target);
+  await api("/api/goals", { method: "POST", body: JSON.stringify({ name: data.get("name"), targetAmount: Number(data.get("targetAmount")) }) });
+  event.target.reset(); await loadData(); render();
+});
+
+document.querySelector("#ledger-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault(); const data = new FormData(event.target);
+  await api("/api/ledger", { method: "POST", body: JSON.stringify({ kind: data.get("kind"), description: data.get("description"), amount: Number(data.get("amount")) }) });
+  event.target.reset(); await loadData(); render();
+});
+
+// ── Contact settings form ─────────────────────────────────────
+document.querySelector("#contact-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(event.target);
+  const btn  = event.target.querySelector("[type='submit']");
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "שומר...";
+
+  try {
+    const saved = await api("/api/settings?key=contact", {
+      method: "PUT",
+      body: JSON.stringify({
+        whatsappPhone: String(data.get("whatsappPhone") ?? "").trim(),
+        displayLabel:  String(data.get("displayLabel") ?? "").trim(),
+      }),
+    });
+    store.contactSettings = saved;
+    render();
+  } catch (err) {
+    alert(`שגיאה בשמירת פרטי קשר: ${err.message}`);
   } finally {
     btn.disabled = false;
     btn.textContent = origLabel;

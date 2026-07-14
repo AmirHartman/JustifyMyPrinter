@@ -108,11 +108,11 @@ export function applyMode() {
   if (store.appMode === "friend") {
     catalogTitle.textContent       = "מה אפשר להדפיס?";
     catalogDescription.textContent = store.currentUser?.gender === "female"
-      ? "בחרי מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה."
-      : "בחר מוצר, כמות וסכום שנראה לך הוגן. המינימום הוא עלות ההדפסה.";
+      ? "בחרי מוצר וכמות. המחיר מכסה עלויות וכולל רווח מתון; פרגון הוא אופציונלי."
+      : "בחר מוצר וכמות. המחיר מכסה עלויות וכולל רווח מתון; פרגון הוא אופציונלי.";
   } else {
     catalogTitle.textContent       = "קטלוג מוצרים";
-    catalogDescription.textContent = "בחר מוצר, כמות וסכום לתשלום. המינימום הוא עלות ההדפסה.";
+    catalogDescription.textContent = "בחר מוצר וכמות. המחיר מכסה עלויות וכולל רווח מתון; פרגון הוא אופציונלי.";
   }
 }
 
@@ -123,7 +123,7 @@ export function setView(viewName) {
   const nextView =
     store.appMode === "friend"
       ? (friendViews.includes(viewName) ? viewName : "landing")
-      : (friendViews.includes(viewName) ? "items" : viewName);
+      : (friendViews.includes(viewName) ? "overview" : viewName);
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("is-active", tab.dataset.view === nextView);

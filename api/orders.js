@@ -8,6 +8,7 @@ const {
   requireActiveUser,
   requireAdmin,
 } = require('./_middleware');
+const { calculateProductCost } = require('./_pricing');
 
 const LEGACY_WRITE_STATUS = {
   approved: 'waiting_print',
@@ -50,6 +51,19 @@ function normalizeRow(row) {
     cancellationReason: row.cancellation_reason ?? '',
     status: normalizeOrderStatus(row.status),
     paid: Boolean(row.paid),
+    paidAt: row.paid_at,
+    productionCost: numberOrNull(row.production_cost),
+    wearComponent: numberOrNull(row.wear_component),
+    machineComponent: numberOrNull(row.machine_component),
+    marginComponent: numberOrNull(row.margin_component),
+    printHours: numberOrNull(row.print_hours),
+    printProfile: row.print_profile || 'regular',
+    materialGrams: numberOrNull(row.material_grams),
+    failedAttempts: Number(row.failed_attempts) || 0,
+    wastedGrams: Number(row.wasted_grams) || 0,
+    wastedHours: Number(row.wasted_hours) || 0,
+    marginPercent: numberOrNull(row.margin_percent),
+    internal: Boolean(row.internal),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
@@ -61,7 +75,9 @@ const SELECT_COLUMNS = `
   external_model_link, quantity, selected_colors, user_notes, admin_notes,
   base_cost, support_amount, final_amount, price, estimated_material_weight,
   estimated_print_time, requires_user_price_approval, user_approved_price,
-  cancellation_reason, status, paid, created_at, updated_at, completed_at
+  cancellation_reason, status, paid, paid_at, production_cost, wear_component,
+  machine_component, margin_component, print_hours, print_profile, material_grams, failed_attempts,
+  wasted_grams, wasted_hours, margin_percent, internal, inventory_deducted, created_at, updated_at, completed_at
 `;
 
 module.exports = async (req, res) => {
@@ -81,7 +97,8 @@ module.exports = async (req, res) => {
       const paid = body.paid === undefined ? true : Boolean(body.paid);
       const sql = getSql();
       const result = await sql.query(
-        `UPDATE orders SET paid = $1, updated_at = NOW() WHERE id = ANY($2) RETURNING ${SELECT_COLUMNS}`,
+        `UPDATE orders SET paid = $1, paid_at = CASE WHEN $1 THEN NOW() ELSE NULL END, updated_at = NOW()
+         WHERE id = ANY($2) RETURNING ${SELECT_COLUMNS}`,
         [paid, orderIds]
       );
       return res.json({ ok: true, orders: (result.rows ?? result).map(normalizeRow) });
@@ -154,11 +171,17 @@ module.exports = async (req, res) => {
         if (status === 'cancelled' && !String(body.cancellationReason ?? '').trim()) {
           return res.status(400).json({ error: 'Cancellation reason is required' });
         }
+        const marginPercent = body.marginPercent === '' || body.marginPercent == null ? null : Number(body.marginPercent);
+        if (marginPercent != null && (!Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 5)) {
+          return res.status(400).json({ error: 'אחוז הרווח חייב להיות בין 0% ל־500%' });
+        }
 
         const rows = await sql`
           UPDATE orders SET
             status = COALESCE(${status}, status),
             paid = CASE WHEN ${body.paid !== undefined} THEN ${Boolean(body.paid)} ELSE paid END,
+            paid_at = CASE WHEN ${body.paid !== undefined}
+              THEN (CASE WHEN ${Boolean(body.paid)} THEN NOW() ELSE NULL END) ELSE paid_at END,
             admin_notes = CASE WHEN ${body.adminNotes !== undefined} THEN ${String(body.adminNotes ?? '').trim()} ELSE admin_notes END,
             base_cost = CASE WHEN ${body.baseCost !== undefined} THEN ${numberOrNull(body.baseCost)} ELSE base_cost END,
             support_amount = CASE WHEN ${body.supportAmount !== undefined} THEN ${Number(body.supportAmount) || 0} ELSE support_amount END,
@@ -176,18 +199,34 @@ module.exports = async (req, res) => {
               THEN ${Boolean(body.userApprovedPrice)} ELSE user_approved_price END,
             cancellation_reason = CASE WHEN ${status === 'cancelled'}
               THEN ${String(body.cancellationReason ?? '').trim()} ELSE cancellation_reason END,
+            margin_percent = CASE WHEN ${body.marginPercent !== undefined} THEN ${marginPercent} ELSE margin_percent END,
+            internal = CASE WHEN ${body.internal !== undefined} THEN ${Boolean(body.internal)} ELSE internal END,
+            failed_attempts = CASE WHEN ${status === 'failed'} THEN failed_attempts + 1 ELSE failed_attempts END,
+            wasted_grams = CASE WHEN ${body.wastedGrams !== undefined} THEN ${Math.max(Number(body.wastedGrams) || 0, 0)} ELSE wasted_grams END,
+            wasted_hours = CASE WHEN ${body.wastedHours !== undefined} THEN ${Math.max(Number(body.wastedHours) || 0, 0)} ELSE wasted_hours END,
             completed_at = CASE WHEN ${status === 'completed'} THEN COALESCE(completed_at, NOW()) ELSE completed_at END,
             updated_at = NOW()
           WHERE id = ${id}
-          RETURNING
-            id, product_id, user_id, friend_name, order_type, request_description,
-            external_model_link, quantity, selected_colors, user_notes, admin_notes,
-            base_cost, support_amount, final_amount, price, estimated_material_weight,
-            estimated_print_time, requires_user_price_approval, user_approved_price,
-            cancellation_reason, status, paid, created_at, updated_at, completed_at
+          RETURNING ${sql.unsafe(SELECT_COLUMNS)}
         `;
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-        return res.json(normalizeRow(rows[0]));
+        const updated = rows[0];
+        if (status === 'completed' && updated.internal) {
+          await sql`INSERT INTO owner_ledger (id, kind, description, amount, order_id)
+            VALUES (${randomUUID()}, 'self_print', ${`הדפסה עצמית ${updated.id}`}, ${-Number(updated.production_cost || 0)}, ${updated.id})
+            ON CONFLICT (order_id, kind) WHERE order_id IS NOT NULL DO NOTHING`;
+        }
+        if ((status === 'completed' || status === 'failed') && !updated.inventory_deducted) {
+          const grams = status === 'completed'
+            ? Number(updated.material_grams || 0) + Number(updated.wasted_grams || 0)
+            : Number(updated.wasted_grams || 0);
+          if (grams > 0 && updated.product_id) {
+            await sql`UPDATE filaments SET remaining_grams = GREATEST(COALESCE(remaining_grams, spool_grams) - ${grams}, 0)
+              WHERE id = (SELECT materials->0->>'filamentId' FROM products WHERE id = ${updated.product_id})`;
+          }
+          await sql`UPDATE orders SET inventory_deducted = TRUE WHERE id = ${updated.id}`;
+        }
+        return res.json(normalizeRow(updated));
       } catch (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -253,7 +292,9 @@ module.exports = async (req, res) => {
       let product = null;
       if (productId) {
         const rows = await sql`
-          SELECT cost, grams, print_hours, requires_admin_approval
+          SELECT cost, grams, print_hours, print_profile, materials, requires_admin_approval,
+                 manual_price_enabled, manual_price, purge_grams, risk_percent,
+                 additional_copy_hours, minimum_unit_price
           FROM products WHERE id = ${productId} AND active = TRUE
         `;
         product = rows[0] || null;
@@ -263,16 +304,24 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Catalog orders require a product' });
       }
 
-      const baseCost = product ? Number(product.cost) * quantity : numberOrNull(body.baseCost);
-      const finalAmount = numberOrNull(body.finalAmount ?? body.price ?? baseCost);
-      if (baseCost != null && finalAmount != null
-          && Math.round(finalAmount * 100) < Math.round(baseCost * 100)) {
-        return res.status(400).json({ error: `המינימום להזמנה הזו הוא ${baseCost.toFixed(2)}` });
+      let breakdown = null;
+      if (product) {
+        const filamentRows = await sql`SELECT id, price_per_kg FROM filaments`;
+        const settingRows = await sql`SELECT value FROM settings WHERE key = 'pricing'`;
+        breakdown = calculateProductCost({
+          printHours: Number(product.print_hours), printProfile: product.print_profile,
+          materials: product.materials || [], purgeGrams: Number(product.purge_grams),
+          riskPercent: product.risk_percent, additionalCopyHours: product.additional_copy_hours,
+          minUnitPrice: product.minimum_unit_price,
+        }, filamentRows.map((f) => ({ id: f.id, pricePerKg: Number(f.price_per_kg) })), settingRows[0]?.value || {}, { quantity });
       }
+      const baseCost = product
+        ? product.manual_price_enabled && product.manual_price != null
+          ? Number(product.manual_price) * quantity : breakdown.shopPrice
+        : numberOrNull(body.baseCost);
+      const supportAmount = Math.max(Number(body.supportAmount) || 0, 0);
+      const finalAmount = baseCost == null ? numberOrNull(body.finalAmount ?? body.price) : baseCost + supportAmount;
       const requiresApproval = orderType !== 'catalog' || Boolean(product?.requires_admin_approval);
-      const supportAmount = orderType === 'catalog' && baseCost != null && finalAmount != null
-        ? Math.max(finalAmount - baseCost, 0)
-        : Math.max(Number(body.supportAmount) || 0, 0);
       const status = requiresApproval ? 'new' : 'waiting_print';
       const id = randomUUID();
       const selectedColors = JSON.stringify(Array.isArray(body.selectedColors) ? body.selectedColors : []);
@@ -283,6 +332,8 @@ module.exports = async (req, res) => {
           external_model_link, quantity, selected_colors, user_notes, admin_notes,
           base_cost, support_amount, final_amount, price, estimated_material_weight,
           estimated_print_time, requires_user_price_approval, user_approved_price,
+          production_cost, wear_component, machine_component, margin_component,
+          print_hours, print_profile, material_grams, margin_percent, internal,
           status, paid, created_at, updated_at
         ) VALUES (
           ${id}, ${productId}, ${user.id}, ${user.name}, ${orderType},
@@ -292,14 +343,14 @@ module.exports = async (req, res) => {
           ${supportAmount}, ${finalAmount}, ${finalAmount ?? 0.01},
           ${numberOrNull(body.estimatedMaterialWeight ?? product?.grams)},
           ${numberOrNull(body.estimatedPrintTime ?? product?.print_hours)},
-          ${requiresApproval}, FALSE, ${status}, FALSE, NOW(), NOW()
+          ${requiresApproval}, FALSE,
+          ${breakdown?.productionCost ?? null}, ${breakdown?.wearCost ?? null},
+          ${breakdown?.machineCost ?? null}, ${breakdown?.marginAmount ?? null},
+          ${breakdown?.totalHours ?? null}, ${product?.print_profile || 'regular'}, ${breakdown?.materialGrams ?? null},
+          ${breakdown?.marginPercent ?? null}, FALSE,
+          ${status}, FALSE, NOW(), NOW()
         )
-        RETURNING
-          id, product_id, user_id, friend_name, order_type, request_description,
-          external_model_link, quantity, selected_colors, user_notes, admin_notes,
-          base_cost, support_amount, final_amount, price, estimated_material_weight,
-          estimated_print_time, requires_user_price_approval, user_approved_price,
-          cancellation_reason, status, paid, created_at, updated_at, completed_at
+        RETURNING ${sql.unsafe(SELECT_COLUMNS)}
       `;
       return res.status(201).json(normalizeRow(rows[0]));
     } catch (err) {

@@ -26,6 +26,11 @@ app.all('/api/messages',      require('./api/messages'));
 app.all('/api/notifications', require('./api/notifications'));
 app.all('/api/settings',      require('./api/settings'));
 app.all('/api/expenses',      require('./api/expenses'));
+app.all('/api/insights',      require('./api/insights'));
+app.all('/api/ledger',        require('./api/ledger'));
+app.all('/api/goals',         require('./api/goals'));
+app.all('/api/maintenance',   require('./api/maintenance'));
+app.all('/api/print-sync',    require('./api/print-sync'));
 app.all('/api/init',          require('./api/init'));
 
 // Unknown /api/* paths → structured 404, never falls through to the HTML catch-all.

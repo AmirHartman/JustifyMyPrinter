@@ -14,6 +14,9 @@ export const store = {
   pricingSettings: null,     // admin: pricing config
   contactSettings: null,     // public-safe admin WhatsApp contact
   expenses:       [],        // admin only: business expenses
+  insights:       null,
+  goals:          [],
+  ledger:         [],
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -22,7 +25,7 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger] = await Promise.all([
     api("/api/products"),
     api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
@@ -30,8 +33,11 @@ export async function loadData() {
     isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
     store.currentUser ? api("/api/filaments")          : Promise.resolve([]),
     isAdmin      ? api("/api/settings?key=pricing")    : Promise.resolve(null),
-    isFriendMode ? api("/api/settings?key=contact")    : Promise.resolve(null),
+    store.currentUser ? api("/api/settings?key=contact") : Promise.resolve(null),
     isAdmin      ? api("/api/expenses")                : Promise.resolve([]),
+    isAdmin      ? api("/api/insights")                : Promise.resolve(null),
+    isAdmin      ? api("/api/goals")                   : Promise.resolve([]),
+    isAdmin      ? api("/api/ledger")                  : Promise.resolve([]),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -42,18 +48,11 @@ export async function loadData() {
   store.pricingSettings = pricingSettings;
   store.contactSettings = contactSettings;
   store.expenses        = expenses;
+  store.insights         = insights;
+  store.goals            = goals;
+  store.ledger           = ledger;
 }
 
 export function findProduct(productId) {
   return store.products.find((p) => p.id === productId);
-}
-
-export function findCategory(categoryId) {
-  return store.categories.find((c) => c.id === categoryId);
-}
-
-export function getProductOrderedQuantity(productId) {
-  return store.orders.reduce((total, order) => {
-    return order.productId === productId ? total + order.quantity : total;
-  }, 0);
 }

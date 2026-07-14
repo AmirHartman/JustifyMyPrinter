@@ -41,7 +41,7 @@ function getBaseCost() {
   const product = findProduct(orderForm?.productId.value);
   if (!product) return 0;
   const quantity = Math.max(Number(orderForm.quantity.value) || 1, 1);
-  return product.cost * quantity;
+  return Number(product.pricesByQuantity?.[quantity] ?? product.cost * quantity);
 }
 
 export function updateReviewCosts() {
@@ -49,7 +49,7 @@ export function updateReviewCosts() {
   if (!product || !orderForm) return;
   const quantity = Math.max(Number(orderForm.quantity.value) || 1, 1);
   document.querySelector("#review-unit-cost").textContent = formatCurrency(product.cost);
-  document.querySelector("#review-total-cost").textContent = formatCurrency(product.cost * quantity);
+  document.querySelector("#review-total-cost").textContent = formatCurrency(getBaseCost());
 }
 
 export function addTip(amount) {

@@ -1,4 +1,5 @@
 export const STATUS_LABELS = {
+  failed: "נכשלה",
   new: "הזמנה חדשה",
   waiting_approval: "ממתין לאישור",
   waiting_print: "ממתין להדפסה",

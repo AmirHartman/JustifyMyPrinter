@@ -9,7 +9,7 @@ import { setView } from "./auth.js";
 // carries legacy keys as a display fallback, which must not appear as choices).
 const ORDER_STATUS_SEQUENCE = [
   "new", "waiting_approval", "waiting_print", "printing",
-  "ready_delivery", "completed", "cancelled",
+  "ready_delivery", "completed", "failed", "cancelled",
 ];
 
 const ORDER_TYPE_LABELS = {
@@ -44,13 +44,52 @@ export function render() {
   renderUsersAdmin();
   renderStoreEdit();
   renderCategoriesAdmin();
-  renderSummary();
-  renderOverview();
-  renderFinanceOverview();
+  renderActionQueue();
   renderWelcome();
   renderFilaments();
   renderPricingForm();
+  renderContactSettingsForm();
   renderExpenses();
+  renderBusinessInsights();
+}
+
+function renderBusinessInsights() {
+  const insights = store.insights;
+  const grid = document.querySelector("#business-summary-grid");
+  if (!grid || !insights) return;
+  const ownerText = insights.owner.balance >= 0 ? `העסק חייב לך ${formatCurrency(insights.owner.balance)}` : `אתה חייב לעסק ${formatCurrency(Math.abs(insights.owner.balance))}`;
+  grid.innerHTML = [
+    ["קופת תחזוקה", insights.maintenance.balance], ["קופה פנויה", insights.business.available],
+    ["רווח והפסד", insights.pnl.profit],
+  ].map(([label, value]) => `<article class="finance-card"><span>${label}</span><strong>${formatCurrency(value)}</strong></article>`).join("") + `<article class="finance-card"><span>חשבון בעלים</span><strong>${ownerText}</strong></article>`;
+  const parts = document.querySelector("#parts-health-list");
+  parts.innerHTML = insights.partsHealth.map((part) => `<article class="business-row"><span>${escapeHtml(part.name)}</span><progress max="100" value="${Math.min(part.percent, 100)}"></progress><strong>${Math.round(part.percent)}%</strong><button class="ghost-button btn-sm" data-maintenance-id="${escapeHtml(part.id)}">החלפתי</button></article>`).join("");
+  parts.querySelectorAll("[data-maintenance-id]").forEach((button) => button.addEventListener("click", async () => {
+    await api("/api/maintenance", { method: "POST", body: JSON.stringify({ partId: button.dataset.maintenanceId, eventType: "replace" }) });
+    await loadData(); render();
+  }));
+  const tasks = document.querySelector("#maintenance-tasks-list");
+  tasks.innerHTML = insights.maintenanceTasks.map((task) => `<article class="business-row"><span>${escapeHtml(task.name)}</span><strong>כל ${task.everyHours} שעות / ${task.everyDays} ימים</strong><button class="ghost-button btn-sm" data-service-id="${escapeHtml(task.id)}">טיפלתי</button></article>`).join("");
+  tasks.querySelectorAll("[data-service-id]").forEach((button) => button.addEventListener("click", async () => {
+    await api("/api/maintenance", { method: "POST", body: JSON.stringify({ partId: button.dataset.serviceId, eventType: "service" }) }); await loadData(); render();
+  }));
+  document.querySelector("#risk-list").innerHTML = insights.risk.map((item) => `<article class="business-row"><span>${escapeHtml(item.label)}</span><strong>${item.enoughData ? `${Math.round(item.actualPercent * 100)}% בפועל מול ${Math.round(item.configuredPercent * 100)}%` : `אין מספיק נתונים (${item.samples}/10)`}</strong></article>`).join("");
+  document.querySelector("#goals-list").innerHTML = store.goals.map((goal) => `<article class="business-row"><span>${escapeHtml(goal.name)}</span><progress max="${Number(goal.target_amount)}" value="${Number(goal.saved)}"></progress><strong>${formatCurrency(goal.saved)} / ${formatCurrency(goal.target_amount)}</strong></article>`).join("") || "אין יעדים עדיין";
+  document.querySelector("#ledger-list").innerHTML = store.ledger.map((entry) => `<article class="business-row"><span>${escapeHtml(entry.description)}</span><strong>${formatCurrency(entry.amount)}</strong></article>`).join("");
+}
+
+// ── Shared: resolve the user behind an order ──────────────────
+// An order's user_id is authoritative; friend_name is only a fallback for
+// legacy rows created before user_id existed. Renaming a user must not
+// orphan their orders, so name is never used when user_id is present.
+function findOrderUser(order) {
+  if (order.userId) return store.users.find((u) => u.id === order.userId);
+  return store.users.find((u) => u.name === order.friendName);
+}
+
+function ordersForUser(user) {
+  return store.orders.filter((o) =>
+    o.userId != null ? o.userId === user.id : o.friendName === user.name);
 }
 
 // ── Catalog (friend view) ─────────────────────────────────────
@@ -146,102 +185,163 @@ function renderCatalog() {
   });
 }
 
-// ── Orders table (admin view) ─────────────────────────────────
+// ── Orders (admin view): grouped cards, filter bar, drawer ────
 
 const PAST_STATUSES = new Set(["completed", "cancelled"]);
+const FORWARD_STATUS_SEQUENCE = ["new", "waiting_approval", "waiting_print", "printing", "ready_delivery", "completed"];
 
-function buildOrderRow(order) {
+let orderSearchQuery = "";
+let orderStatusFilter = "all"; // all | unpaid | open | done
+
+document.querySelector("#orders-search")?.addEventListener("input", (e) => {
+  orderSearchQuery = e.target.value.trim().toLowerCase();
+  renderOrders();
+});
+document.querySelectorAll("#orders-filter-chips .filter-chip").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    orderStatusFilter = chip.dataset.filter;
+    document.querySelectorAll("#orders-filter-chips .filter-chip")
+      .forEach((c) => c.classList.toggle("is-active", c === chip));
+    renderOrders();
+  });
+});
+
+function nextOrderStatus(status) {
+  const idx = FORWARD_STATUS_SEQUENCE.indexOf(status);
+  if (idx === -1 || idx === FORWARD_STATUS_SEQUENCE.length - 1) return null;
+  return FORWARD_STATUS_SEQUENCE[idx + 1];
+}
+
+function matchesOrderFilter(order) {
+  if (orderStatusFilter === "unpaid" && (order.paid || order.status === "cancelled")) return false;
+  if (orderStatusFilter === "open" && PAST_STATUSES.has(order.status)) return false;
+  if (orderStatusFilter === "done" && !PAST_STATUSES.has(order.status)) return false;
+  if (!orderSearchQuery) return true;
   const product = findProduct(order.productId);
-  const user = store.users.find((candidate) =>
-    candidate.id === order.userId || candidate.name === order.friendName);
+  const haystack = `${order.friendName} ${product?.name ?? order.requestDescription ?? ""}`.toLowerCase();
+  return haystack.includes(orderSearchQuery);
+}
+
+async function setOrderStatus(order, next, cancellationReason) {
+  const previous = order.status;
+  order.status = next;
+  render();
+  try {
+    const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: next, cancellationReason }),
+    });
+    Object.assign(order, updated);
+    render();
+    return true;
+  } catch (err) {
+    order.status = previous;
+    render();
+    alert(`שגיאה בעדכון סטטוס: ${err.message}`);
+    return false;
+  }
+}
+
+function buildOrderCard(order) {
+  const product = findProduct(order.productId);
+  const user = findOrderUser(order);
   const recipientName = user?.fullName || order.friendName;
   const orderName = product?.name || order.requestDescription || "הבקשה שלך";
   const amount = Number(order.finalAmount ?? order.price);
-  const row = document.createElement("tr");
-  row.innerHTML = `
-    <td>${escapeHtml(order.friendName)}</td>
-    <td>${escapeHtml(product?.name ?? (order.requestDescription ? order.requestDescription : "בקשה מיוחדת"))}
+
+  const card = document.createElement("article");
+  card.className = "order-card";
+  card.innerHTML = `
+    <div class="order-card-header">
+      <div class="order-card-title">
+        <strong>${escapeHtml(order.friendName)}</strong>
+        <span class="order-card-product">${escapeHtml(orderName)} ×${order.quantity}</span>
+      </div>
+      <div class="order-card-amount">${formatCurrency(amount)}</div>
+    </div>
+    <div class="order-card-badges">
+      <span class="ws-status-chip ws-status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] ?? order.status)}</span>
+      ${order.paid ? '<span class="status-badge status-active">שולם</span>' : '<span class="status-badge status-pending">לא שולם</span>'}
       ${order.orderType && order.orderType !== "catalog"
-        ? `<span class="status-badge status-pending">${escapeHtml(ORDER_TYPE_LABELS[order.orderType] ?? order.orderType)}</span>`
+        ? `<span class="status-badge status-inactive">${escapeHtml(ORDER_TYPE_LABELS[order.orderType] ?? order.orderType)}</span>`
         : ""}
-    </td>
-    <td>${order.quantity}</td>
-    <td>${formatCurrency(amount)}</td>
-    <td></td>
-    <td></td>
-    <td></td>
+    </div>
+    <div class="order-card-actions"></div>
   `;
 
+  const actions = card.querySelector(".order-card-actions");
+
+  const next = nextOrderStatus(order.status);
+  if (next) {
+    const promoteBtn = document.createElement("button");
+    promoteBtn.className   = "primary-button btn-sm";
+    promoteBtn.type        = "button";
+    promoteBtn.textContent = `קדם ל${STATUS_LABELS[next] ?? next} ←`;
+    promoteBtn.addEventListener("click", () => setOrderStatus(order, next));
+    actions.append(promoteBtn);
+  }
+
   const statusSelect = document.createElement("select");
+  statusSelect.className = "order-status-jump";
+  statusSelect.setAttribute("aria-label", "מעבר לסטטוס אחר או ביטול");
+  const placeholderOpt = document.createElement("option");
+  placeholderOpt.value = "";
+  placeholderOpt.textContent = "סטטוס אחר…";
+  placeholderOpt.disabled = true;
+  placeholderOpt.selected = true;
+  statusSelect.append(placeholderOpt);
   ORDER_STATUS_SEQUENCE.forEach((value) => {
+    if (value === order.status) return;
     const option = document.createElement("option");
     option.value = value;
     option.textContent = STATUS_LABELS[value] ?? value;
-    option.selected = order.status === value;
     statusSelect.append(option);
   });
-  statusSelect.addEventListener("change", async () => {
-    const previous = order.status;
-    const next = statusSelect.value;
-    let cancellationReason;
-    if (next === "cancelled") {
-      const reason = window.prompt("סיבת הביטול (תוצג ללקוח):");
-      if (reason === null || !reason.trim()) { statusSelect.value = previous; return; }
-      cancellationReason = reason.trim();
+  statusSelect.addEventListener("change", () => {
+    const value = statusSelect.value;
+    statusSelect.value = "";
+    if (!value) return;
+    if (value === "cancelled") {
+      openOrderDrawer(order, { focusCancel: true });
+      return;
     }
-    order.status = next;
-    render();
-    try {
-      const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
-        method: "PUT",
-        body: JSON.stringify({ status: next, cancellationReason }),
-      });
-      Object.assign(order, updated);
-      render();
-    } catch (err) {
-      order.status = previous;
-      render();
-      alert(`שגיאה בעדכון סטטוס: ${err.message}`);
-    }
+    setOrderStatus(order, value);
   });
+  actions.append(statusSelect);
 
   const paidLabel = document.createElement("label");
   paidLabel.className = "paid-toggle";
   paidLabel.innerHTML = `<input type="checkbox" ${order.paid ? "checked" : ""} /> שולם`;
   paidLabel.querySelector("input").addEventListener("change", async (event) => {
-    order.paid = event.target.checked;
+    const nextPaid = event.target.checked;
+    const previous = order.paid;
+    order.paid = nextPaid;
     render();
     try {
-      await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
+      const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
         method: "PUT",
-        body: JSON.stringify({ paid: order.paid }),
+        body: JSON.stringify({ paid: nextPaid }),
       });
-    } catch { /* paid already updated locally */ }
+      Object.assign(order, updated);
+      render();
+    } catch (err) {
+      order.paid = previous;
+      render();
+      alert(`שגיאה בעדכון תשלום: ${err.message}`);
+    }
   });
+  actions.append(paidLabel);
 
   const detailsBtn = document.createElement("button");
   detailsBtn.className   = "ghost-button btn-sm";
   detailsBtn.type        = "button";
-  detailsBtn.textContent = "פרטים ומחיר";
-
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className   = "ghost-button btn-sm user-delete-btn order-delete-btn";
-  deleteBtn.type        = "button";
-  deleteBtn.textContent = "מחק";
-  deleteBtn.title       = "מחק הזמנה";
-  deleteBtn.setAttribute("aria-label", `מחק הזמנה של ${order.friendName}`);
-  deleteBtn.addEventListener("click", () => deleteOrder(order.id));
-
-  const actions = document.createElement("div");
-  actions.className = "whatsapp-actions";
+  detailsBtn.textContent = "פרטים";
+  detailsBtn.addEventListener("click", () => openOrderDrawer(order));
   actions.append(detailsBtn);
+
   actions.append(createWhatsAppLink({
     phone: user?.phone,
-    message: whatsappTemplates.status({
-      name: recipientName,
-      product: orderName,
-      status: order.status,
-    }),
+    message: whatsappTemplates.status({ name: recipientName, product: orderName, status: order.status }),
     label: "עדכון בוואטסאפ",
     className: "btn-sm",
   }));
@@ -249,11 +349,7 @@ function buildOrderRow(order) {
   if (Number.isFinite(amount) && amount > 0) {
     actions.append(createWhatsAppLink({
       phone: user?.phone,
-      message: whatsappTemplates.priceApproval({
-        name: recipientName,
-        product: orderName,
-        amount: amount.toFixed(2),
-      }),
+      message: whatsappTemplates.priceApproval({ name: recipientName, product: orderName, amount: amount.toFixed(2) }),
       label: "אישור מחיר",
       className: "btn-sm",
     }));
@@ -267,28 +363,29 @@ function buildOrderRow(order) {
       className: "btn-sm",
     }));
   }
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className   = "ghost-button btn-sm user-delete-btn order-delete-btn";
+  deleteBtn.type        = "button";
+  deleteBtn.textContent = "מחק";
+  deleteBtn.title       = "מחק הזמנה";
+  deleteBtn.setAttribute("aria-label", `מחק הזמנה של ${order.friendName}`);
+  deleteBtn.addEventListener("click", () => deleteOrder(order.id));
   actions.append(deleteBtn);
 
-  row.children[4].append(statusSelect);
-  row.children[5].append(paidLabel);
-  row.children[6].append(actions);
-
-  const detailRow = buildOrderDetailRow(order);
-  detailsBtn.addEventListener("click", () => {
-    detailRow.hidden = !detailRow.hidden;
-    detailsBtn.textContent = detailRow.hidden ? "פרטים ומחיר" : "סגירה";
-  });
-
-  return [row, detailRow];
+  return card;
 }
 
-function buildOrderDetailRow(order) {
-  const detailRow = document.createElement("tr");
-  detailRow.className = "user-edit-row";
-  detailRow.hidden = true;
+// Order details / price editing / cancellation — all in one reusable drawer.
+function openOrderDrawer(order, opts = {}) {
+  const dialog     = document.querySelector("#order-drawer");
+  const titleEl    = document.querySelector("#order-drawer-title");
+  const readonlyEl = document.querySelector("#order-drawer-readonly");
+  const form       = document.querySelector("#order-drawer-form");
+  if (!dialog || !form) return;
 
-  const cell = document.createElement("td");
-  cell.colSpan = 7;
+  const product = findProduct(order.productId);
+  titleEl.textContent = `${order.friendName} · ${product?.name || order.requestDescription || "הזמנה"}`;
 
   const readOnlyBits = [];
   if (order.requestDescription) readOnlyBits.push(`<div><strong>בקשה:</strong> ${escapeHtml(order.requestDescription)}</div>`);
@@ -296,32 +393,31 @@ function buildOrderDetailRow(order) {
   if (order.selectedColors?.length) readOnlyBits.push(`<div><strong>צבעים:</strong> ${escapeHtml(order.selectedColors.join(", "))}</div>`);
   if (order.userNotes) readOnlyBits.push(`<div><strong>הערות לקוח:</strong> ${escapeHtml(order.userNotes)}</div>`);
   if (order.cancellationReason) readOnlyBits.push(`<div><strong>סיבת ביטול:</strong> ${escapeHtml(order.cancellationReason)}</div>`);
+  readonlyEl.innerHTML = readOnlyBits.length ? `<div class="order-detail-readonly">${readOnlyBits.join("")}</div>` : "";
 
-  cell.innerHTML = `
-    ${readOnlyBits.length ? `<div class="order-detail-readonly">${readOnlyBits.join("")}</div>` : ""}
-    <form class="user-edit-form order-price-form">
-      <div class="user-edit-fields">
-        <label>עלות בסיס (₪)<input name="baseCost" type="number" min="0" step="0.01" value="${order.baseCost ?? ""}" /></label>
-        <label>תוספת תמיכה (₪)<input name="supportAmount" type="number" min="0" step="0.01" value="${order.supportAmount ?? 0}" /></label>
-        <label>סכום סופי (₪)<input name="finalAmount" type="number" min="0" step="0.01" value="${order.finalAmount ?? ""}" /></label>
-        <label class="checkbox-label"><input name="requiresUserPriceApproval" type="checkbox" style="width:auto" ${order.requiresUserPriceApproval ? "checked" : ""} /> נדרש אישור מחיר מהלקוח</label>
-        <label>הערות מנהל (פנימי)<textarea name="adminNotes" rows="2">${escapeHtml(order.adminNotes ?? "")}</textarea></label>
-      </div>
-      <div class="user-edit-actions">
-        <button class="primary-button btn-sm" type="submit">שמירה</button>
-      </div>
-    </form>
-  `;
+  form.elements.baseCost.value    = order.baseCost ?? "";
+  form.elements.supportAmount.value = order.supportAmount ?? 0;
+  form.elements.finalAmount.value = order.finalAmount ?? "";
+  form.elements.requiresUserPriceApproval.checked = Boolean(order.requiresUserPriceApproval);
+  form.elements.adminNotes.value  = order.adminNotes ?? "";
+  form.elements.marginPercent.value = order.marginPercent == null ? "" : order.marginPercent * 100;
+  form.elements.internal.checked = Boolean(order.internal);
+  form.elements.wastedGrams.value = order.wastedGrams ?? 0;
+  form.elements.wastedHours.value = order.wastedHours ?? 0;
 
-  cell.querySelector("form").addEventListener("submit", async (e) => {
+  form.onsubmit = async (e) => {
     e.preventDefault();
-    const fd = new FormData(e.target);
+    const fd = new FormData(form);
     const payload = {
       baseCost: fd.get("baseCost") === "" ? null : Number(fd.get("baseCost")),
       supportAmount: Number(fd.get("supportAmount")) || 0,
       finalAmount: fd.get("finalAmount") === "" ? null : Number(fd.get("finalAmount")),
       adminNotes: String(fd.get("adminNotes") ?? "").trim(),
       requiresUserPriceApproval: fd.get("requiresUserPriceApproval") !== null,
+      marginPercent: fd.get("marginPercent") === "" ? null : Number(fd.get("marginPercent")) / 100,
+      internal: fd.get("internal") !== null,
+      wastedGrams: Number(fd.get("wastedGrams")) || 0,
+      wastedHours: Number(fd.get("wastedHours")) || 0,
     };
     try {
       const updated = await api(`/api/orders?id=${encodeURIComponent(order.id)}`, {
@@ -330,42 +426,82 @@ function buildOrderDetailRow(order) {
       });
       Object.assign(order, updated);
       render();
+      dialog.close();
     } catch (err) {
       alert(`שגיאה בשמירת פרטי הזמנה: ${err.message}`);
     }
-  });
+  };
 
-  detailRow.append(cell);
-  return detailRow;
+  const cancelSection    = document.querySelector("#order-drawer-cancel-section");
+  const cancelToggle     = document.querySelector("#order-drawer-cancel-toggle");
+  const cancelForm       = document.querySelector("#order-cancel-form");
+  const cancelReasonInput = document.querySelector("#order-cancel-reason");
+  const cancelConfirmBtn = document.querySelector("#order-cancel-confirm");
+  const cancelAbortBtn   = document.querySelector("#order-cancel-abort");
+
+  const canCancel = !PAST_STATUSES.has(order.status);
+  cancelSection.hidden = !canCancel;
+  cancelForm.hidden = !opts.focusCancel;
+  cancelReasonInput.value = "";
+
+  cancelToggle.onclick = () => { cancelForm.hidden = false; cancelReasonInput.focus(); };
+  cancelAbortBtn.onclick = () => { cancelForm.hidden = true; };
+  cancelConfirmBtn.onclick = async () => {
+    const reason = cancelReasonInput.value.trim();
+    if (!reason) { cancelReasonInput.focus(); return; }
+    const ok = await setOrderStatus(order, "cancelled", reason);
+    if (ok) dialog.close();
+  };
+
+  if (typeof dialog.showModal === "function") dialog.showModal();
 }
 
 function renderOrders() {
-  const ordersTable     = document.querySelector("#orders-table");
-  const pastOrdersTable = document.querySelector("#past-orders-table");
-  if (!ordersTable) return;
+  const groupsContainer = document.querySelector("#orders-groups");
+  if (!groupsContainer) return;
 
-  const openOrders = store.orders.filter((o) => !PAST_STATUSES.has(o.status));
-  const pastOrders = store.orders.filter((o) => PAST_STATUSES.has(o.status));
+  const filtered = store.orders.filter(matchesOrderFilter);
 
-  // Badge on the orders tab for unreviewed (new) orders
   const newOrdersBadge = document.querySelector("#new-orders-badge");
   if (newOrdersBadge) {
-    const count = openOrders.filter((o) => o.status === "new").length;
+    const count = store.orders.filter((o) => o.status === "new").length;
     newOrdersBadge.textContent = count || "";
     newOrdersBadge.hidden = count === 0;
   }
 
-  ordersTable.replaceChildren();
-  document.querySelector("#orders-empty")
-    ?.classList.toggle("is-visible", openOrders.length === 0);
-  openOrders.forEach((order) => ordersTable.append(...buildOrderRow(order)));
+  groupsContainer.replaceChildren();
+  document.querySelector("#orders-empty")?.classList.toggle("is-visible", filtered.length === 0);
 
-  if (pastOrdersTable) {
-    pastOrdersTable.replaceChildren();
-    document.querySelector("#past-orders-empty")
-      ?.classList.toggle("is-visible", pastOrders.length === 0);
-    pastOrders.forEach((order) => pastOrdersTable.append(...buildOrderRow(order)));
-  }
+  ORDER_STATUS_SEQUENCE.forEach((status) => {
+    const ordersInGroup = filtered.filter((o) => o.status === status);
+    if (ordersInGroup.length === 0) return;
+
+    const group = document.createElement("section");
+    group.className = "order-status-group";
+    const isCollapsedByDefault = PAST_STATUSES.has(status);
+
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "order-status-group-header";
+    header.innerHTML = `
+      <span>${escapeHtml(STATUS_LABELS[status] ?? status)}</span>
+      <span class="order-status-group-count">${ordersInGroup.length}</span>
+    `;
+
+    const list = document.createElement("div");
+    list.className = "order-status-group-list";
+    list.hidden = isCollapsedByDefault;
+    header.classList.toggle("is-collapsed", isCollapsedByDefault);
+    header.addEventListener("click", () => {
+      list.hidden = !list.hidden;
+      header.classList.toggle("is-collapsed", list.hidden);
+    });
+
+    ordersInGroup.forEach((order) => list.append(buildOrderCard(order)));
+
+    group.append(header, list);
+    groupsContainer.append(group);
+  });
 }
 
 // ── Items stats table (admin view) ───────────────────────────
@@ -379,11 +515,11 @@ function renderItemStats() {
     ?.classList.toggle("is-visible", store.products.length === 0);
 
   store.products.forEach((product) => {
-    const orders    = store.orders.filter((o) => o.productId === product.id);
+    const orders    = store.orders.filter((o) => o.productId === product.id && o.status !== "cancelled");
     const completed = orders.filter((o) => o.status === "completed").length;
-    const revenue   = orders.reduce((s, o) => s + o.price, 0);
-    const cogs      = orders.reduce((s, o) => s + Number(product.cost) * o.quantity, 0);
-    const profit    = revenue - cogs;
+    const paidTotal   = orders.reduce((s, o) => (o.paid ? s + Number(o.finalAmount ?? o.price ?? 0) : s), 0);
+    const debtTotal   = orders.reduce((s, o) => (o.paid ? s : s + Number(o.finalAmount ?? o.price ?? 0)), 0);
+    const supportTotal = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
 
     const row = document.createElement("tr");
     row.innerHTML = `
@@ -393,9 +529,9 @@ function renderItemStats() {
       <td class="stat-cell stat-muted">${product.grams}g</td>
       <td class="stat-cell">${orders.length}</td>
       <td class="stat-cell stat-completed">${completed}</td>
-      <td class="stat-cell stat-revenue">${formatCurrency(revenue)}</td>
-      <td class="stat-cell stat-muted">${formatCurrency(cogs)}</td>
-      <td class="stat-cell ${profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(profit)}</td>
+      <td class="stat-cell stat-revenue">${formatCurrency(paidTotal)}</td>
+      <td class="stat-cell ${debtTotal > 0 ? "stat-negative" : "stat-muted"}">${formatCurrency(debtTotal)}</td>
+      <td class="stat-cell ${supportTotal >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(supportTotal)}</td>
     `;
 
     const imgCell = document.createElement("td");
@@ -419,15 +555,12 @@ function renderItemStats() {
 
 // ── Users admin view (active + pending sub-tabs) ──────────────
 
-function getUserOrderStats(userName) {
-  const orders  = store.orders.filter((o) => o.friendName === userName);
-  const revenue = orders.reduce((s, o) => s + o.price, 0);
-  const paid    = orders.reduce((s, o) => (o.paid ? s + o.price : s), 0);
-  const cogs    = orders.reduce((s, o) => {
-    const p = findProduct(o.productId);
-    return s + (p ? Number(p.cost) * o.quantity : 0);
-  }, 0);
-  return { count: orders.length, revenue, paid, debt: revenue - paid, profit: revenue - cogs };
+function getUserOrderStats(user) {
+  const orders  = ordersForUser(user).filter((o) => o.status !== "cancelled");
+  const revenue = orders.reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
+  const paid    = orders.reduce((s, o) => (o.paid ? s + Number(o.finalAmount ?? o.price ?? 0) : s), 0);
+  const support = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
+  return { count: orders.length, revenue, paid, debt: revenue - paid, support };
 }
 
 function renderUsersAdmin() {
@@ -449,7 +582,7 @@ function renderUsersAdmin() {
       ?.classList.toggle("is-visible", activeList.length === 0);
 
     activeList.forEach((user) => {
-      const stats = getUserOrderStats(user.name);
+      const stats = getUserOrderStats(user);
 
       // ── Display row ──────────────────────────────────────
       const row = document.createElement("tr");
@@ -465,7 +598,7 @@ function renderUsersAdmin() {
         <td class="stat-cell stat-revenue">${formatCurrency(stats.revenue)}</td>
         <td class="stat-cell">${formatCurrency(stats.paid)}</td>
         <td class="stat-cell ${stats.debt > 0 ? "stat-negative" : "stat-muted"}">${formatCurrency(stats.debt)}</td>
-        <td class="stat-cell ${stats.profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.profit)}</td>
+        <td class="stat-cell ${stats.support >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.support)}</td>
         <td class="actions-cell"></td>
       `;
 
@@ -503,7 +636,7 @@ function renderUsersAdmin() {
         markPaidBtn.className   = "ghost-button btn-sm";
         markPaidBtn.type        = "button";
         markPaidBtn.textContent = "סמן הכל כשולם";
-        markPaidBtn.addEventListener("click", () => markUserOrdersPaid(user.name));
+        markPaidBtn.addEventListener("click", () => markUserOrdersPaid(user));
         actionsCell.append(markPaidBtn);
       }
       actionsCell.append(editBtn, deleteBtn);
@@ -531,6 +664,7 @@ function renderUsersAdmin() {
           <div class="user-edit-fields">
             <label>שם משתמש<input name="name" value="${escapeHtml(user.name)}" required /></label>
             <label>שם מלא<input name="fullName" value="${escapeHtml(user.fullName ?? "")}" /></label>
+            <label>טלפון<input name="phone" type="tel" value="${escapeHtml(user.phone ?? "")}" placeholder="050-1234567" /></label>
             <label>מגדר<select name="gender"><option value="male">גבר</option><option value="female">אישה</option></select></label>
             <label>סיסמה חדשה (השאר ריק כדי לשמור על הקיימת)<input name="password" type="password" placeholder="סיסמה חדשה" autocomplete="new-password" /></label>
             <label>תפקיד<select name="role">${ROLE_OPTIONS}</select></label>
@@ -556,6 +690,7 @@ function renderUsersAdmin() {
         const payload = {
           name:     fd.get("name"),
           fullName: fd.get("fullName"),
+          phone:    fd.get("phone"),
           gender:   fd.get("gender"),
           role:     fd.get("role"),
           status,
@@ -606,6 +741,8 @@ function renderUsersAdmin() {
       row.innerHTML = `
         <td>${escapeHtml(user.name)}</td>
         <td>${escapeHtml(user.fullName ?? "")}</td>
+        <td>${escapeHtml(user.howYouKnowAdmin ?? "")}</td>
+        <td>${escapeHtml(user.registrationMessage ?? "")}</td>
         <td>${new Date(user.createdAt).toLocaleDateString("he-IL")}</td>
         <td class="actions-cell"></td>
       `;
@@ -628,7 +765,6 @@ function renderUsersAdmin() {
       rejectBtn.className   = "ghost-button btn-sm";
       rejectBtn.type        = "button";
       rejectBtn.textContent = "דחה";
-      rejectBtn.addEventListener("click", () => promptReject(user.id));
 
       const deleteBtn = document.createElement("button");
       deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
@@ -638,6 +774,36 @@ function renderUsersAdmin() {
 
       cell.append(whatsappBtn, approveBtn, rejectBtn, deleteBtn);
       pendingTable.append(row);
+
+      // ── Reject-reason row (replaces window.prompt) ─────────
+      const rejectRow = document.createElement("tr");
+      rejectRow.className = "user-edit-row";
+      rejectRow.hidden = true;
+      const rejectCell = document.createElement("td");
+      rejectCell.colSpan = 6;
+      rejectCell.innerHTML = `
+        <form class="user-edit-form">
+          <div class="user-edit-fields">
+            <label>סיבת הדחייה (תוצג למשתמש)<textarea name="reason" rows="2" required></textarea></label>
+          </div>
+          <div class="user-edit-actions">
+            <button class="primary-button btn-sm" type="submit">אישור דחייה</button>
+            <button class="ghost-button btn-sm" type="button" data-cancel>ביטול</button>
+          </div>
+        </form>
+      `;
+      rejectCell.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const reason = String(new FormData(e.target).get("reason") ?? "").trim();
+        if (!reason) return;
+        await updateUserStatus(user.id, "rejected", reason);
+      });
+      rejectCell.querySelector("[data-cancel]").addEventListener("click", () => {
+        rejectRow.hidden = true;
+      });
+      rejectRow.append(rejectCell);
+      rejectBtn.addEventListener("click", () => { rejectRow.hidden = !rejectRow.hidden; });
+      pendingTable.append(rejectRow);
     });
   }
 }
@@ -653,13 +819,17 @@ function renderStoreEdit() {
     ?.classList.toggle("is-visible", store.products.length === 0);
 
   store.products.forEach((product) => {
+    const orders = store.orders.filter((o) => o.productId === product.id && o.status !== "cancelled");
+    const supportTotal = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
+
     const card = document.createElement("article");
     card.className = "store-edit-card";
+    card.classList.toggle("store-edit-card--inactive", product.active === false);
+    card.classList.toggle("store-edit-card--inactive", product.inventoryAvailable === false);
 
-    // ── Image section ──────────────────────────────────────
+    // ── Image ────────────────────────────────────────────
     const imageWrap = document.createElement("div");
     imageWrap.className = "store-edit-image";
-
     if (product.image) {
       const img = document.createElement("img");
       img.src = product.image;
@@ -674,103 +844,60 @@ function renderStoreEdit() {
       imageWrap.append(placeholder);
     }
 
-    const overlay = document.createElement("div");
-    overlay.className = "store-edit-image-overlay";
-    const changeImgBtn = document.createElement("button");
-    changeImgBtn.className = "ghost-button";
-    changeImgBtn.type = "button";
-    changeImgBtn.textContent = "שנה תמונה";
-    changeImgBtn.addEventListener("click", () => {
-      const url = window.prompt("קישור לתמונה:", product.image ?? "");
-      if (url !== null) updateProduct(product.id, { image: url.trim() });
-    });
-    overlay.append(changeImgBtn);
-    imageWrap.append(overlay);
-
-    // ── Card body ──────────────────────────────────────────
+    // ── Body ─────────────────────────────────────────────
     const body = document.createElement("div");
     body.className = "store-edit-body";
+    const syncNotice = product.printSync?.status === "needs_material"
+      ? '<p class="store-edit-sync-notice">טיוטה מסנכרון 3MF — בחר פילמנט והשלם פרטים לפני פרסום.</p>'
+      : product.printSync?.status === "ready"
+        ? '<p class="store-edit-sync-notice">נתוני ההדפסה עודכנו מקובץ 3MF מקומי.</p>'
+        : '';
+    const stockNotice = product.inventoryAvailable === false
+      ? '<p class="store-edit-sync-notice">מוסתר אוטומטית מהקטלוג — הפילמנט החסר או הכמות הנדרשת אינם במלאי.</p>'
+      : '';
+    body.innerHTML = `
+      <h3 class="store-edit-name">${escapeHtml(product.name)}</h3>
+      <div class="store-edit-facts">
+        <span>${formatCurrency(product.cost)}</span>
+        <span class="stat-muted">${product.grams}g</span>
+      </div>
+      ${syncNotice}
+      ${stockNotice}
+      <div class="store-edit-live-stats">
+        <span>${orders.length} הזמנות</span>
+        <span class="${supportTotal > 0 ? "stat-positive" : "stat-muted"}">${formatCurrency(supportTotal)} תמיכה</span>
+      </div>
+    `;
 
-    const nameInput = document.createElement("input");
-    nameInput.className = "store-edit-name";
-    nameInput.value = product.name;
-    nameInput.placeholder = "שם מוצר";
-    nameInput.addEventListener("change", () => updateProduct(product.id, { name: nameInput.value.trim() }));
-    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") nameInput.blur(); });
-
-    const costRow = document.createElement("div");
-    costRow.className = "store-edit-row";
-    const costInput = document.createElement("input");
-    costInput.type = "number"; costInput.min = "0.01"; costInput.step = "0.01";
-    costInput.value = product.cost;
-    costInput.addEventListener("change", () => {
-      const val = Math.max(Number(costInput.value) || 0.01, 0.01);
-      updateProduct(product.id, { cost: val });
-    });
-    costInput.addEventListener("keydown", (e) => { if (e.key === "Enter") costInput.blur(); });
-    const costLabel = document.createElement("span");
-    costLabel.textContent = "עלות: ₪";
-    costRow.append(costLabel, costInput);
-
-    const gramsRow = document.createElement("div");
-    gramsRow.className = "store-edit-row";
-    const gramsInput = document.createElement("input");
-    gramsInput.type = "number"; gramsInput.min = "1"; gramsInput.step = "1";
-    gramsInput.value = product.grams;
-    gramsInput.addEventListener("change", () => {
-      const val = Math.max(Number(gramsInput.value) || 1, 1);
-      updateProduct(product.id, { grams: val });
-    });
-    gramsInput.addEventListener("keydown", (e) => { if (e.key === "Enter") gramsInput.blur(); });
-    const gramsLabel = document.createElement("span");
-    gramsLabel.textContent = "גרם: ";
-    gramsRow.append(gramsLabel, gramsInput);
-
-    const descInput = document.createElement("textarea");
-    descInput.className = "store-edit-desc";
-    descInput.value = product.description;
-    descInput.rows = 3;
-    descInput.placeholder = "תיאור המוצר";
-    descInput.addEventListener("change", () => updateProduct(product.id, { description: descInput.value.trim() }));
-
-    // ── Card footer ────────────────────────────────────────
+    // ── Footer ───────────────────────────────────────────
     const footer = document.createElement("div");
     footer.className = "store-edit-footer";
 
-    const stlInput = document.createElement("input");
-    stlInput.type = "url";
-    stlInput.className = "store-edit-stl";
-    stlInput.value = product.stlUrl ?? "";
-    stlInput.placeholder = "קישור STL";
-    stlInput.addEventListener("change", () => updateProduct(product.id, { stlUrl: stlInput.value.trim() }));
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "ghost-button";
-    deleteBtn.type = "button";
-    deleteBtn.textContent = "מחיקה";
-    deleteBtn.addEventListener("click", () => deleteProduct(product.id));
-
-    // Active toggle
     const activeLabel    = document.createElement("label");
     activeLabel.className = "store-edit-active-toggle";
     const activeCheckbox = document.createElement("input");
     activeCheckbox.type    = "checkbox";
     activeCheckbox.checked = product.active !== false;
+    activeCheckbox.disabled = product.inventoryAvailable === false;
     activeCheckbox.addEventListener("change", () => updateProduct(product.id, { active: activeCheckbox.checked }));
-    activeLabel.append(activeCheckbox, " פעיל");
+    activeLabel.append(activeCheckbox, " הצג בקטלוג");
 
-    // Edit-details button (wired in app.js via window.openProductEditForm)
     const editDetailsBtn = document.createElement("button");
     editDetailsBtn.className   = "ghost-button btn-sm";
     editDetailsBtn.type        = "button";
-    editDetailsBtn.textContent = "ערוך פרטים";
+    editDetailsBtn.textContent = "עריכה";
     editDetailsBtn.addEventListener("click", () => {
       if (typeof window.openProductEditForm === "function") window.openProductEditForm(product);
     });
 
-    footer.append(activeLabel, stlInput, editDetailsBtn, deleteBtn);
-    body.append(nameInput, costRow, gramsRow, descInput, footer);
-    card.classList.toggle("store-edit-card--inactive", product.active === false);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "ghost-button btn-sm user-delete-btn";
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "מחיקה";
+    deleteBtn.addEventListener("click", () => deleteProduct(product.id));
+
+    footer.append(activeLabel, editDetailsBtn, deleteBtn);
+    body.append(footer);
     card.append(imageWrap, body);
     grid.append(card);
   });
@@ -823,7 +950,14 @@ function renderCategoriesAdmin() {
     deleteBtn.textContent = "מחק";
     deleteBtn.addEventListener("click", () => deleteCategory(category));
 
-    cell.append(editBtn, toggleBtn, deleteBtn);
+    const newSpoolBtn = document.createElement("button");
+    newSpoolBtn.className = "ghost-button btn-sm"; newSpoolBtn.type = "button"; newSpoolBtn.textContent = "גליל חדש";
+    newSpoolBtn.addEventListener("click", async () => {
+      if (!f.spoolPrice || !window.confirm(`לרשום גליל חדש של ${f.name} ולהוסיף הוצאה של ${formatCurrency(f.spoolPrice)}?`)) return;
+      await api(`/api/filaments?id=${encodeURIComponent(f.id)}`, { method: "PUT", body: JSON.stringify({ newSpool: true, spoolPrice: f.spoolPrice, spoolGrams: f.spoolGrams }) });
+      await loadData(); render();
+    });
+    cell.append(editBtn, newSpoolBtn, toggleBtn, deleteBtn);
     tbody.append(row);
   });
 }
@@ -853,58 +987,180 @@ async function deleteCategory(category) {
   }
 }
 
-// ── Summary strip (admin view) ────────────────────────────────
+// ── Action queue (overview) ────────────────────────────────────
 
-function renderSummary() {
-  const summaryOrders = document.querySelector("#summary-orders");
-  const summaryDebt   = document.querySelector("#summary-debt");
-  if (!summaryOrders || !summaryDebt) return;
-
-  const openOrders = store.orders.filter((o) => !o.paid).length;
-  const totalDebt  = store.orders.reduce((sum, o) => sum + (o.paid ? 0 : o.price), 0);
-  summaryOrders.textContent = openOrders;
-  summaryDebt.textContent   = formatCurrency(totalDebt);
+function buildQueueSection(title, rows) {
+  const section = document.createElement("section");
+  section.className = "queue-section";
+  const heading = document.createElement("h3");
+  heading.textContent = `${title} (${rows.length})`;
+  section.append(heading);
+  const list = document.createElement("div");
+  list.className = "queue-rows";
+  rows.forEach((row) => list.append(row));
+  section.append(list);
+  return section;
 }
 
-// ── Overview cards (admin dashboard) ──────────────────────────
-
-const OVERVIEW_ORDER_CARDS = [
-  { key: "new",              label: "הזמנות חדשות",        filter: (o) => o.status === "new" },
-  { key: "waiting_approval", label: "ממתינות לאישור לקוח", filter: (o) => o.status === "waiting_approval" },
-  { key: "waiting_print",    label: "ממתינות להדפסה",      filter: (o) => o.status === "waiting_print" },
-  { key: "printing",         label: "בהדפסה עכשיו",        filter: (o) => o.status === "printing" },
-  { key: "ready_delivery",   label: "מוכנות למסירה",       filter: (o) => o.status === "ready_delivery" },
-  { key: "unpaid",           label: "הזמנות לא שולמו",     filter: (o) => !o.paid && o.status !== "cancelled" },
-];
-
-function renderOverview() {
-  const grid = document.querySelector("#overview-grid");
-  if (!grid) return;
-
-  grid.replaceChildren();
-
-  OVERVIEW_ORDER_CARDS.forEach(({ key, label, filter }) => {
-    const count = store.orders.filter(filter).length;
-    grid.append(buildOverviewCard(key, label, count, () => setView("orders")));
-  });
-
-  const pendingUsers = store.users.filter((u) => u.status === "pending").length;
-  grid.append(buildOverviewCard("pending-users", "משתמשים ממתינים לאישור", pendingUsers, () => {
-    setView("users");
-    document.querySelector('.sub-tab[data-sub="pending-users"]')?.click();
-  }));
-}
-
-function buildOverviewCard(key, label, count, onClick) {
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = `overview-card overview-card-${key}${count > 0 ? " has-count" : ""}`;
-  card.innerHTML = `
-    <span class="overview-card-count">${count}</span>
-    <span class="overview-card-label">${label}</span>
+function buildQueueRow(title, subtitle, actions) {
+  const row = document.createElement("div");
+  row.className = "queue-row";
+  row.innerHTML = `
+    <div class="queue-row-info">
+      <strong>${escapeHtml(title)}</strong>
+      ${subtitle ? `<span class="queue-row-subtitle">${escapeHtml(subtitle)}</span>` : ""}
+    </div>
+    <div class="queue-row-actions"></div>
   `;
-  card.addEventListener("click", onClick);
-  return card;
+  const actionsEl = row.querySelector(".queue-row-actions");
+  actions.forEach((a) => actionsEl.append(a));
+  return row;
+}
+
+function renderActionQueue() {
+  const container = document.querySelector("#action-queue");
+  if (!container) return;
+  container.replaceChildren();
+
+  const sections = [];
+
+  // ── Pending registrations ────────────────────────────────
+  const pendingUsers = store.users.filter((u) => u.status === "pending");
+  if (pendingUsers.length > 0) {
+    const rows = pendingUsers.map((user) => {
+      const bits = [user.howYouKnowAdmin, user.registrationMessage].filter(Boolean).join(" · ");
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "primary-button btn-sm";
+      approveBtn.type = "button";
+      approveBtn.textContent = "אשר";
+      approveBtn.addEventListener("click", () => updateUserStatus(user.id, "active"));
+
+      const jumpBtn = document.createElement("button");
+      jumpBtn.className = "ghost-button btn-sm";
+      jumpBtn.type = "button";
+      jumpBtn.textContent = "פרטים";
+      jumpBtn.addEventListener("click", () => {
+        setView("users");
+        document.querySelector('.sub-tab[data-sub="pending-users"]')?.click();
+      });
+
+      return buildQueueRow(`${user.fullName || user.name}`, bits, [
+        approveBtn,
+        jumpBtn,
+        createWhatsAppLink({
+          phone: user.phone,
+          message: whatsappTemplates.general(user.fullName || user.name),
+          label: "וואטסאפ",
+          className: "btn-sm",
+        }),
+      ]);
+    });
+    sections.push(buildQueueSection("הרשמות ממתינות", rows));
+  }
+
+  // ── New orders ────────────────────────────────────────────
+  const newOrders = store.orders.filter((o) => o.status === "new");
+  if (newOrders.length > 0) {
+    const rows = newOrders.map((order) => {
+      const product = findProduct(order.productId);
+      const promoteBtn = document.createElement("button");
+      promoteBtn.className = "primary-button btn-sm";
+      promoteBtn.type = "button";
+      promoteBtn.textContent = "קדם";
+      promoteBtn.addEventListener("click", () => setOrderStatus(order, nextOrderStatus(order.status)));
+      const detailsBtn = document.createElement("button");
+      detailsBtn.className = "ghost-button btn-sm";
+      detailsBtn.type = "button";
+      detailsBtn.textContent = "פרטים";
+      detailsBtn.addEventListener("click", () => openOrderDrawer(order));
+      return buildQueueRow(
+        `${order.friendName} · ${product?.name || order.requestDescription || "בקשה מיוחדת"}`,
+        `כמות ${order.quantity} · ${formatCurrency(Number(order.finalAmount ?? order.price))}`,
+        [promoteBtn, detailsBtn]
+      );
+    });
+    sections.push(buildQueueSection("הזמנות חדשות", rows));
+  }
+
+  // ── Waiting for price approval ───────────────────────────
+  const waitingApproval = store.orders.filter((o) => o.status === "waiting_approval");
+  if (waitingApproval.length > 0) {
+    const rows = waitingApproval.map((order) => {
+      const product = findProduct(order.productId);
+      const detailsBtn = document.createElement("button");
+      detailsBtn.className = "ghost-button btn-sm";
+      detailsBtn.type = "button";
+      detailsBtn.textContent = "פרטים";
+      detailsBtn.addEventListener("click", () => openOrderDrawer(order));
+      return buildQueueRow(
+        `${order.friendName} · ${product?.name || order.requestDescription || "בקשה מיוחדת"}`,
+        formatCurrency(Number(order.finalAmount ?? order.price)),
+        [detailsBtn]
+      );
+    });
+    sections.push(buildQueueSection("ממתינות לאישור מחיר", rows));
+  }
+
+  // ── Ready for delivery ────────────────────────────────────
+  const readyForDelivery = store.orders.filter((o) => o.status === "ready_delivery");
+  if (readyForDelivery.length > 0) {
+    const rows = readyForDelivery.map((order) => {
+      const product = findProduct(order.productId);
+      const user = findOrderUser(order);
+      return buildQueueRow(
+        `${order.friendName} · ${product?.name || order.requestDescription || "בקשה מיוחדת"}`,
+        "",
+        [createWhatsAppLink({
+          phone: user?.phone,
+          message: whatsappTemplates.delivery({ name: user?.fullName || order.friendName }),
+          label: "תיאום מסירה",
+          className: "btn-sm",
+        })]
+      );
+    });
+    sections.push(buildQueueSection("מוכנות למסירה", rows));
+  }
+
+  // ── Open debt ─────────────────────────────────────────────
+  const debtors = store.users
+    .map((user) => ({ user, stats: getUserOrderStats(user) }))
+    .filter(({ stats }) => stats.debt > 0);
+  if (debtors.length > 0) {
+    const rows = debtors.map(({ user, stats }) => {
+      const markPaidBtn = document.createElement("button");
+      markPaidBtn.className = "ghost-button btn-sm";
+      markPaidBtn.type = "button";
+      markPaidBtn.textContent = "סמן הכל כשולם";
+      markPaidBtn.addEventListener("click", () => markUserOrdersPaid(user));
+      return buildQueueRow(user.fullName || user.name, formatCurrency(stats.debt), [
+        markPaidBtn,
+        createWhatsAppLink({
+          phone: user.phone,
+          message: whatsappTemplates.paymentSummary({ name: user.fullName || user.name, amount: stats.debt.toFixed(2) }),
+          label: "סיכום תשלום",
+          className: "btn-sm",
+        }),
+      ]);
+    });
+    sections.push(buildQueueSection("חוב פתוח", rows));
+  }
+
+  if (sections.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state is-visible";
+    empty.textContent = "הכל מטופל כרגע. אין פעולות ממתינות.";
+    container.append(empty);
+  } else {
+    sections.forEach((s) => container.append(s));
+  }
+
+  // ── This month, quietly ───────────────────────────────────
+  const s = computeFinanceSummary();
+  const monthLine = document.createElement("p");
+  monthLine.className = "queue-month-line";
+  monthLine.textContent =
+    `החודש: ${formatCurrency(s.monthIncome)} נכנס · ${formatCurrency(s.monthExpenses)} יצא · יתרה ${formatCurrency(s.monthBalance)}`;
+  container.append(monthLine);
 }
 
 // ── Finance / expenses (admin view) ───────────────────────────
@@ -929,8 +1185,11 @@ function computeFinanceSummary() {
   const totalExpenses = store.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const reinvestmentBalance = paidIncome - totalExpenses;
 
+  // Income is counted the month money actually arrived (paidAt), not the
+  // month the order was opened — an order placed in May and paid in July
+  // must land in July's figures.
   const monthIncome = paidOrders
-    .filter((o) => isSameMonth(o.createdAt, now))
+    .filter((o) => isSameMonth(o.paidAt, now))
     .reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
   const monthExpenses = store.expenses
     .filter((e) => isSameMonth(e.expenseDate, now))
@@ -961,29 +1220,16 @@ function renderFinanceCards(containerId, cards) {
   cards.forEach(({ label, value, tone }) => grid.append(buildFinanceCard(label, value, tone)));
 }
 
-function renderFinanceOverview() {
-  if (!document.querySelector("#finance-overview-grid")) return;
-  const s = computeFinanceSummary();
-  renderFinanceCards("finance-overview-grid", [
-    { label: "הכנסות החודש (ששולמו)", value: s.monthIncome, tone: "positive" },
-    { label: "הוצאות החודש", value: s.monthExpenses, tone: "negative" },
-    { label: "חוב לא שולם (סה״כ)", value: s.unpaidTotal, tone: s.unpaidTotal > 0 ? "negative" : undefined },
-    { label: "יתרת השקעה חוזרת (משוערת)", value: s.reinvestmentBalance, tone: s.reinvestmentBalance >= 0 ? "positive" : "negative" },
-  ]);
-}
-
 function renderFinanceSummary() {
   if (!document.querySelector("#finance-summary-grid")) return;
   const s = computeFinanceSummary();
   renderFinanceCards("finance-summary-grid", [
-    { label: "הכנסות מהזמנות ששולמו (סה״כ)", value: s.paidIncome, tone: "positive" },
-    { label: "חוב לא שולם (סה״כ)", value: s.unpaidTotal, tone: s.unpaidTotal > 0 ? "negative" : undefined },
-    { label: "סה״כ תמיכה שהתקבלה", value: s.supportTotal, tone: "positive" },
-    { label: "סה״כ הוצאות", value: s.totalExpenses, tone: "negative" },
-    { label: "יתרת השקעה חוזרת (משוערת)", value: s.reinvestmentBalance, tone: s.reinvestmentBalance >= 0 ? "positive" : "negative" },
-    { label: "הכנסות החודש", value: s.monthIncome, tone: "positive" },
+    { label: "נכנס החודש", value: s.monthIncome, tone: "positive" },
     { label: "הוצאות החודש", value: s.monthExpenses, tone: "negative" },
-    { label: "יתרה משוערת החודש", value: s.monthBalance, tone: s.monthBalance >= 0 ? "positive" : "negative" },
+    { label: "יתרה החודש", value: s.monthBalance, tone: s.monthBalance >= 0 ? "positive" : "negative" },
+    { label: "חוב פתוח", value: s.unpaidTotal, tone: s.unpaidTotal > 0 ? "negative" : undefined },
+    { label: "יתרת השקעה חוזרת (משוערת)", value: s.reinvestmentBalance, tone: s.reinvestmentBalance >= 0 ? "positive" : "negative" },
+    { label: "תמיכה שהתקבלה", value: s.supportTotal, tone: "positive" },
   ]);
 }
 
@@ -1157,10 +1403,10 @@ async function deleteOrder(orderId) {
   }
 }
 
-async function markUserOrdersPaid(friendName) {
-  const orderIds = store.orders.filter((o) => o.friendName === friendName && !o.paid).map((o) => o.id);
+async function markUserOrdersPaid(user) {
+  const orderIds = ordersForUser(user).filter((o) => !o.paid).map((o) => o.id);
   if (orderIds.length === 0) return;
-  if (!window.confirm(`לסמן ${orderIds.length} הזמנות של ${friendName} כשולמו?`)) return;
+  if (!window.confirm(`לסמן ${orderIds.length} הזמנות של ${user.fullName || user.name} כשולמו?`)) return;
   try {
     const { orders: updated } = await api(`/api/orders?action=mark-paid`, {
       method: "PUT",
@@ -1203,12 +1449,6 @@ async function deleteUser(userId) {
   } catch (err) {
     alert(`שגיאה במחיקת משתמש: ${err.message}`);
   }
-}
-
-async function promptReject(userId) {
-  const reason = window.prompt("סיבת הדחייה (תוצג למשתמש):");
-  if (reason === null) return;
-  await updateUserStatus(userId, "rejected", reason.trim());
 }
 
 async function updateUserStatus(userId, status, rejectionReason = "") {
@@ -1376,6 +1616,10 @@ function renderFilaments() {
       <td>${escapeHtml(f.name)}</td>
       <td>${escapeHtml(f.materialType ?? '')}</td>
       <td>${formatCurrency(f.pricePerKg)}/ק״ג</td>
+      <td>${f.remainingGrams == null ? "—" : `${Math.round(f.remainingGrams)} גרם (${Math.round(f.remainingGrams / f.spoolGrams * 100)}%)`}</td>
+      <td>${f.active !== false
+        ? '<span class="status-badge status-active">פעיל</span>'
+        : '<span class="status-badge status-inactive">מושבת</span>'}</td>
       <td class="actions-cell"></td>
     `;
 
@@ -1387,15 +1631,35 @@ function renderFilaments() {
     editBtn.textContent = "ערוך";
     editBtn.addEventListener("click", () => openFilamentEditForm(f));
 
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className   = "ghost-button btn-sm";
+    toggleBtn.type        = "button";
+    toggleBtn.textContent = f.active !== false ? "השבתה" : "הפעלה";
+    toggleBtn.addEventListener("click", () => toggleFilamentActive(f));
+
     const deleteBtn = document.createElement("button");
     deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
     deleteBtn.type        = "button";
     deleteBtn.textContent = "מחק";
     deleteBtn.addEventListener("click", () => deleteFilament(f.id));
 
-    cell.append(editBtn, " ", deleteBtn);
+    cell.append(editBtn, toggleBtn, deleteBtn);
     tbody.append(row);
   });
+}
+
+async function toggleFilamentActive(f) {
+  try {
+    const updated = await api(`/api/filaments?id=${encodeURIComponent(f.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ active: f.active === false }),
+    });
+    const idx = store.filaments.findIndex((x) => x.id === f.id);
+    if (idx !== -1) store.filaments[idx] = updated;
+    render();
+  } catch (err) {
+    alert(`שגיאה בעדכון חומר: ${err.message}`);
+  }
 }
 
 async function deleteFilament(filamentId) {
@@ -1417,7 +1681,11 @@ function openFilamentEditForm(f) {
   form.elements["materialType"].value = f.materialType ?? "PLA";
   form.elements["colorHex"].value    = f.colorHex;
   form.elements["pricePerKg"].value  = f.pricePerKg;
+  form.elements["spoolPrice"].value = f.spoolPrice ?? "";
+  form.elements["spoolGrams"].value = f.spoolGrams ?? 1000;
+  form.elements["remainingGrams"].value = f.remainingGrams ?? "";
   form.elements["note"].value        = f.note ?? "";
+  form.elements["active"].checked    = f.active !== false;
   form.hidden = false;
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -1429,13 +1697,19 @@ function renderPricingForm() {
   if (!form || !store.pricingSettings) return;
   const s = store.pricingSettings;
 
-  if (form.elements.electricityPerHour)
-    form.elements.electricityPerHour.value = s.electricityPerHour ?? "";
+  form.elements.marginPercent.value = (Number(s.marginPercent) || 0) * 100;
+  form.elements.minOrderPrice.value = Number(s.minOrderPrice) || 0;
+  const wear = (s.wearParts ?? []).filter((p) => !p.amsOnly).reduce((sum, p) => sum + Number(p.priceIls) / Number(p.lifetimeHours), 0);
+  const target = document.querySelector("#pricing-readonly-breakdown");
+  if (target) target.innerHTML = `<div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(wear)}/שעה</span></div><div class="cost-preview-row"><span>עלות מדפסת</span><span>${formatCurrency(Number(s.machine?.priceIls) / Number(s.machine?.lifeHours))}/שעה</span></div>`;
+}
 
-  ["regular", "ams", "complex"].forEach((p) => {
-    const prof = s.printProfiles?.[p] ?? {};
-    if (form.elements[`${p}_wearPerHour`])  form.elements[`${p}_wearPerHour`].value  = prof.wearPerHour  ?? "";
-    if (form.elements[`${p}_fixedWear`])    form.elements[`${p}_fixedWear`].value    = prof.fixedWear    ?? "";
-    if (form.elements[`${p}_riskPercent`])  form.elements[`${p}_riskPercent`].value  = prof.riskPercent  ?? "";
-  });
+// ── Contact settings form (admin view) ────────────────────────
+
+function renderContactSettingsForm() {
+  const form = document.querySelector("#contact-form");
+  if (!form) return;
+  const s = store.contactSettings;
+  if (form.elements.whatsappPhone) form.elements.whatsappPhone.value = s?.whatsappPhone ?? "";
+  if (form.elements.displayLabel)  form.elements.displayLabel.value  = s?.displayLabel ?? "";
 }

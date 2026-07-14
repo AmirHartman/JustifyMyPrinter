@@ -142,6 +142,21 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS production_cost NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wear_component NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS machine_component NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS margin_component NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_hours NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_profile TEXT NOT NULL DEFAULT 'regular'`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS material_grams NUMERIC(10,2)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wasted_grams NUMERIC(10,2) NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wasted_hours NUMERIC(10,2) NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS margin_percent NUMERIC(5,3)`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS internal BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_deducted BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`UPDATE orders SET paid_at = created_at WHERE paid = TRUE AND paid_at IS NULL`;
 
     // ── Extended product columns ──────────────────────────────
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT ''`;
@@ -154,6 +169,11 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS calculated_cost NUMERIC(10,2)`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS manual_price_enabled BOOLEAN DEFAULT FALSE`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS manual_price NUMERIC(10,2)`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS production_cost NUMERIC(10,2)`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS purge_grams NUMERIC(10,2) NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS risk_percent NUMERIC(4,3)`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS additional_copy_hours NUMERIC(6,2)`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS minimum_unit_price NUMERIC(10,2)`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS possible_colors JSONB NOT NULL DEFAULT '[]'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS required_colors JSONB NOT NULL DEFAULT '[]'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS requires_admin_approval BOOLEAN NOT NULL DEFAULT FALSE`;
@@ -161,6 +181,14 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS internal_print_notes TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category_ids JSONB NOT NULL DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_key TEXT`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_filename TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_checksum TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_material_grams JSONB NOT NULL DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_status TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_warnings JSONB NOT NULL DEFAULT '[]'`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_synced_at TIMESTAMPTZ`;
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS products_print_sync_key_unique ON products (print_sync_key) WHERE print_sync_key IS NOT NULL`;
 
     // ── Categories table (dynamic, admin-managed) ─────────────
     await sql`
@@ -206,6 +234,29 @@ module.exports = async (req, res) => {
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+    await sql`ALTER TABLE filaments ADD COLUMN IF NOT EXISTS spool_price NUMERIC(10,2)`;
+    await sql`ALTER TABLE filaments ADD COLUMN IF NOT EXISTS spool_grams INTEGER NOT NULL DEFAULT 1000`;
+    await sql`ALTER TABLE filaments ADD COLUMN IF NOT EXISTS remaining_grams NUMERIC(10,2)`;
+
+    await sql`CREATE TABLE IF NOT EXISTS owner_ledger (
+      id TEXT PRIMARY KEY, kind TEXT NOT NULL, description TEXT NOT NULL,
+      amount NUMERIC(10,2) NOT NULL, occurred_at DATE NOT NULL DEFAULT CURRENT_DATE,
+      order_id TEXT, expense_id TEXT, notes TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW()
+    )`;
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS owner_ledger_order_kind_idx ON owner_ledger(order_id, kind) WHERE order_id IS NOT NULL`;
+    await sql`CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, target_amount NUMERIC(10,2) NOT NULL,
+      saved NUMERIC(10,2) NOT NULL DEFAULT 0, achieved_at TIMESTAMPTZ,
+      sort_order INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS maintenance_events (
+      id TEXT PRIMARY KEY, part_id TEXT NOT NULL, event_type TEXT NOT NULL DEFAULT 'replace',
+      hours_at_event NUMERIC(10,2) NOT NULL, performed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expense_id TEXT, notes TEXT NOT NULL DEFAULT ''
+    )`;
+    await sql`INSERT INTO owner_ledger (id, kind, description, amount)
+      VALUES ('initial-printer-investment', 'investment', 'מדפסת Bambu Lab P2S', 4300)
+      ON CONFLICT (id) DO NOTHING`;
 
     const SEED_FILAMENTS = [
       { id: 'filament-black-pla', name: 'שחור PLA',  materialType: 'PLA', colorHex: '#111111', pricePerKg: 80 },
@@ -243,20 +294,17 @@ module.exports = async (req, res) => {
       )
     `;
 
-    const DEFAULT_PRICING = {
-      electricityPerHour: 0.13,
-      roundingMode: 'ceil',
-      printProfiles: {
-        regular: { label: 'רגיל',               wearPerHour: 1.5, fixedWear: 2, riskPercent: 0.12 },
-        ams:     { label: 'AMS / ריבוי צבעים',  wearPerHour: 2.0, fixedWear: 3, riskPercent: 0.15 },
-        complex: { label: 'הדפסה מורכבת',        wearPerHour: 2.5, fixedWear: 5, riskPercent: 0.20 },
-      },
-    };
+    const DEFAULT_PRICING = { marginPercent: 0.50, minOrderPrice: 5, roundingMode: 'ceil' };
     await sql`
       INSERT INTO settings (key, value)
       VALUES ('pricing', ${JSON.stringify(DEFAULT_PRICING)})
       ON CONFLICT (key) DO NOTHING
     `;
+    await sql`UPDATE settings SET value = jsonb_build_object(
+      'marginPercent', COALESCE(value->'marginPercent', '0.5'::jsonb),
+      'minOrderPrice', COALESCE(value->'minOrderPrice', value->'minPrice', '5'::jsonb),
+      'roundingMode', '"ceil"'::jsonb
+    ) WHERE key = 'pricing'`;
 
     let adminCreated = false;
     if (canBootstrapAdmin) {

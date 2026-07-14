@@ -1,0 +1,33 @@
+{
+  "electricityPricePerKwh": 0.6432,
+  "machine": { "priceIls": 4300, "lifeHours": 5000 },
+  "wearParts": [
+    { "id": "hotend", "name": "הוטאנד ונחיר", "priceIls": 84, "lifetimeHours": 800, "amsOnly": false, "kind": "part" },
+    { "id": "build_plate", "name": "משטח הדפסה", "priceIls": 143, "lifetimeHours": 1200, "amsOnly": false, "kind": "part" },
+    { "id": "air_filter", "name": "מסנן אוויר", "priceIls": 76, "lifetimeHours": 1000, "amsOnly": false, "kind": "part" },
+    { "id": "aux_fan", "name": "מאוורר צינון עזר", "priceIls": 168, "lifetimeHours": 3000, "amsOnly": false, "kind": "part" },
+    { "id": "extruder_gears", "name": "גלגלי שיניים אקסטרודר", "priceIls": 109, "lifetimeHours": 2500, "amsOnly": false, "kind": "part" },
+    { "id": "filament_buffer", "name": "Filament buffer", "priceIls": 168, "lifetimeHours": 5000, "amsOnly": false, "kind": "part" },
+    { "id": "filament_cutter", "name": "להב חותך פילמנט", "priceIls": 21, "lifetimeHours": 800, "amsOnly": false, "kind": "part" },
+    { "id": "hotend_fan", "name": "מאוורר הוטאנד", "priceIls": 71, "lifetimeHours": 3000, "amsOnly": false, "kind": "part" },
+    { "id": "xy_belt", "name": "רצועת XY", "priceIls": 71, "lifetimeHours": 3000, "amsOnly": false, "kind": "part" },
+    { "id": "filament_sensor", "name": "חיישן פילמנט", "priceIls": 71, "lifetimeHours": 5000, "amsOnly": false, "kind": "part" },
+    { "id": "eddy_sensor", "name": "חיישן Eddy", "priceIls": 55, "lifetimeHours": 5000, "amsOnly": false, "kind": "part" },
+    { "id": "ams_parts", "name": "חלקי AMS", "priceIls": 126, "lifetimeHours": 3000, "amsOnly": true, "kind": "part" },
+    { "id": "ipa", "name": "IPA לניקוי", "priceIls": 45, "lifetimeHours": 1000, "amsOnly": false, "kind": "accessory" },
+    { "id": "lubricants", "name": "שמן וגריז", "priceIls": 50, "lifetimeHours": 1500, "amsOnly": false, "kind": "accessory" },
+    { "id": "cleaning_kit", "name": "ערכת ניקוי", "priceIls": 49, "lifetimeHours": 2000, "amsOnly": false, "kind": "accessory" },
+    { "id": "glue", "name": "דבק למשטח", "priceIls": 24, "lifetimeHours": 1000, "amsOnly": false, "kind": "accessory" },
+    { "id": "wipes", "name": "מטליות ניקוי", "priceIls": 20, "lifetimeHours": 1000, "amsOnly": false, "kind": "accessory" }
+  ],
+  "maintenanceTasks": [
+    { "id": "clean_plate", "name": "ניקוי יסודי למשטח", "everyHours": 100, "everyDays": 30 },
+    { "id": "lubricate_xy", "name": "שימון צירי XY", "everyHours": 300, "everyDays": 90 },
+    { "id": "service_z", "name": "טיפול בציר Z", "everyHours": 500, "everyDays": 180 }
+  ],
+  "printProfiles": {
+    "regular": { "label": "רגיל", "wattsAvg": 150, "riskPercent": 0.12 },
+    "ams": { "label": "AMS / ריבוי צבעים", "wattsAvg": 160, "riskPercent": 0.15 },
+    "complex": { "label": "מורכב", "wattsAvg": 300, "riskPercent": 0.20 }
+  }
+}

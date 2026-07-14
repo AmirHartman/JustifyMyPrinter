@@ -1,5 +1,6 @@
 const { getSql } = require('./_db');
 const { parseBody, requireAdmin } = require('./_middleware');
+const { mergedSettings, editableSettings } = require('./_pricing');
 
 const ALLOWED_KEYS = ['pricing', 'contact'];
 
@@ -25,7 +26,7 @@ module.exports = async (req, res) => {
       const user = await requireAdmin(req, res);
       if (!user) return;
       if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-      return res.json(rows[0].value);
+      return res.json(mergedSettings(rows[0].value));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -36,13 +37,26 @@ module.exports = async (req, res) => {
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const value = key === 'contact' ? publicContact(body) : body;
+      let value;
+      if (key === 'contact') {
+        value = publicContact(body);
+      } else {
+        const marginPercent = Number(body.marginPercent);
+        const minOrderPrice = Number(body.minOrderPrice);
+        if (!Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 5) {
+          return res.status(400).json({ error: 'אחוז הרווח חייב להיות בין 0% ל־500%' });
+        }
+        if (!Number.isFinite(minOrderPrice) || minOrderPrice < 0) {
+          return res.status(400).json({ error: 'מחיר המינימום להזמנה חייב להיות מספר לא־שלילי' });
+        }
+        value = editableSettings({ marginPercent, minOrderPrice });
+      }
       await sql`
         INSERT INTO settings (key, value)
         VALUES (${key}, ${JSON.stringify(value)})
         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
       `;
-      return res.json(value);
+      return res.json(key === 'pricing' ? mergedSettings(value) : value);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

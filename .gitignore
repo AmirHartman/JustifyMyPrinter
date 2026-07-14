@@ -8,3 +8,8 @@ public/
 .DS_Store
 Thumbs.db
 .vercel/
+
+# Local sliced print files and their machine-specific mapping stay off-server.
+print-files/*.3mf
+print-files/*.3MF
+print-files/manifest.json

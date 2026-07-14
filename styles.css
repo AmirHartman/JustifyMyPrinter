@@ -652,6 +652,30 @@ body[data-mode="friend"] .admin-tabs {
 .status-badge.status-pending  { background: #fdf3d0; color: #8a6000; }
 .status-badge.status-active   { background: #d4f0ee; color: var(--teal-dark); }
 .status-badge.status-inactive { background: #e8e8e8; color: var(--muted); }
+
+.product-advanced-settings {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.product-advanced-settings summary { cursor: pointer; font-weight: 700; }
+.product-advanced-settings__content { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+
+.store-edit-sync-notice {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.product-import-summary {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
 .status-badge.status-rejected { background: #fde8e8; color: var(--danger); }
 
 /* ============================================================
@@ -2480,3 +2504,446 @@ body[data-page="app"]      .global-tab[data-tab="admin"] {
 @media (max-width: 480px) {
   .global-tab { padding: 10px 12px; }
 }
+
+/* ============================================================
+   ADMIN REDESIGN — action queue, order cards, side drawers,
+   filter bar, and responsive (card-mode) admin tables.
+   ============================================================ */
+
+/* .product-form { display: grid } ties [hidden]'s UA display:none at
+   equal specificity; author origin wins the tie, so the inline
+   category/filament/expense forms never actually hid. Break the tie. */
+.product-form[hidden],
+.order-cancel-form[hidden] {
+  display: none;
+}
+
+/* ── Section sub-heading (inside a sub-view, smaller than the
+   top-level section-heading) ─────────────────────────────── */
+.section-heading--sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-heading--sub p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.form-hint {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  background: var(--soft);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.danger-button {
+  background: var(--danger);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.danger-button:hover { background: #9a3236; }
+
+/* ── Store-edit card: read-only facts + live numbers ──────── */
+.store-edit-name { margin: 0; }
+.store-edit-facts {
+  display: flex;
+  gap: 10px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.store-edit-live-stats {
+  display: flex;
+  gap: 10px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* ── Action queue (overview) ──────────────────────────────── */
+.action-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.queue-section h3 {
+  font-size: var(--text-md);
+  margin: 0 0 8px;
+}
+
+.queue-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.queue-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.queue-row-subtitle {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.queue-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.queue-month-line {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+/* ── Orders: filter bar ───────────────────────────────────── */
+.orders-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.orders-filter-bar input[type="search"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.filter-chip:hover { border-color: var(--teal); }
+.filter-chip.is-active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+/* ── Orders: status groups ────────────────────────────────── */
+.orders-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.order-status-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.order-status-group-count {
+  background: var(--teal);
+  color: #fff;
+  border-radius: 999px;
+  min-width: 22px;
+  padding: 1px 7px;
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.order-status-group-header.is-collapsed { opacity: 0.75; }
+
+.order-status-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* ── Order card ────────────────────────────────────────────── */
+.order-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.order-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.order-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.order-card-product {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.order-card-amount {
+  font-weight: 700;
+  font-size: var(--text-lg);
+  white-space: nowrap;
+}
+
+.order-card-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.order-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.order-status-jump {
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: var(--text-sm);
+  max-width: 160px;
+}
+
+.order-detail-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-sm);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.order-drawer-cancel {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.order-cancel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.order-cancel-form textarea { width: 100%; }
+
+/* ── Side drawers (product / order) ───────────────────────── */
+dialog.side-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  margin: 0;
+  width: min(480px, 100%);
+  max-width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  padding: 0;
+}
+
+dialog.side-drawer[open] {
+  display: flex;
+}
+
+.side-drawer-inner {
+  padding: 20px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.side-drawer-inner h2 {
+  font-size: var(--text-xl);
+  margin: 0 0 14px;
+  padding-left: 36px;
+}
+
+.side-drawer .close-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+
+.side-drawer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+@media (max-width: 700px) {
+  dialog.side-drawer {
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 92vh;
+    max-height: 92vh;
+    border-radius: 14px 14px 0 0;
+  }
+}
+
+/* ── Responsive admin tables → cards ──────────────────────── */
+@media (max-width: 700px) {
+  .admin-responsive-table thead { display: none; }
+  .admin-responsive-table,
+  .admin-responsive-table tbody,
+  .admin-responsive-table tr,
+  .admin-responsive-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  /* The block-display rule above outranks [hidden] by specificity
+     (type+class vs. attribute alone), so it would force-show hidden
+     edit rows. Restore hiding explicitly. */
+  .admin-responsive-table tr[hidden] {
+    display: none;
+  }
+  .admin-responsive-table tr {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    background: var(--surface);
+  }
+  .admin-responsive-table tr.user-edit-row {
+    border: 0;
+    padding: 0;
+    margin-bottom: 10px;
+    background: transparent;
+  }
+  .admin-responsive-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 2px;
+    border: 0;
+    text-align: right;
+  }
+  .admin-responsive-table td:empty,
+  .admin-responsive-table td:has(> .product-thumb):not(:has(img)) {
+    display: none;
+  }
+  .admin-responsive-table td.actions-cell {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    padding-top: 8px;
+  }
+  .admin-responsive-table td::before {
+    font-weight: 700;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    flex-shrink: 0;
+  }
+  .admin-responsive-table td.actions-cell::before,
+  .admin-responsive-table td:empty::before {
+    content: none;
+  }
+
+  .items-stats-table td:nth-child(1)::before { content: ""; }
+  .items-stats-table td:nth-child(2)::before { content: "מוצר"; }
+  .items-stats-table td:nth-child(3)::before { content: "מחיר"; }
+  .items-stats-table td:nth-child(4)::before { content: "גרם"; }
+  .items-stats-table td:nth-child(5)::before { content: "הזמנות"; }
+  .items-stats-table td:nth-child(6)::before { content: "הושלמו"; }
+  .items-stats-table td:nth-child(7)::before { content: "שולם"; }
+  .items-stats-table td:nth-child(8)::before { content: "חוב"; }
+  .items-stats-table td:nth-child(9)::before { content: "תמיכה"; }
+
+  .users-stats-table td:nth-child(1)::before { content: "שם משתמש"; }
+  .users-stats-table td:nth-child(2)::before { content: "שם מלא"; }
+  .users-stats-table td:nth-child(3)::before { content: "הזמנות"; }
+  .users-stats-table td:nth-child(4)::before { content: "הכנסה"; }
+  .users-stats-table td:nth-child(5)::before { content: "שולם"; }
+  .users-stats-table td:nth-child(6)::before { content: "חוב"; }
+  .users-stats-table td:nth-child(7)::before { content: "תמיכה"; }
+
+  .pending-users-table td:nth-child(1)::before { content: "שם משתמש"; }
+  .pending-users-table td:nth-child(2)::before { content: "שם מלא"; }
+  .pending-users-table td:nth-child(3)::before { content: "איך הכיר"; }
+  .pending-users-table td:nth-child(4)::before { content: "הודעה"; }
+  .pending-users-table td:nth-child(5)::before { content: "תאריך הרשמה"; }
+
+  .categories-table td:nth-child(1)::before { content: "שם"; }
+  .categories-table td:nth-child(2)::before { content: "תיאור"; }
+  .categories-table td:nth-child(3)::before { content: "סדר"; }
+  .categories-table td:nth-child(4)::before { content: "סטטוס"; }
+
+  .filaments-table td:nth-child(2)::before { content: "שם"; }
+  .filaments-table td:nth-child(3)::before { content: "סוג"; }
+  .filaments-table td:nth-child(4)::before { content: "מחיר לק״ג"; }
+  .filaments-table td:nth-child(5)::before { content: "סטטוס"; }
+
+  .expenses-table td:nth-child(1)::before { content: "תאריך"; }
+  .expenses-table td:nth-child(2)::before { content: "תיאור"; }
+  .expenses-table td:nth-child(3)::before { content: "קטגוריה"; }
+  .expenses-table td:nth-child(4)::before { content: "סכום"; }
+  .expenses-table td:nth-child(5)::before { content: "הערה"; }
+}
+.business-list { display: grid; gap: .65rem; margin-block: .75rem 1.5rem; }
+.business-row { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(8rem, 2fr) auto auto; gap: .75rem; align-items: center; padding: .75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.business-row progress { width: 100%; }
+@media (max-width: 640px) { .business-row { grid-template-columns: 1fr auto; } .business-row progress { grid-column: 1 / -1; } }
