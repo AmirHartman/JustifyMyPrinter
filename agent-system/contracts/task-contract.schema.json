@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://justifymyprinter.local/schemas/task-contract.schema.json",
+  "title": "Agent task contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "goal",
+    "delegationRationale",
+    "baseSha",
+    "branch",
+    "worktree",
+    "assignedRole",
+    "modelRecommendation",
+    "writeScope",
+    "readContext",
+    "invariants",
+    "dependencies",
+    "forbiddenFiles",
+    "forbiddenActions",
+    "acceptanceCriteria",
+    "requiredVerification",
+    "expectedHandoff",
+    "stopConditions"
+  ],
+  "properties": {
+    "taskId": { "type": "string", "minLength": 1 },
+    "goal": { "type": "string", "minLength": 1 },
+    "delegationRationale": { "type": "string", "minLength": 1 },
+    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "branch": { "type": "string", "minLength": 1 },
+    "worktree": { "type": "string", "minLength": 1 },
+    "assignedRole": { "type": "string", "minLength": 1 },
+    "modelRecommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability", "reasoning"],
+      "properties": {
+        "capability": { "type": "string", "minLength": 1 },
+        "reasoning": { "type": "string", "enum": ["low", "medium", "high", "xhigh"] },
+        "platformModel": { "type": ["string", "null"] }
+      }
+    },
+    "writeScope": { "$ref": "#/$defs/stringList" },
+    "readContext": { "$ref": "#/$defs/stringList" },
+    "invariants": { "$ref": "#/$defs/stringList" },
+    "dependencies": { "$ref": "#/$defs/stringList" },
+    "forbiddenFiles": { "$ref": "#/$defs/stringList" },
+    "forbiddenActions": { "$ref": "#/$defs/stringList" },
+    "acceptanceCriteria": { "$ref": "#/$defs/stringList" },
+    "requiredVerification": { "$ref": "#/$defs/stringList" },
+    "expectedHandoff": { "$ref": "#/$defs/stringList" },
+    "stopConditions": { "$ref": "#/$defs/stringList" }
+  },
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}

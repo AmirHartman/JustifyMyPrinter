@@ -1,0 +1,5 @@
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+developer_instructions = "Read agent-system/roles/frontend-rtl.md and the assigned task contract. Preserve Hebrew RTL, accessibility, mobile behavior, and existing vanilla patterns; edit only the exclusive write scope; do not spawn agents or perform Git integration."

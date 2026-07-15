@@ -1,73 +1,30 @@
-# CLAUDE.md
+# Claude Code Entry Point
 
-Repository guidance for Claude Code. Follow `AGENTS.md` for operating rules and
-`docs/PRODUCT_SPEC.md` for product requirements.
+Follow `AGENTS.md` for repository rules, `agent-system/README.md` for the shared
+multi-agent system, and `docs/PRODUCT_SPEC.md` for product intent. Current code
+is authoritative for implemented behavior. Project subagent wrappers live in
+`.claude/agents/` and point to the canonical roles under `agent-system/roles/`.
 
-## Product
+## Claude-specific routing
 
-JustifyMyPrinter (מדפסת חברים) manages a small 3D-printing service: public
-catalog browsing, friend registration and approval, ordering, manual payment
-tracking, and admin management. The product UI is Hebrew, right-to-left, and
-mobile-friendly.
+- Remain the Coordinator unless delegation has a clear specialization,
+  evidence, or independent-parallelism benefit.
+- Use the project agents only for their documented role and exclusive write
+  scope. They may not spawn agents recursively.
+- Project Mapper and Tester are read-only plan-mode roles. Tester only verifies
+  and reports; Quality Curator owns tests, task/regression state, decisions, and
+  lessons; Git Steward owns Git integration.
+- Follow the shared task-contract, handoff, context-pack, verification, and Git
+  workflows rather than duplicating them here.
 
-## Architecture
-
-```text
-Browser pages (*.html, styles.css)
-        |
-Frontend ES modules (js/)
-        |
-Express routes (server.js -> api/)
-        |
-Neon PostgreSQL
-```
-
-- The frontend is plain HTML and JavaScript with no bundler or framework.
-- `js/state.js` owns shared client state; `js/render.js` renders from it;
-  `js/app.js` boots the current page; `js/api.js` wraps HTTP requests.
-- `server.js` mounts resource handlers from `api/` and serves approved static
-  files.
-- `api/_middleware.js` contains session and authorization helpers;
-  `api/_db.js` connects to Neon; `api/init.js` defines and migrates the schema.
-- Sessions use an HttpOnly cookie. Authorization must be enforced server-side.
-- Render runs `npm start`.
-
-## Core invariants
-
-- Active catalog data is publicly browsable; ordering requires an eligible
-  authenticated account.
-- Friends may access only their own orders; administrative data and mutations
-  require admin authorization.
-- Payment is an independently tracked manual paid/unpaid state.
-- Special orders require pricing and customer approval before printing.
-- User and order states must use the canonical values in
-  `docs/PRODUCT_SPEC.md`; preserve compatibility normalization where present.
-- Internal messaging is disabled. Communication uses manually opened WhatsApp
-  links with Hebrew templates.
-- Database evolution is additive and idempotent.
-
-## Development
-
-```bash
-npm install
-cp env.local.example .env.local  # configure DATABASE_URL locally
-npm run dev                       # http://localhost:3000
-npm run build                     # optional static-export check
-```
-
-Initialize a fresh database with `POST /api/init`. Production initialization is
-protected by `INIT_SECRET`. Never print or commit credentials.
-
-There is no automated test suite. Inspect affected paths and run targeted
-syntax, endpoint, build, and browser checks.
+Run `npm test`, `npm run tester`, and risk-appropriate checks. Structured tester
+output is `npm run --silent tester -- --json`; optional smoke is restricted to
+an isolated literal loopback target.
 
 When the owner says "model" or "מודל", they mean the active conversational
-model, whether Claude or Codex. Any persistent change to agent behavior,
-conversation conventions, or project memory must be implemented for both
-surfaces and use a shared repository source of truth wherever possible.
+model, whether Claude or Codex. Persistent behavior or conversation conventions
+must be implemented for both platforms through the shared repository source.
 
-## Updating this guidance
-
-If this file or another AI-guidance file becomes inaccurate, explain the needed
-change and ask the owner for explicit approval before editing it. Never fold an
-AI-guidance edit into an otherwise approved task without separate confirmation.
+Edits to `AGENTS.md`, this file, `docs/AI_WORKFLOW_RULES.md`, or the root pointer
+always require explicit owner approval, separate from ordinary code or docs
+approval.

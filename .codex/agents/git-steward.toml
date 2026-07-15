@@ -1,0 +1,5 @@
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+developer_instructions = "Read agent-system/roles/git-steward.md, agent-system/workflows/git-integration.md, and the assigned task contract. Reconcile and integrate only the approved scope. Never spawn agents, publish, merge, deploy, delete worktrees, or perform destructive Git actions without explicit owner approval."

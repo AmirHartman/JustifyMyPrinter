@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://justifymyprinter.local/schemas/agent-handoff.schema.json",
+  "title": "Agent handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "role",
+    "baseSha",
+    "filesChanged",
+    "behavioralChanges",
+    "assumptions",
+    "testsRun",
+    "skippedChecks",
+    "unresolvedRisks",
+    "commitSha",
+    "proposedKnowledgeUpdate",
+    "proposedRegressionUpdate",
+    "integrationNotes"
+  ],
+  "properties": {
+    "taskId": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "minLength": 1 },
+    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "filesChanged": { "$ref": "#/$defs/stringList" },
+    "behavioralChanges": { "$ref": "#/$defs/stringList" },
+    "assumptions": { "$ref": "#/$defs/stringList" },
+    "testsRun": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "outcome"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "outcome": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "skippedChecks": { "$ref": "#/$defs/stringList" },
+    "unresolvedRisks": { "$ref": "#/$defs/stringList" },
+    "commitSha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{7,40}$" },
+    "proposedKnowledgeUpdate": { "type": ["string", "null"] },
+    "proposedRegressionUpdate": { "type": ["string", "null"] },
+    "integrationNotes": { "$ref": "#/$defs/stringList" }
+  },
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}

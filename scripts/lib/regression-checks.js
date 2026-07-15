@@ -1,44 +1,125 @@
 const fs = require('fs');
 const path = require('path');
 
-const read = (root, file) => {
+const DEFINITIONS = [
+  {
+    id: 'R1',
+    description: 'Custom-text product/order contract is fully removed outside DB compatibility columns',
+    requiredFiles: ['api/orders.js', 'api/products.js', 'js/render.js', 'docs/PRODUCT_SPEC.md'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => !/customText|custom_text/.test([
+      sources['api/orders.js'],
+      sources['api/products.js'],
+      sources['js/render.js'],
+      sources['docs/PRODUCT_SPEC.md'],
+    ].join('\n')),
+  },
+  {
+    id: 'R2',
+    description: 'Waste and completion deductions use independent retryable accounting',
+    requiredFiles: ['api/init.js', 'api/orders.js'],
+    relatedEvidence: ['T1 tests/order-inventory.test.js'],
+    evaluate: ({ sources }) => /waste_deducted_grams/.test(sources['api/init.js'])
+      && /deductOrderInventory/.test(sources['api/orders.js']),
+  },
+  {
+    id: 'R3',
+    description: 'Category rendering has no undefined filament action',
+    requiredFiles: ['js/render.js'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => !/newSpoolBtn/.test(sources['js/render.js']),
+  },
+  {
+    id: 'R4',
+    description: 'Init bypass is explicit-development only',
+    requiredFiles: ['api/_init-auth.js', 'env.local.example'],
+    relatedEvidence: ['T1 tests/init-auth.test.js'],
+    evaluate: ({ sources }) => /NODE_ENV\s*===\s*['"]development['"]/.test(sources['api/_init-auth.js'])
+      && /^NODE_ENV=development$/m.test(sources['env.local.example']),
+  },
+  {
+    id: 'R5',
+    description: 'Admin login redirects to dashboard',
+    requiredFiles: ['js/app.js'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => /result\.role\s*===\s*['"]admin['"][\s\S]{0,100}dashboard\.html/.test(sources['js/app.js']),
+  },
+  {
+    id: 'R6',
+    description: 'Goal and ledger submissions share guarded button/error handling',
+    requiredFiles: ['js/app.js'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => /submitManagedForm/.test(sources['js/app.js'])
+      && /goal-form/.test(sources['js/app.js'])
+      && /ledger-form/.test(sources['js/app.js']),
+  },
+  {
+    id: 'R7',
+    description: 'Failed is documented and treated as closed',
+    requiredFiles: ['js/render.js', 'docs/PRODUCT_SPEC.md'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => /PAST_STATUSES\s*=\s*new Set\(\[[^\]]*['"]failed['"]/.test(sources['js/render.js'])
+      && /`failed`/.test(sources['docs/PRODUCT_SPEC.md']),
+  },
+  {
+    id: 'R8',
+    description: 'Failure attempts increment only on transition into failed',
+    requiredFiles: ['api/orders.js'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => /status\s*===\s*'failed'[\s\S]{0,100}status\s*<>\s*'failed'/.test(sources['api/orders.js']),
+  },
+  {
+    id: 'R9',
+    description: 'Init repairs only missing or invalid risk levels',
+    requiredFiles: ['api/init.js'],
+    relatedEvidence: [],
+    evaluate: ({ sources }) => /risk_level IS NULL OR risk_level NOT IN/.test(sources['api/init.js'])
+      && !/risk_percent <= 0\.12|risk_percent >= 0\.20/.test(sources['api/init.js']),
+  },
+];
+
+function loadSource(root, file, overrides) {
+  if (Object.hasOwn(overrides, file)) {
+    return { exists: true, content: String(overrides[file]) };
+  }
   const full = path.join(root, file);
-  return fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
-};
-
-function checkRegressions(root = process.cwd(), overrides = {}) {
-  const source = (file) => Object.hasOwn(overrides, file) ? overrides[file] : read(root, file);
-  const orders = source('api/orders.js');
-  const products = source('api/products.js');
-  const init = source('api/init.js');
-  const app = source('js/app.js');
-  const render = source('js/render.js');
-  const spec = source('docs/PRODUCT_SPEC.md');
-  const envExample = source('env.local.example');
-
-  const checks = [
-    ['R1', !/customText|custom_text/.test([orders, products, render, spec].join('\n')),
-      'Custom-text product/order contract is fully removed outside DB compatibility columns'],
-    ['R2', /waste_deducted_grams/.test(init) && /deductOrderInventory/.test(orders),
-      'Waste and completion deductions use independent retryable accounting'],
-    ['R3', !/newSpoolBtn/.test(render), 'Category rendering has no undefined filament action'],
-    ['R4', /NODE_ENV\s*===\s*['"]development['"]/.test(source('api/_init-auth.js'))
-      && /^NODE_ENV=development$/m.test(envExample), 'Init bypass is explicit-development only'],
-    ['R5', /result\.role\s*===\s*['"]admin['"][\s\S]{0,100}dashboard\.html/.test(app),
-      'Admin login redirects to dashboard'],
-    ['R6', /submitManagedForm/.test(app)
-      && /goal-form/.test(app) && /ledger-form/.test(app),
-      'Goal and ledger submissions share guarded button/error handling'],
-    ['R7', /PAST_STATUSES\s*=\s*new Set\(\[[^\]]*['"]failed['"]/.test(render)
-      && /`failed`/.test(spec), 'Failed is documented and treated as closed'],
-    ['R8', /status\s*===\s*'failed'[\s\S]{0,100}status\s*<>\s*'failed'/.test(orders),
-      'Failure attempts increment only on transition into failed'],
-    ['R9', /risk_level IS NULL OR risk_level NOT IN/.test(init)
-      && !/risk_percent <= 0\.12|risk_percent >= 0\.20/.test(init),
-      'Init repairs only missing/invalid risk levels'],
-  ];
-
-  return checks.map(([id, passed, description]) => ({ id, passed, description }));
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+    return { exists: false, content: '' };
+  }
+  return { exists: true, content: fs.readFileSync(full, 'utf8') };
 }
 
-module.exports = { checkRegressions };
+function checkRegressions(root = process.cwd(), overrides = {}) {
+  return DEFINITIONS.map((definition) => {
+    const loaded = Object.fromEntries(definition.requiredFiles.map((file) => [
+      file,
+      loadSource(root, file, overrides),
+    ]));
+    const missingFiles = definition.requiredFiles.filter((file) => !loaded[file].exists);
+    const sources = Object.fromEntries(Object.entries(loaded).map(([file, value]) => [
+      file,
+      value.content,
+    ]));
+    let matchesContract = false;
+    if (missingFiles.length === 0) {
+      try {
+        matchesContract = Boolean(definition.evaluate({ sources }));
+      } catch {
+        matchesContract = false;
+      }
+    }
+    return {
+      id: definition.id,
+      tier: 'T2',
+      passed: missingFiles.length === 0 && matchesContract,
+      description: definition.description,
+      requiredFiles: [...definition.requiredFiles],
+      missingFiles,
+      relatedEvidence: [...definition.relatedEvidence],
+      proves: 'The required repository sources currently match this static regression contract.',
+      doesNotProve: 'Runtime reachability, database behavior, or browser behavior.',
+    };
+  });
+}
+
+module.exports = { DEFINITIONS, checkRegressions };

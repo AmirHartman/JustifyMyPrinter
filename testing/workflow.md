@@ -1,32 +1,37 @@
-# Shared tester workflow
+# Tester Operations
 
-This file is the vendor-neutral source of truth for the Claude `tester` agent
-and the Codex `tester` skill.
+The canonical role boundary is `agent-system/roles/tester.md`; evidence tiers
+are defined in `agent-system/workflows/verification-matrix.md`. This file keeps
+the repository-specific commands and quality handoff visible to both platforms.
 
 ## Run
 
-1. Read the system map, regression catalog, and task ledger.
-2. Reconcile remembered plans against current code. Memory is a candidate source;
-   repository evidence and `tasks.json` determine task state.
-3. Show verified `open` and `later` tasks as a separate reminder. Continue the
-   deterministic tests by default; reminders never alter test selection or exit status.
-4. Run `npm run tester` and report severity, evidence, and the regression summary.
-5. Use smoke mode only against `localhost`, `127.0.0.1`, or `::1`. It performs
-   read-only requests and never initializes or mutates a database.
+1. Read `testing/system-map.md`, `testing/regressions.md`,
+   `testing/test-manifest.json`, and `testing/tasks.json`.
+2. Run `npm run tester`. Use `npm run --silent tester -- --json` for bounded
+   structured output.
+3. Add `--smoke` only for an isolated server on literal `127.0.0.1` or `::1`.
+   Smoke uses credential-free, timeout-bounded, redirect-free GET requests and
+   performs no initialization or database mutation.
+4. Report executed checks and their tiers, exact failures, visible skips, proof
+   limits, and `open`/`later` task reminders separately.
 
-## Task choices
+Only an executed check failure changes exit status. Task reminders and skipped
+T3-T5 checks never do.
 
-- **Implement now:** hand the task to the active model's normal implementation
-  workflow. The tester itself does not edit product code.
-- **Later:** set `status` to `later` and continue testing.
-- **Pause:** stop the current tester conversation without changing task state.
-- **Dismiss:** set `status` to `dismissed`; preserve the fingerprint so the same
-  remembered plan is not imported again.
-- **Done:** use only after repository evidence and relevant tests prove completion.
+## Read-only Tester boundary
 
-## Adaptive learning
+Tester never edits product code, tests, this directory, task or regression
+state, system knowledge, decisions, or lessons. It may propose a reproducible
+finding with evidence in its handoff.
 
-For each new confirmed bug, add a reproducible check before marking it fixed.
-Update `regressions.md` with root cause, detection, status, and date. Update the
-system map only when architecture or a canonical contract changes. Never write
-secrets or copy unverified memory claims into the ledger.
+Quality Curator alone may:
+
+- add or change tests and regression definitions;
+- change `testing/tasks.json` state or dismissed fingerprints;
+- update `testing/regressions.md` or `testing/system-map.md`;
+- persist evidence-backed decisions or lessons.
+
+The enforced finding lifecycle is: Tester finding → Quality Curator regression
+→ specialist fix → independent Tester rerun → Quality Curator durable-status
+update. Coordinator routes implementation and resolves task choices.

@@ -1,0 +1,5 @@
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+developer_instructions = "Read agent-system/roles/orders-pricing-inventory.md and the assigned task contract. Protect order, pricing, payment, and inventory invariants; edit only the exclusive write scope; do not spawn agents or perform Git integration."

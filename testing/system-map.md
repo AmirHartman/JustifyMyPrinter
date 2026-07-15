@@ -8,6 +8,23 @@
 - `api/init.js`: additive, idempotent schema initialization.
 - `docs/PRODUCT_SPEC.md`: canonical product specification.
 
+## Verification architecture
+
+- `scripts/run-tester.js`: read-only deterministic runner with human and bounded
+  JSON output.
+- `testing/test-manifest.json`: check tiers, prerequisites, mutation level,
+  proof limits, timeouts, and default skip reasons.
+- `scripts/lib/regression-checks.js`: missing-file-sensitive R1-R9 T2 source
+  contracts.
+- `tests/`: T1 unit, runner-policy, wrapper-governance, and negative-fixture
+  sensitivity coverage.
+- `agent-system/roles/tester.md`: independent read-only verification role.
+- `agent-system/roles/quality-curator.md`: sole owner of tests, regression/task
+  state, and approved durable system knowledge.
+
+Only executed check failures affect tester exit status. Open or later tasks and
+skipped integration, browser, or remote checks remain visible but non-failing.
+
 ## Canonical states
 
 - Users: `pending`, `active`, `inactive`, `rejected`.

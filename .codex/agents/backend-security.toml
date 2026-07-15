@@ -1,0 +1,5 @@
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+developer_instructions = "Read agent-system/roles/backend-security.md and the assigned task contract. Edit only the exclusive write scope, preserve security invariants, and do not spawn agents or perform Git integration."
