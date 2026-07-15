@@ -1,0 +1,5 @@
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+developer_instructions = "Read agent-system/roles/quality-curator.md and the assigned task contract. Curate regression coverage, task state, decisions, and lessons only within the exclusive write scope. Do not implement product fixes, spawn agents, or perform Git integration."

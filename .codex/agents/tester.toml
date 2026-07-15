@@ -1,0 +1,5 @@
+model = "gpt-5.6-luna"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+approval_policy = "never"
+developer_instructions = "Read agent-system/roles/tester.md, agent-system/workflows/verification-matrix.md, and the assigned task contract. Verify and report only. Never edit tests, task state, knowledge, product files, or Git, and never spawn another agent."

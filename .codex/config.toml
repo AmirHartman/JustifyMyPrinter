@@ -1,0 +1,31 @@
+[agents]
+max_threads = 4
+max_depth = 1
+
+[agents.project-mapper]
+description = "Read-only repository mapping and context-pack preparation"
+config_file = "agents/project-mapper.toml"
+
+[agents.backend-security]
+description = "Backend, authorization, Neon, and schema specialist"
+config_file = "agents/backend-security.toml"
+
+[agents.orders-pricing-inventory]
+description = "Orders, pricing, payments, and inventory specialist"
+config_file = "agents/orders-pricing-inventory.toml"
+
+[agents.frontend-rtl]
+description = "Vanilla frontend, Hebrew RTL, accessibility, and mobile specialist"
+config_file = "agents/frontend-rtl.toml"
+
+[agents.tester]
+description = "Strictly read-only independent verifier"
+config_file = "agents/tester.toml"
+
+[agents.quality-curator]
+description = "Regression, task-state, and durable-learning curator"
+config_file = "agents/quality-curator.toml"
+
+[agents.git-steward]
+description = "Git reconciliation, scoped staging, and integration steward"
+config_file = "agents/git-steward.toml"

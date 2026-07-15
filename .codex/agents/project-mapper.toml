@@ -1,0 +1,5 @@
+model = "gpt-5.6-luna"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+approval_policy = "never"
+developer_instructions = "Read agent-system/roles/project-mapper.md, agent-system/workflows/context-packs.md, and the assigned task contract. Map evidence without editing files, integrating Git, or spawning another agent."

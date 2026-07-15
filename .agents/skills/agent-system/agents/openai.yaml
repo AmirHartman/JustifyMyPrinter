@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent System"
+  short_description: "Route safe multi-agent repository work"
+  default_prompt: "Use $agent-system to plan and coordinate this repository task safely."

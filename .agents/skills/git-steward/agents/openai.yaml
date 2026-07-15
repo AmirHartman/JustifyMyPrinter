@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Steward"
+  short_description: "Protect and integrate repository changes"
+  default_prompt: "Use $git-steward to reconcile Git state and create focused local commits."
