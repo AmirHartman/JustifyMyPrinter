@@ -35,6 +35,32 @@ const EXPENSE_CATEGORY_LABELS = {
   general:            "כללי",
 };
 
+const NO_PRICE_YET = "מחיר ייקבע לאחר בדיקה";
+
+// Ideas, external links and custom requests have no agreed price until the admin
+// quotes one. Such an order must never be shown as an amount, nor summed into
+// income or debt — it would invent money that nobody agreed to.
+function orderAmount(order) {
+  const amount = Number(order.finalAmount ?? order.price);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function orderAmountLabel(order) {
+  const amount = orderAmount(order);
+  return amount == null ? NO_PRICE_YET : formatCurrency(amount);
+}
+
+function sumOrderAmounts(orders) {
+  return orders.reduce((total, order) => total + (orderAmount(order) ?? 0), 0);
+}
+
+// The server resolves filament ids to names; fall back to the raw value only for
+// legacy rows so a friend never sees a bare uuid.
+function orderColorNames(order) {
+  const names = order.selectedColorNames?.length ? order.selectedColorNames : order.selectedColors;
+  return (names ?? []).filter(Boolean);
+}
+
 // ── Public entry point ────────────────────────────────────────
 
 export function render() {
@@ -51,6 +77,91 @@ export function render() {
   renderContactSettingsForm();
   renderExpenses();
   renderBusinessInsights();
+  renderFeedback();
+}
+
+const FEEDBACK_KIND_LABELS = { bug: "באג / תקלה", improvement: "הצעה לשיפור" };
+
+function renderFeedback() {
+  const list = document.querySelector("#feedback-list");
+  if (!list) return;
+
+  const items = store.feedback || [];
+  const badge = document.querySelector("#feedback-tab-badge");
+  if (badge) {
+    const open = items.filter((f) => f.status !== "resolved").length;
+    badge.textContent = open || "";
+    badge.hidden = open === 0;
+  }
+
+  document.querySelector("#feedback-empty")
+    ?.classList.toggle("is-visible", items.length === 0);
+
+  list.replaceChildren();
+  items.forEach((item) => {
+    const resolved = item.status === "resolved";
+    const loggedIn = Boolean(item.user_id);
+    const when = item.created_at ? new Date(item.created_at).toLocaleString("he-IL") : "";
+    const card = document.createElement("article");
+    card.className = `feedback-card${resolved ? " is-resolved" : ""}`;
+    card.innerHTML = `
+      <div class="feedback-card-head">
+        <span class="feedback-kind-badge feedback-kind-${escapeHtml(item.kind)}">${escapeHtml(FEEDBACK_KIND_LABELS[item.kind] ?? item.kind)}</span>
+        <span class="feedback-source-badge ${loggedIn ? "is-member" : "is-external"}">${loggedIn ? "משתמש מחובר" : "חיצוני / לא מחובר"}</span>
+        ${resolved ? '<span class="feedback-status-badge">טופל</span>' : ""}
+      </div>
+      <p class="feedback-message">${escapeHtml(item.message ?? "")}</p>
+      <div class="feedback-meta">
+        <span>${escapeHtml(item.name || "ללא שם")}</span>
+        ${item.phone ? `<span>${escapeHtml(item.phone)}</span>` : ""}
+        ${item.page ? `<span>עמוד: ${escapeHtml(item.page)}</span>` : ""}
+        <span>${escapeHtml(when)}</span>
+      </div>
+      <div class="feedback-actions"></div>
+    `;
+
+    const actions = card.querySelector(".feedback-actions");
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className   = "ghost-button btn-sm";
+    toggleBtn.type        = "button";
+    toggleBtn.textContent = resolved ? "החזר לפתוח" : "סמן כטופל";
+    toggleBtn.addEventListener("click", () => setFeedbackStatus(item.id, resolved ? "new" : "resolved"));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
+    deleteBtn.type        = "button";
+    deleteBtn.textContent = "מחק";
+    deleteBtn.addEventListener("click", () => deleteFeedback(item.id));
+
+    actions.append(toggleBtn, " ", deleteBtn);
+    list.append(card);
+  });
+}
+
+async function setFeedbackStatus(id, status) {
+  try {
+    await api(`/api/feedback?id=${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    });
+    const item = (store.feedback || []).find((f) => f.id === id);
+    if (item) item.status = status;
+    render();
+  } catch (err) {
+    alert(`שגיאה בעדכון הפנייה: ${err.message}`);
+  }
+}
+
+async function deleteFeedback(id) {
+  if (!window.confirm("למחוק פנייה זו? פעולה זו אינה הפיכה.")) return;
+  try {
+    await api(`/api/feedback?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    store.feedback = (store.feedback || []).filter((f) => f.id !== id);
+    render();
+  } catch (err) {
+    alert(`שגיאה במחיקת הפנייה: ${err.message}`);
+  }
 }
 
 function renderBusinessInsights() {
@@ -176,9 +287,11 @@ function renderCatalog() {
     card.querySelector("h3").textContent = product.name;
     card.querySelector("p").textContent  = product.description;
     const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
-    card.querySelector(".cost").textContent = isIdea || product.requiresAdminApproval
+    card.querySelector(".cost").textContent = isIdea
       ? "מחיר לאחר בדיקה"
-      : formatCurrency(product.cost);
+      : product.requiresAdminApproval
+        ? `מחיר משוער ${formatCurrency(product.cost)}`
+        : formatCurrency(product.cost);
     renderStlLink(card, product);
     renderProductBadges(card, product);
     renderProductFacts(card, product);
@@ -225,7 +338,7 @@ function renderCatalog() {
         const form = document.querySelector("#custom-order-form");
         if (form) {
           form.elements.requestDescription.value = `בקשה להדפסה חוזרת: ${previous.productName || "מוצר שאינו זמין עוד"}`;
-          form.elements.userNotes.value = [previous.selectedColor ? `צבע קודם: ${previous.selectedColor}` : "", previous.customText ? `טקסט קודם: ${previous.customText}` : ""].filter(Boolean).join("; ");
+          form.elements.userNotes.value = previous.selectedColor ? `צבע קודם: ${previous.selectedColor}` : "";
           form.elements.quantity.value = Math.max(Number(previous.quantity) || 1, 1);
         }
       }
@@ -254,9 +367,11 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
   document.querySelector("#product-detail-title").textContent = product.name;
   document.querySelector("#product-detail-description").textContent = product.description || "אין תיאור נוסף למוצר.";
   const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
-  document.querySelector("#product-detail-price").textContent = isIdea || product.requiresAdminApproval
+  document.querySelector("#product-detail-price").textContent = isIdea
     ? "המחיר ייקבע לאחר בדיקה"
-    : formatCurrency(product.cost);
+    : product.requiresAdminApproval
+      ? `מחיר משוער ${formatCurrency(product.cost)} — ייקבע סופית לאחר בדיקה`
+      : formatCurrency(product.cost);
 
   const facts = [];
   if (Number(product.printHours) > 0) facts.push(`זמן הדפסה משוער: כ־${product.printHours} שעות`);
@@ -277,7 +392,6 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
     item.textContent = `${option.label ?? option.name ?? option.value}${option.available === false ? " — לא זמין כרגע" : ""}`;
     colorsContainer.append(item);
   });
-  document.querySelector("#product-detail-custom-text").hidden = !product.customTextEnabled;
   const availability = document.querySelector("#product-detail-availability");
   availability.textContent = product.inventoryAvailable === false
     ? "לא זמין כרגע במלאי. אפשר לשלוח בקשה לחלופה; ההדפסה לא תתחיל ללא אישורך."
@@ -336,7 +450,7 @@ document.querySelectorAll("[data-close-product-detail]").forEach((button) => {
 
 // ── Orders (admin view): grouped cards, filter bar, drawer ────
 
-const PAST_STATUSES = new Set(["completed", "cancelled"]);
+const PAST_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const FORWARD_STATUS_SEQUENCE = ["new", "waiting_approval", "waiting_print", "printing", "ready_delivery", "completed"];
 
 let orderSearchQuery = "";
@@ -396,7 +510,8 @@ function buildOrderCard(order) {
   const user = findOrderUser(order);
   const recipientName = user?.fullName || order.friendName;
   const orderName = product?.name || order.requestDescription || "הבקשה שלך";
-  const amount = Number(order.finalAmount ?? order.price);
+  const amount = orderAmount(order);
+  const amountLabel = orderAmountLabel(order);
 
   const card = document.createElement("article");
   card.className = "order-card";
@@ -406,7 +521,7 @@ function buildOrderCard(order) {
         <strong>${escapeHtml(order.friendName)}</strong>
         <span class="order-card-product">${escapeHtml(orderName)} ×${order.quantity}</span>
       </div>
-      <div class="order-card-amount">${formatCurrency(amount)}</div>
+      <div class="order-card-amount">${escapeHtml(amountLabel)}</div>
     </div>
     <div class="order-card-badges">
       <span class="ws-status-chip ws-status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] ?? order.status)}</span>
@@ -495,7 +610,7 @@ function buildOrderCard(order) {
     className: "btn-sm",
   }));
 
-  if (Number.isFinite(amount) && amount > 0) {
+  if (amount != null) {
     actions.append(createWhatsAppLink({
       phone: user?.phone,
       message: whatsappTemplates.priceApproval({ name: recipientName, product: orderName, amount: amount.toFixed(2) }),
@@ -525,6 +640,26 @@ function buildOrderCard(order) {
   return card;
 }
 
+// Live "my cost / total cost / profit" summary inside the order drawer.
+// My cost = actual production cost (materials + electricity + wear); total cost
+// = what the friend is being charged (base cost + support); profit is the gap.
+function renderOrderCostSummary(order, form) {
+  const body = document.querySelector("#order-drawer-cost-summary-body");
+  if (!body) return;
+  const myCost = order.productionCost;
+  if (myCost == null) {
+    body.innerHTML = `<span class="form-hint">אין נתוני עלות (הזמנה ללא מוצר מהקטלוג).</span>`;
+    return;
+  }
+  const totalCost = form ? Number(form.elements.finalAmount.value) || 0 : Number(order.finalAmount) || 0;
+  const profit = totalCost - myCost;
+  body.innerHTML = `
+    <div class="cost-preview-row"><span>העלות שלי (חומרים, חשמל, בלאי)</span><span>${formatCurrency(myCost)}</span></div>
+    <div class="cost-preview-row"><span>עלות כוללת (מה שהחבר משלם)</span><span>${formatCurrency(totalCost)}</span></div>
+    <div class="cost-preview-final"><span>רווח</span><span>${formatCurrency(profit)}</span></div>
+  `;
+}
+
 // Order details / price editing / cancellation — all in one reusable drawer.
 function openOrderDrawer(order, opts = {}) {
   const dialog     = document.querySelector("#order-drawer");
@@ -539,8 +674,8 @@ function openOrderDrawer(order, opts = {}) {
   const readOnlyBits = [];
   if (order.requestDescription) readOnlyBits.push(`<div><strong>בקשה:</strong> ${escapeHtml(order.requestDescription)}</div>`);
   if (order.externalModelLink) readOnlyBits.push(`<div><strong>קישור:</strong> <a href="${escapeHtml(order.externalModelLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(order.externalModelLink)}</a></div>`);
-  if (order.selectedColors?.length) readOnlyBits.push(`<div><strong>צבעים:</strong> ${escapeHtml(order.selectedColors.join(", "))}</div>`);
-  if (order.customText) readOnlyBits.push(`<div><strong>טקסט מותאם:</strong> ${escapeHtml(order.customText)}</div>`);
+  const colorNames = orderColorNames(order);
+  if (colorNames.length) readOnlyBits.push(`<div><strong>צבעים:</strong> ${escapeHtml(colorNames.join(", "))}</div>`);
   if (order.colorAlternativeStatus && order.colorAlternativeStatus !== "none") {
     readOnlyBits.push(`<div><strong>חלופת צבע:</strong> ${escapeHtml(colorAlternativeLabel(order))}</div>`);
   }
@@ -603,6 +738,9 @@ function openOrderDrawer(order, opts = {}) {
   form.elements.internal.checked = Boolean(order.internal);
   form.elements.wastedGrams.value = order.wastedGrams ?? 0;
   form.elements.wastedHours.value = order.wastedHours ?? 0;
+
+  renderOrderCostSummary(order, form);
+  form.oninput = () => renderOrderCostSummary(order, form);
 
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -716,8 +854,8 @@ function renderItemStats() {
   store.products.forEach((product) => {
     const orders    = store.orders.filter((o) => o.productId === product.id && o.status !== "cancelled");
     const completed = orders.filter((o) => o.status === "completed").length;
-    const paidTotal   = orders.reduce((s, o) => (o.paid ? s + Number(o.finalAmount ?? o.price ?? 0) : s), 0);
-    const debtTotal   = orders.reduce((s, o) => (o.paid ? s : s + Number(o.finalAmount ?? o.price ?? 0)), 0);
+    const paidTotal   = sumOrderAmounts(orders.filter((o) => o.paid));
+    const debtTotal   = sumOrderAmounts(orders.filter((o) => !o.paid));
     const supportTotal = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
 
     const row = document.createElement("tr");
@@ -756,8 +894,8 @@ function renderItemStats() {
 
 function getUserOrderStats(user) {
   const orders  = ordersForUser(user).filter((o) => o.status !== "cancelled");
-  const revenue = orders.reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
-  const paid    = orders.reduce((s, o) => (o.paid ? s + Number(o.finalAmount ?? o.price ?? 0) : s), 0);
+  const revenue = sumOrderAmounts(orders);
+  const paid    = sumOrderAmounts(orders.filter((o) => o.paid));
   const support = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
   return { count: orders.length, revenue, paid, debt: revenue - paid, support };
 }
@@ -1143,14 +1281,7 @@ function renderCategoriesAdmin() {
     deleteBtn.textContent = "מחק";
     deleteBtn.addEventListener("click", () => deleteCategory(category));
 
-    const newSpoolBtn = document.createElement("button");
-    newSpoolBtn.className = "ghost-button btn-sm"; newSpoolBtn.type = "button"; newSpoolBtn.textContent = "גליל חדש";
-    newSpoolBtn.addEventListener("click", async () => {
-      if (!f.spoolPrice || !window.confirm(`לרשום גליל חדש של ${f.name} ולהוסיף הוצאה של ${formatCurrency(f.spoolPrice)}?`)) return;
-      await api(`/api/filaments?id=${encodeURIComponent(f.id)}`, { method: "PUT", body: JSON.stringify({ newSpool: true, spoolPrice: f.spoolPrice, spoolGrams: f.spoolGrams }) });
-      await loadData(); render();
-    });
-    cell.append(editBtn, newSpoolBtn, toggleBtn, deleteBtn);
+    cell.append(editBtn, toggleBtn, deleteBtn);
     tbody.append(row);
   });
 }
@@ -1268,7 +1399,7 @@ function renderActionQueue() {
       detailsBtn.addEventListener("click", () => openOrderDrawer(order));
       return buildQueueRow(
         `${order.friendName} · ${product?.name || order.requestDescription || "בקשה מיוחדת"}`,
-        `כמות ${order.quantity} · ${formatCurrency(Number(order.finalAmount ?? order.price))}`,
+        `כמות ${order.quantity} · ${orderAmountLabel(order)}`,
         [promoteBtn, detailsBtn]
       );
     });
@@ -1287,7 +1418,7 @@ function renderActionQueue() {
       detailsBtn.addEventListener("click", () => openOrderDrawer(order));
       return buildQueueRow(
         `${order.friendName} · ${product?.name || order.requestDescription || "בקשה מיוחדת"}`,
-        formatCurrency(Number(order.finalAmount ?? order.price)),
+        orderAmountLabel(order),
         [detailsBtn]
       );
     });
@@ -1372,8 +1503,8 @@ function computeFinanceSummary() {
   const paidOrders   = liveOrders.filter((o) => o.paid);
   const unpaidOrders = liveOrders.filter((o) => !o.paid);
 
-  const paidIncome    = paidOrders.reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
-  const unpaidTotal   = unpaidOrders.reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
+  const paidIncome    = sumOrderAmounts(paidOrders);
+  const unpaidTotal   = sumOrderAmounts(unpaidOrders);
   const supportTotal  = paidOrders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
   const totalExpenses = store.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const reinvestmentBalance = paidIncome - totalExpenses;
@@ -1383,7 +1514,7 @@ function computeFinanceSummary() {
   // must land in July's figures.
   const monthIncome = paidOrders
     .filter((o) => isSameMonth(o.paidAt, now))
-    .reduce((s, o) => s + Number(o.finalAmount ?? o.price ?? 0), 0);
+    .reduce((s, o) => s + (orderAmount(o) ?? 0), 0);
   const monthExpenses = store.expenses
     .filter((e) => isSameMonth(e.expenseDate, now))
     .reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -1713,7 +1844,13 @@ function renderWsOrderList(container, orders, emptyMsg) {
     const product = store.products.find((p) => p.id === order.productId);
     const snapshot = order.productSnapshot ?? {};
     const title = product?.name ?? snapshot.name ?? order.requestDescription ?? "בקשה מיוחדת";
-    const amount = Number(order.finalAmount ?? order.price);
+    const amount = orderAmount(order);
+    const awaitingApproval = order.requiresUserPriceApproval && !order.userApprovedPrice;
+    const amountLabel = amount == null
+      ? NO_PRICE_YET
+      : awaitingApproval
+        ? `מחיר משוער ${formatCurrency(amount)} — ממתין לאישורך`
+        : `לתשלום ${formatCurrency(amount)}`;
     const supportAmount = Number(order.supportAmount) || 0;
 
     const div = document.createElement("div");
@@ -1721,10 +1858,9 @@ function renderWsOrderList(container, orders, emptyMsg) {
     div.innerHTML = `
       <div class="ws-order-info">
         <span class="ws-order-product">${escapeHtml(title)}</span>
-        <span class="ws-order-meta">כמות ${order.quantity} · לתשלום ${formatCurrency(amount)}</span>
+        <span class="ws-order-meta">כמות ${order.quantity} · ${escapeHtml(amountLabel)}</span>
         ${supportAmount > 0 ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} פרגון — תודה! 💛</span>` : ""}
-        ${order.selectedColors?.length ? `<span class="ws-order-meta">צבע: ${escapeHtml(order.selectedColors.join(", "))}</span>` : ""}
-        ${order.customText ? `<span class="ws-order-meta">טקסט מותאם: ${escapeHtml(order.customText)}</span>` : ""}
+        ${orderColorNames(order).length ? `<span class="ws-order-meta">צבע: ${escapeHtml(orderColorNames(order).join(", "))}</span>` : ""}
         ${order.colorAlternativeStatus && order.colorAlternativeStatus !== "none"
           ? `<span class="ws-order-meta">חלופת צבע: ${escapeHtml(colorAlternativeLabel(order))}</span>` : ""}
         ${order.adminNotes ? `<span class="ws-order-meta">הערת אמיר: ${escapeHtml(order.adminNotes)}</span>` : ""}
@@ -1854,7 +1990,6 @@ function reorder(order, product, title) {
     productName: title,
     quantity: order.quantity,
     selectedColor: order.selectedColors?.[0] ?? "",
-    customText: order.customText ?? "",
   };
   sessionStorage.setItem("pendingReorder", JSON.stringify(previous));
   window.location.href = "catalog.html";
@@ -2005,7 +2140,7 @@ function renderPricingForm() {
   if (form.elements.riskHighPercent) form.elements.riskHighPercent.value = Number(risk.high) * 100;
   const wear = (s.wearParts ?? []).filter((p) => !p.amsOnly).reduce((sum, p) => sum + Number(p.priceIls) / Number(p.lifetimeHours), 0);
   const target = document.querySelector("#pricing-readonly-breakdown");
-  if (target) target.innerHTML = `<div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(wear)}/שעה</span></div><div class="cost-preview-row"><span>עלות מדפסת</span><span>${formatCurrency(Number(s.machine?.priceIls) / Number(s.machine?.lifeHours))}/שעה</span></div>`;
+  if (target) target.innerHTML = `<div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(wear)}/שעה</span></div><div class="cost-preview-row"><span>עלות מדפסת</span><span>תוספת של 10% על עלות ההדפסה (לאחר סיכון)</span></div>`;
 }
 
 // ── Contact settings form (admin view) ────────────────────────

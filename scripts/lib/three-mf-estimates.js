@@ -34,14 +34,17 @@ function numberList(value) {
 
 function collectFromLine(line, result) {
   const timePatterns = [
-    /total estimated time\s*[:=]\s*(.+)$/i,
-    /estimated printing time[^:=]*[:=]\s*(.+)$/i,
-    /(?:model )?printing time\s*[:=]\s*(.+)$/i,
+    /total estimated time\s*[:=]\s*([^;]+)/i,
+    /estimated printing time[^:=]*[:=]\s*([^;]+)/i,
+    /(?:model )?printing time\s*[:=]\s*([^;]+)/i,
   ];
   for (const pattern of timePatterns) {
     const match = line.match(pattern);
     const hours = match && parseDuration(match[1]);
-    if (hours != null && hours > 0) result.printHours = hours;
+    if (hours != null && hours > 0) {
+      result.printHours = hours;
+      break;
+    }
   }
 
   const gramsMatch = line.match(/(?:total )?filament used\s*\[g\]\s*[:=]\s*(.+)$/i);

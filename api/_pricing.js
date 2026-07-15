@@ -7,6 +7,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   riskPercentByLevel: Object.freeze({ low: 0.08, medium: 0.15, high: 0.25 }),
 });
 
+// Printer/machine recovery is a flat surcharge on top of the print cost,
+// applied after the risk addition (not an hourly wear rate).
+const MACHINE_RECOVERY_PERCENT = 0.10;
+
 function normalizedRiskPercents(value = {}) {
   const source = value.riskPercentByLevel || value.riskPercents || {};
   const read = (level) => {
@@ -46,23 +50,27 @@ function calculateProductCost(product = {}, filaments = [], settingsValue = {}, 
     : Math.max(Number(product.additionalCopyHours) || 0, 0);
   const totalHours = (Number(product.printHours) || 0) + additionalCopyHours * (quantity - 1);
   const purgeGrams = Math.max(Number(product.purgeGrams) || 0, 0);
+  const pricePerGram = (filamentId) => {
+    const filament = filaments.find((item) => item.id === filamentId);
+    const spoolPrice = Number(filament?.spoolPrice);
+    const spoolGrams = Number(filament?.spoolGrams);
+    return Number.isFinite(spoolPrice) && spoolPrice > 0 && spoolGrams > 0
+      ? spoolPrice / spoolGrams
+      : (Number(filament?.pricePerKg) || 0) / 1000;
+  };
   let materialGrams = purgeGrams * quantity;
   let materialCost = 0;
   for (const material of product.materials || []) {
     const grams = Math.max(Number(material.grams) || 0, 0) * quantity;
     materialGrams += grams;
-    const filament = filaments.find((item) => item.id === material.filamentId);
-    const spoolPrice = Number(filament?.spoolPrice);
-    const spoolGrams = Number(filament?.spoolGrams);
-    const pricePerGram = Number.isFinite(spoolPrice) && spoolPrice > 0 && spoolGrams > 0
-      ? spoolPrice / spoolGrams
-      : (Number(filament?.pricePerKg) || 0) / 1000;
-    materialCost += grams * pricePerGram;
+    materialCost += grams * pricePerGram(material.filamentId);
   }
+  // Purge/flush waste is filament that really leaves the spool, so it is billed
+  // like any other gram. It is priced with the first material's filament.
+  materialCost += purgeGrams * quantity * pricePerGram(product.materials?.[0]?.filamentId);
   const electricityCost = totalHours * Number(profile.wattsAvg) / 1000 * Number(settings.electricityPricePerKwh);
   const wearCost = totalHours * wearPerHour(profileKey);
-  const machineCost = totalHours * Number(settings.machine.priceIls) / Number(settings.machine.lifeHours);
-  const productionCost = materialCost + electricityCost + wearCost + machineCost;
+  const productionCost = materialCost + electricityCost + wearCost;
   const riskLevel = ['low', 'medium', 'high'].includes(product.riskLevel) ? product.riskLevel : 'medium';
   const riskPercent = product.riskLevel
     ? Number(settings.riskPercentByLevel[riskLevel])
@@ -70,7 +78,9 @@ function calculateProductCost(product = {}, filaments = [], settingsValue = {}, 
       ? Number(settings.riskPercentByLevel[riskLevel] ?? profile.riskPercent)
       : Math.max(Number(product.riskPercent) || 0, 0);
   const riskCost = productionCost * riskPercent;
-  const costWithRisk = productionCost + riskCost;
+  const costBeforeMachine = productionCost + riskCost;
+  const machineCost = costBeforeMachine * MACHINE_RECOVERY_PERCENT;
+  const costWithRisk = costBeforeMachine + machineCost;
   const internal = Boolean(options.internal);
   const marginPercent = internal ? 0 : options.marginPercent == null
     ? Number(settings.marginPercent)
@@ -90,4 +100,7 @@ function calculateProductCost(product = {}, filaments = [], settingsValue = {}, 
   };
 }
 
-module.exports = { config, DEFAULT_SETTINGS, editableSettings, mergedSettings, wearPerHour, calculateProductCost };
+module.exports = {
+  config, DEFAULT_SETTINGS, MACHINE_RECOVERY_PERCENT,
+  editableSettings, mergedSettings, wearPerHour, calculateProductCost,
+};

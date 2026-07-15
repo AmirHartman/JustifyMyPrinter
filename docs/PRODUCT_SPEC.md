@@ -122,7 +122,7 @@ Product fields:
 - external model source link;
 - internal STL/3MF file if available;
 - internal print notes/instructions;
-- selectable options: color, quantity, custom text, future size/options;
+- selectable options: color, quantity, and future size/options;
 - whether multiple units are allowed.
 
 Catalog publication is automatic. There is no manual "show in catalog"
@@ -137,7 +137,7 @@ internal print notes, inventory quantities, spool costs, or pricing internals.
 The admin product editor is a full-page form ordered by printing necessity. It
 supports possible and required colors, multiple images and a primary image,
 quantity restrictions, extra print time per copy, internal notes, risk level,
-custom text, and readiness feedback. Product descriptions are entered manually;
+and readiness feedback. Product descriptions are entered manually;
 the application does not generate them.
 
 Categories must be dynamic, editable in admin, and products may belong to multiple.
@@ -169,6 +169,7 @@ Order approval:
 | `printing`         | Currently on the printer                            |
 | `ready_delivery`   | Printed; ready for pickup/delivery                  |
 | `completed`        | Delivered and done                                  |
+| `failed`           | A print attempt failed; cumulative waste is recorded|
 | `cancelled`        | Cancelled (reason required)                         |
 
 > Implemented. Legacy order status values are normalized at API boundaries.
@@ -186,7 +187,6 @@ Order fields:
 - future: attached file;
 - quantity;
 - selected color(s);
-- optional custom text when enabled by the product;
 - user notes;
 - internal admin notes;
 - status (canonical set above);
@@ -202,12 +202,12 @@ Order fields:
 - created date;
 - updated date;
 - delivered/completed date.
+- failed-attempt count and cumulative wasted material/time.
 
 Catalog order options are validated again by the API. The selected color must
-belong to the product, quantity must be one when multiple units are disabled,
-and custom text is accepted only for products that enable it. Order snapshots
-preserve the product/options context, while reorder always uses the product's
-current price and requires a new confirmation.
+belong to the product, and quantity must be one when multiple units are disabled.
+Order snapshots preserve the product/options context, while reorder always uses
+the product's current price and requires a new confirmation.
 
 When a requested color is unavailable, the order records a separate color
 alternative approval state. The admin proposes an available filament; the
@@ -240,7 +240,8 @@ Pricing inputs:
 The admin calculation presents production cost before profit and the final
 price after profit in separate cards. Material cost is derived from spool price
 and spool weight (cost per gram); there is no independently editable price-per-
-kilogram field.
+kilogram field. A machine-recovery component adds 10% after the configured risk
+component and before the margin is applied.
 
 Known catalog product:
 - clear price upfront; can auto-approve.
@@ -338,7 +339,10 @@ Behavior:
 - admin can get low-filament warnings;
 - system can estimate if enough material exists before approval;
 - admin updates remaining weight manually;
-- material deducted only after `ready_delivery` / `completed`.
+- a `failed` attempt deducts only newly recorded cumulative waste;
+- `completed` deducts product material and purge once, plus any failure waste
+  that was not already deducted;
+- retrying or resaving an order never deducts the same grams twice.
 
 ## 12. Finance and transparency
 

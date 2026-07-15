@@ -1,21 +1,7 @@
-const { timingSafeEqual } = require('crypto');
 const { getSql } = require('./_db');
 const { SEED_PRODUCTS, SEED_USERS, SEED_ORDERS } = require('./_seed');
 const { hashPassword } = require('./_password');
-
-function canInitialize(req) {
-  if (process.env.NODE_ENV !== 'production') return true;
-  const expected = process.env.INIT_SECRET;
-  if (!expected) return false;
-  const authorization = String(req.headers.authorization || '');
-  const bearer = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const supplied = String(req.headers['x-init-secret'] || bearer);
-  if (!supplied) return false;
-  const suppliedBuffer = Buffer.from(supplied);
-  const expectedBuffer = Buffer.from(expected);
-  return suppliedBuffer.length === expectedBuffer.length
-    && timingSafeEqual(suppliedBuffer, expectedBuffer);
-}
+const { canInitialize } = require('./_init-auth');
 
 function enabled(name) {
   return process.env[name] === 'true';
@@ -135,6 +121,10 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS base_cost NUMERIC(10,2)`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS support_amount NUMERIC(10,2) NOT NULL DEFAULT 0`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS final_amount NUMERIC(10,2)`;
+    // Orders awaiting a quote used to be stored with a 0.01 placeholder to satisfy
+    // the NOT NULL price column, which surfaced to friends as "₪0.01". Unpriced
+    // orders now carry 0, and the UI shows "price to be set" instead of a number.
+    await sql`UPDATE orders SET price = 0 WHERE final_amount IS NULL AND price = 0.01`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_material_weight NUMERIC(10,2)`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_print_time NUMERIC(10,2)`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requires_user_price_approval BOOLEAN NOT NULL DEFAULT FALSE`;
@@ -153,6 +143,7 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wasted_grams NUMERIC(10,2) NOT NULL DEFAULT 0`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS wasted_hours NUMERIC(10,2) NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS waste_deducted_grams NUMERIC(10,2) NOT NULL DEFAULT 0`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS margin_percent NUMERIC(5,3)`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS internal BOOLEAN NOT NULL DEFAULT FALSE`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_deducted BOOLEAN NOT NULL DEFAULT FALSE`;
@@ -199,13 +190,8 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS catalog_kind TEXT NOT NULL DEFAULT 'printed'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS risk_level TEXT NOT NULL DEFAULT 'medium'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS custom_text_enabled BOOLEAN NOT NULL DEFAULT FALSE`;
-    await sql`UPDATE products SET risk_level = CASE
-      WHEN risk_percent IS NULL THEN 'medium'
-      WHEN risk_percent <= 0.12 THEN 'low'
-      WHEN risk_percent >= 0.20 THEN 'high'
-      ELSE 'medium' END
-      WHERE risk_level IS NULL OR risk_level NOT IN ('low', 'medium', 'high')
-        OR (risk_level = 'medium' AND risk_percent IS NOT NULL AND (risk_percent <= 0.12 OR risk_percent >= 0.20))`;
+    await sql`UPDATE products SET risk_level = 'medium'
+      WHERE risk_level IS NULL OR risk_level NOT IN ('low', 'medium', 'high')`;
     await sql`UPDATE products SET catalog_kind = 'printed' WHERE catalog_kind NOT IN ('printed', 'idea') OR catalog_kind IS NULL`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS products_print_sync_key_unique ON products (print_sync_key) WHERE print_sync_key IS NOT NULL`;
 
@@ -319,6 +305,20 @@ module.exports = async (req, res) => {
       )
     `;
 
+    await sql`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        name TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        kind TEXT NOT NULL DEFAULT 'bug',
+        message TEXT NOT NULL,
+        page TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'new',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+
     const DEFAULT_PRICING = { marginPercent: 0.50, minOrderPrice: 5, roundingMode: 'ceil', riskPercentByLevel: { low: 0.08, medium: 0.15, high: 0.25 } };
     await sql`
       INSERT INTO settings (key, value)
@@ -387,7 +387,7 @@ module.exports = async (req, res) => {
 
     res.json({
       ok: true,
-      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories'],
+      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories', 'feedback'],
       demoDataSeeded: seedDemoData,
       demoUsersSeeded: demoUsers.length > 0,
       adminBootstrap: canBootstrapAdmin ? (adminCreated ? 'created' : 'already-exists') : 'skipped',

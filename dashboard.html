@@ -129,6 +129,10 @@
           <span class="tab-badge" id="pending-tab-badge"></span>
         </button>
         <button class="tab admin-tab" data-view="finance">כספים</button>
+        <button class="tab admin-tab" data-view="feedback">
+          משוב
+          <span class="tab-badge" id="feedback-tab-badge" hidden></span>
+        </button>
         <button class="tab admin-tab" data-view="settings">הגדרות</button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>
@@ -258,7 +262,6 @@
                 <div><strong>צבעים אפשריים</strong><div id="product-possible-colors"></div></div>
                 <div><strong>צבעים נדרשים</strong><div id="product-required-colors"></div></div>
                 <label class="checkbox-label"><input name="allowMultiple" type="checkbox" checked style="width:auto" /> ניתן להזמין יותר מיחידה אחת</label>
-                <label class="checkbox-label"><input name="customTextEnabled" type="checkbox" style="width:auto" /> ניתן להוסיף טקסט מותאם אישית</label>
               </section>
 
               <section class="product-materials-section" aria-labelledby="product-internal-title">
@@ -508,6 +511,18 @@
       </section>
 
       <!-- ── Settings ── -->
+      <!-- ── Feedback ── -->
+      <section class="view" id="feedback-view" aria-labelledby="feedback-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="feedback-title">משוב</h2>
+            <p>דיווחי תקלות והצעות לשיפור מהמשתמשים והמבקרים.</p>
+          </div>
+        </div>
+        <div class="feedback-list" id="feedback-list"></div>
+        <p class="empty-state" id="feedback-empty">אין עדיין פניות.</p>
+      </section>
+
       <section class="view" id="settings-view" aria-labelledby="settings-title">
         <div class="section-heading">
           <div>
@@ -631,6 +646,10 @@
         <button class="icon-button close-button" type="button" id="order-drawer-close" aria-label="סגירה">×</button>
         <h2 id="order-drawer-title">פרטי הזמנה</h2>
         <div id="order-drawer-readonly"></div>
+        <div class="cost-preview-panel" id="order-drawer-cost-summary">
+          <strong>עלות ורווח</strong>
+          <div id="order-drawer-cost-summary-body"></div>
+        </div>
 
         <form class="user-edit-form order-price-form" id="order-drawer-form">
           <div class="user-edit-fields">

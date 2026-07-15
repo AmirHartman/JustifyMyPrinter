@@ -3,7 +3,7 @@ import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
 import {
   openOrderDialog, updateReviewCosts, getOrderFriendName, openCustomOrderDialog,
-  addTip, resetTip, goToStep, getTipAmount, getOrderTotal, getOrderOptions,
+  addTip, resetTip, goToStep, getTipAmount, getOrderOptions,
 } from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
 import { formatCurrency, calculateProductCost } from "./utils.js";
@@ -75,7 +75,7 @@ loginForm?.addEventListener("submit", async (event) => {
   store.currentUser = result;
   store.appMode = store.currentUser.role === "admin" ? "admin" : "friend";
 
-  window.location.href = "welcome.html";
+  window.location.href = result.role === "admin" ? "dashboard.html" : "welcome.html";
 });
 
 registerForm?.addEventListener("submit", async (event) => {
@@ -197,7 +197,6 @@ orderForm?.addEventListener("submit", async (event) => {
 
   const quantity     = Number(data.get("quantity"));
   const supportAmount = getTipAmount();
-  const price         = getOrderTotal();
   const orderOptions  = getOrderOptions();
 
   try {
@@ -207,11 +206,8 @@ orderForm?.addEventListener("submit", async (event) => {
         productId:  product.id,
         friendName: getOrderFriendName(data),
         quantity,
-        price,
-        baseCost: product.cost * quantity,
         supportAmount,
         selectedColors: orderOptions.selectedColors,
-        customText: orderOptions.customText,
       }),
     });
     if (store.appMode === "admin") store.orders.unshift(order);
@@ -265,6 +261,101 @@ customOrderForm?.addEventListener("submit", async (event) => {
     customOrderError.classList.add("is-visible");
   }
 });
+
+// ── Global feedback / bug-report widget (injected on every page) ─
+// There is no shared-chrome include, but app.js loads on every page, so we
+// inject the launcher button + dialog once here. Name/phone fields show only
+// when signed out; for logged-in users the server fills identity from the account.
+(function setupFeedbackWidget() {
+  if (document.querySelector("#feedback-fab")) return;
+
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+    <button type="button" id="feedback-fab" class="feedback-fab" aria-haspopup="dialog" aria-label="דיווח על תקלה או הצעה לשיפור">
+      <span aria-hidden="true">💬</span><span class="feedback-fab-text">דיווח / הצעה</span>
+    </button>
+    <dialog id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-dialog-title">
+      <form method="dialog" class="order-form" id="feedback-form">
+        <button class="icon-button close-button" type="button" data-close-feedback aria-label="סגירה">×</button>
+        <h2 id="feedback-dialog-title">דיווח על תקלה / הצעה לשיפור</h2>
+        <fieldset class="feedback-kind">
+          <legend>סוג הפנייה</legend>
+          <label class="feedback-radio"><input type="radio" name="kind" value="bug" checked /> באג / תקלה</label>
+          <label class="feedback-radio"><input type="radio" name="kind" value="improvement" /> הצעה לשיפור</label>
+        </fieldset>
+        <label>תיאור
+          <textarea name="message" required rows="4" placeholder="ספרו לנו מה קרה או מה תרצו לשפר"></textarea>
+        </label>
+        <div class="feedback-contact-fields">
+          <label>שם
+            <input type="text" name="name" autocomplete="name" placeholder="השם שלך" />
+          </label>
+          <label>טלפון
+            <input type="tel" name="phone" autocomplete="tel" placeholder="050-1234567" />
+          </label>
+        </div>
+        <p class="form-error" id="feedback-error"></p>
+        <p class="feedback-success" id="feedback-success" hidden>תודה! הפנייה נשלחה.</p>
+        <menu>
+          <button class="ghost-button" type="button" data-close-feedback>ביטול</button>
+          <button class="primary-button" type="submit">שליחה</button>
+        </menu>
+      </form>
+    </dialog>
+  `,
+  );
+
+  const dialog  = document.querySelector("#feedback-dialog");
+  const form    = document.querySelector("#feedback-form");
+  const errorEl = document.querySelector("#feedback-error");
+  const okEl    = document.querySelector("#feedback-success");
+
+  document.querySelector("#feedback-fab").addEventListener("click", () => {
+    form.reset();
+    errorEl.classList.remove("is-visible");
+    okEl.hidden = true;
+    dialog.showModal();
+  });
+
+  document.querySelectorAll("[data-close-feedback]").forEach((btn) =>
+    btn.addEventListener("click", () => dialog.close()),
+  );
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const signedOut = document.body.dataset.auth === "signed-out";
+    errorEl.classList.remove("is-visible");
+
+    const payload = {
+      kind: String(data.get("kind") || "bug"),
+      message: String(data.get("message") ?? "").trim(),
+      page: document.body.dataset.page || location.pathname,
+    };
+    // Name/phone are only relevant (and required) for signed-out visitors;
+    // the server ignores them for logged-in users.
+    if (signedOut) {
+      payload.name = String(data.get("name") ?? "").trim();
+      payload.phone = String(data.get("phone") ?? "").trim();
+      if (!payload.name || !payload.phone) {
+        errorEl.textContent = "יש למלא שם וטלפון.";
+        errorEl.classList.add("is-visible");
+        return;
+      }
+    }
+
+    try {
+      await api("/api/feedback", { method: "POST", body: JSON.stringify(payload) });
+      form.reset();
+      okEl.hidden = false;
+      setTimeout(() => { okEl.hidden = true; dialog.close(); }, 1400);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.add("is-visible");
+    }
+  });
+})();
 
 // ── Product form (admin) ──────────────────────────────────────
 document.querySelector("#sync-print-files-btn")?.addEventListener("click", async (event) => {
@@ -330,7 +421,6 @@ productForm?.addEventListener("submit", async (event) => {
     possibleColors,
     requiredColors,
     allowMultiple:      data.get("allowMultiple") !== null,
-    customTextEnabled:  data.get("customTextEnabled") !== null,
     internalPrintNotes: String(data.get("internalPrintNotes") ?? "").trim(),
     manualPriceEnabled: data.get("manualPriceEnabled") !== null,
     manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
@@ -573,7 +663,6 @@ window.openProductEditForm = function openProductEditForm(product) {
   productForm.elements["riskLevel"].value = product.riskLevel ?? riskLevelFromPercent(product.riskPercent);
   productForm.elements["catalogKind"].value = product.catalogKind ?? "printed";
   productForm.elements["allowMultiple"].checked = product.allowMultiple !== false;
-  productForm.elements["customTextEnabled"].checked = Boolean(product.customTextEnabled);
   productForm.elements["internalPrintNotes"].value = product.internalPrintNotes ?? "";
   document.querySelector("#edit-product-id").value = product.id;
   document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
@@ -775,19 +864,27 @@ function updateCostPreview() {
 
   const b = calculateProductCost(product, store.filaments, store.pricingSettings);
 
+  // Mirror the save/display logic (js/app.js submit handler, api/products.js withCurrentPrice):
+  // a manual price overrides the formula-calculated price everywhere it's shown.
+  const manualPriceEnabled = Boolean(productForm?.elements["manualPriceEnabled"]?.checked);
+  const manualPrice = Number(productForm?.elements["manualPrice"]?.value) || null;
+  const manualOverrideActive = manualPriceEnabled && manualPrice;
+  const finalCost = manualOverrideActive ? manualPrice : b.finalCost;
+
   beforePanel.innerHTML = `
     <div class="cost-preview-row"><span>עלות חומרים</span><span>${formatCurrency(b.materialCost)}</span></div>
     <div class="cost-preview-row"><span>עלות חשמל</span><span>${formatCurrency(b.electricityCost)}</span></div>
     <div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(b.wearCost)}</span></div>
-    <div class="cost-preview-row"><span>עלות מדפסת</span><span>${formatCurrency(b.machineCost)}</span></div>
     <div class="cost-preview-row"><span>סיכון (${Math.round(b.riskPercent * 100)}%)</span><span>${formatCurrency(b.riskCost)}</span></div>
+    <div class="cost-preview-row"><span>עלות מדפסת (10%)</span><span>${formatCurrency(b.machineCost)}</span></div>
     <div class="cost-preview-final"><span>עלות ייצור לפני רווח</span><span>${formatCurrency(b.costWithRisk)}</span></div>
   `;
   afterPanel.innerHTML = `
     <div class="cost-preview-row"><span>רווח</span><span>${formatCurrency(b.marginAmount)}</span></div>
     <div class="cost-preview-row"><span>מינימום מוצר</span><span>${formatCurrency(b.productFloor)}</span></div>
     <div class="cost-preview-row"><span>מינימום הזמנה</span><span>${formatCurrency(b.minOrderPrice)}</span></div>
-    <div class="cost-preview-final"><span>מחיר לאחר רווח, מעוגל מעלה</span><span>${formatCurrency(b.finalCost)}</span></div>
+    ${manualOverrideActive ? `<div class="cost-preview-row"><span>מחיר ידני (דורס את החישוב)</span><span>${formatCurrency(manualPrice)}</span></div>` : ""}
+    <div class="cost-preview-final"><span>מחיר לאחר רווח, מעוגל מעלה</span><span>${formatCurrency(finalCost)}</span></div>
   `;
   updateProductReadiness();
 }
@@ -815,6 +912,7 @@ productForm?.addEventListener("change", (e) => {
 document.querySelector("#manual-price-toggle")?.addEventListener("change", (e) => {
   const field = document.querySelector("#manual-price-field");
   if (field) field.hidden = !e.target.checked;
+  updateCostPreview();
 });
 
 // ── Filament form ─────────────────────────────────────────────
@@ -1115,16 +1213,44 @@ function syncPricingRiskFields() {
   form.elements["riskHighPercent"].value = Number(values.high ?? DEFAULT_RISK_PERCENT_BY_LEVEL.high) * 100;
 }
 
+async function submitManagedForm(form, request, errorLabel) {
+  const button = form.querySelector("[type='submit']");
+  const originalLabel = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "שומר...";
+  }
+  try {
+    await api(request.url, request.options);
+    form.reset();
+    await loadData();
+    render();
+  } catch (err) {
+    alert(`${errorLabel}: ${err.message}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}
+
 document.querySelector("#goal-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault(); const data = new FormData(event.target);
-  await api("/api/goals", { method: "POST", body: JSON.stringify({ name: data.get("name"), targetAmount: Number(data.get("targetAmount")), publicVisible: data.get("publicVisible") === "on", publicLabel: data.get("publicLabel") }) });
-  event.target.reset(); await loadData(); render();
+  event.preventDefault();
+  const data = new FormData(event.target);
+  await submitManagedForm(event.target, {
+    url: "/api/goals",
+    options: { method: "POST", body: JSON.stringify({ name: data.get("name"), targetAmount: Number(data.get("targetAmount")), publicVisible: data.get("publicVisible") === "on", publicLabel: data.get("publicLabel") }) },
+  }, "שגיאה בשמירת היעד");
 });
 
 document.querySelector("#ledger-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault(); const data = new FormData(event.target);
-  await api("/api/ledger", { method: "POST", body: JSON.stringify({ kind: data.get("kind"), description: data.get("description"), amount: Number(data.get("amount")), publicVisible: data.get("publicVisible") === "on", publicLabel: data.get("publicLabel") }) });
-  event.target.reset(); await loadData(); render();
+  event.preventDefault();
+  const data = new FormData(event.target);
+  await submitManagedForm(event.target, {
+    url: "/api/ledger",
+    options: { method: "POST", body: JSON.stringify({ kind: data.get("kind"), description: data.get("description"), amount: Number(data.get("amount")), publicVisible: data.get("publicVisible") === "on", publicLabel: data.get("publicLabel") }) },
+  }, "שגיאה בשמירת הרשומה");
 });
 
 // ── Contact settings form ─────────────────────────────────────

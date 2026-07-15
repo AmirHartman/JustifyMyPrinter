@@ -44,7 +44,6 @@ The codebase already exists and currently includes:
 - user personal area;
 - admin area;
 - product management;
-- Vercel deployment;
 - an internal messaging system that should be removed.
 
 There are conceptual flow issues. The current spec should be used to align the existing project.

@@ -386,11 +386,10 @@ Can wait until after first release:
 
 Current stack assumptions:
 - Neon database exists.
-- Vercel deployment exists.
-- Vercel free-tier issues may exist.
+- Render deployment exists; free-tier issues may exist.
 
 Rules:
-- Keep Vercel/free-tier compatibility where possible.
+- Keep Render/free-tier compatibility where possible.
 - Use existing Neon DB unless explicitly changed.
 - Do not add paid services without explicit approval.
 - Do not replace framework/architecture without approval.

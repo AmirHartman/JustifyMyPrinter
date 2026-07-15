@@ -68,7 +68,7 @@ The codebase already includes:
 - product management;
 - filaments table (`api/filaments.js`);
 - settings/pricing config (`api/settings.js`);
-- **Express server** (`server.js`) — the app runs as `node server.js`, not as Vercel functions;
+- **Express server** (`server.js`) — the app runs as `node server.js`;
 - **Render** is the current deployment target (see `docs/RENDER_DEPLOYMENT_NOTES.md`);
 - disabled compatibility endpoints for legacy messages and notifications;
 - WhatsApp links and Hebrew templates;

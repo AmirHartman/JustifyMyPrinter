@@ -112,7 +112,7 @@ p {
    ============================================================ */
 body[data-auth="signed-out"] .topbar,
 body[data-auth="signed-out"] .app-shell:not(.catalog-shell),
-body[data-auth="signed-out"] dialog,
+body[data-auth="signed-out"] dialog:not(.feedback-dialog),
 body[data-auth="signed-out"] .welcome-shell {
   display: none;
 }
@@ -3410,4 +3410,176 @@ dialog.side-drawer[open] {
   .ws-order-actions {
     width: 100%;
   }
+}
+
+/* ============================================================
+   FEEDBACK / BUG-REPORT WIDGET
+   ============================================================ */
+.feedback-fab {
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  inset-inline-start: 16px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--teal);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.feedback-fab:hover {
+  background: var(--teal-dark);
+}
+
+.feedback-fab:active {
+  transform: translateY(1px);
+}
+
+.feedback-kind {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.feedback-kind legend {
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.feedback-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.feedback-radio input {
+  width: auto;
+}
+
+/* Name/phone are collected only from signed-out visitors; logged-in users'
+   identity comes from their account server-side. */
+.feedback-contact-fields {
+  display: none;
+  gap: 12px;
+}
+
+body[data-auth="signed-out"] .feedback-contact-fields {
+  display: grid;
+}
+
+.feedback-success {
+  margin: 0;
+  color: var(--teal-dark);
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .feedback-fab .feedback-fab-text {
+    display: none;
+  }
+
+  .feedback-fab {
+    padding: 12px;
+    font-size: var(--text-base);
+  }
+}
+
+/* Admin feedback list */
+.feedback-list {
+  display: grid;
+  gap: 12px;
+}
+
+.feedback-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.feedback-card.is-resolved {
+  opacity: 0.6;
+}
+
+.feedback-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-kind-badge,
+.feedback-source-badge,
+.feedback-status-badge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  line-height: 1.6;
+}
+
+.feedback-kind-badge {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.feedback-kind-bug {
+  background: rgba(184, 62, 66, 0.12);
+  color: var(--danger);
+}
+
+.feedback-kind-improvement {
+  background: rgba(15, 127, 122, 0.12);
+  color: var(--teal-dark);
+}
+
+.feedback-source-badge.is-member {
+  background: rgba(15, 127, 122, 0.14);
+  color: var(--teal-dark);
+}
+
+.feedback-source-badge.is-external {
+  background: rgba(181, 139, 43, 0.16);
+  color: var(--gold);
+}
+
+.feedback-status-badge {
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.feedback-message {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.feedback-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.feedback-actions {
+  display: flex;
+  gap: 8px;
 }

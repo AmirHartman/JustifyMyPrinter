@@ -28,7 +28,6 @@ function normalizeRow(row) {
     riskPercent:        row.risk_percent == null ? null : Number(row.risk_percent),
     riskLevel:          row.risk_level ?? 'medium',
     catalogKind:        row.catalog_kind ?? 'printed',
-    customTextEnabled:  Boolean(row.custom_text_enabled),
     additionalCopyHours: row.additional_copy_hours == null ? null : Number(row.additional_copy_hours),
     minUnitPrice:       row.minimum_unit_price == null ? null : Number(row.minimum_unit_price),
     possibleColors:     row.possible_colors ?? [],
@@ -90,7 +89,6 @@ function publicProduct(product) {
     requiredColors: product.requiredColorOptions.map((option) => option.name),
     colorOptions: product.colorOptions,
     requiredColorOptions: product.requiredColorOptions,
-    customTextEnabled: product.customTextEnabled,
     requiresAdminApproval: product.requiresAdminApproval || product.catalogKind === 'idea',
     allowMultiple: product.allowMultiple,
     available: product.inventoryAvailable,
@@ -136,16 +134,27 @@ function withCurrentPrice(row, context) {
     const filament = context.filaments.find((item) => item.id === material.filamentId);
     return Boolean(filament?.active) && (filament.remainingGrams == null || filament.remainingGrams >= Number(material.grams || 0));
   }));
-  product.colorOptions = product.possibleColors.map((value) => {
-    const id = colorValue(value);
-    const filament = context.filaments.find((item) => item.id === id);
-    return {
-      value: id || colorValue(value),
-      name: filament?.name || (typeof value === 'string' ? value : value?.name || id),
-      colorHex: filament?.colorHex || (typeof value === 'object' ? value?.colorHex : null),
-      available: filament ? filament.active && (filament.remainingGrams == null || filament.remainingGrams > 0) : true,
-    };
-  }).filter((item) => item.value);
+  const filamentAvailable = (filament) => Boolean(filament?.active)
+    && (filament.remainingGrams == null || filament.remainingGrams > 0);
+  // Ordering requires picking a colour. A product with its own palette offers that
+  // palette; one without can be printed in any colour currently on the shelf.
+  product.colorOptions = product.possibleColors.length
+    ? product.possibleColors.map((value) => {
+      const id = colorValue(value);
+      const filament = context.filaments.find((item) => item.id === id);
+      return {
+        value: id || colorValue(value),
+        name: filament?.name || (typeof value === 'string' ? value : value?.name || id),
+        colorHex: filament?.colorHex || (typeof value === 'object' ? value?.colorHex : null),
+        available: filament ? filamentAvailable(filament) : true,
+      };
+    }).filter((item) => item.value)
+    : context.filaments.filter(filamentAvailable).map((filament) => ({
+      value: filament.id,
+      name: filament.name,
+      colorHex: filament.colorHex,
+      available: true,
+    }));
   product.requiredColorOptions = product.requiredColors.map((value) => {
     const id = colorValue(value);
     const filament = context.filaments.find((item) => item.id === id);
@@ -268,7 +277,6 @@ module.exports = async (req, res) => {
         if (riskLevel !== null && !['low', 'medium', 'high'].includes(riskLevel)) return res.status(400).json({ error: 'Invalid risk level' });
         const catalogKind        = body.catalogKind !== undefined ? String(body.catalogKind) : null;
         if (catalogKind !== null && !['printed', 'idea'].includes(catalogKind)) return res.status(400).json({ error: 'Invalid catalog kind' });
-        const customTextEnabled  = body.customTextEnabled !== undefined ? Boolean(body.customTextEnabled) : null;
         const additionalCopyHours = body.additionalCopyHours === '' ? null : body.additionalCopyHours !== undefined ? Math.max(Number(body.additionalCopyHours) || 0, 0) : undefined;
         const minUnitPrice       = body.minUnitPrice === '' ? null : body.minUnitPrice !== undefined ? Number(body.minUnitPrice) : undefined;
         if (minUnitPrice !== undefined && minUnitPrice !== null && (!Number.isFinite(minUnitPrice) || minUnitPrice < 0)) return res.status(400).json({ error: 'מחיר מינימום ליחידה חייב להיות לא־שלילי' });
@@ -316,7 +324,6 @@ module.exports = async (req, res) => {
             risk_percent        = CASE WHEN ${body.riskPercent !== undefined} THEN ${riskPercent} ELSE risk_percent END,
             risk_level          = COALESCE(${riskLevel}, risk_level),
             catalog_kind        = COALESCE(${catalogKind}, catalog_kind),
-            custom_text_enabled = COALESCE(${customTextEnabled}, custom_text_enabled),
             additional_copy_hours = CASE WHEN ${body.additionalCopyHours !== undefined} THEN ${additionalCopyHours} ELSE additional_copy_hours END,
             minimum_unit_price  = CASE WHEN ${body.minUnitPrice !== undefined} THEN ${minUnitPrice} ELSE minimum_unit_price END,
             possible_colors     = COALESCE(${possibleColors}::jsonb, possible_colors),
@@ -331,7 +338,7 @@ module.exports = async (req, res) => {
             id, name, cost, grams, description, image, stl_url,
             source_url, category, category_ids, active, print_hours, print_profile,
             images, materials, calculated_cost, manual_price_enabled, manual_price,
-            purge_grams, risk_percent, risk_level, catalog_kind, custom_text_enabled, additional_copy_hours, minimum_unit_price,
+            purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
             possible_colors, required_colors, requires_admin_approval,
             allow_multiple, internal_print_notes,
             print_sync_key, print_sync_filename, print_sync_checksum,
@@ -372,7 +379,7 @@ module.exports = async (req, res) => {
             SELECT id, name, cost, grams, description, image, stl_url,
                    source_url, category, category_ids, active, print_hours, print_profile,
                    images, materials, calculated_cost, manual_price_enabled, manual_price,
-                   purge_grams, risk_percent, risk_level, catalog_kind, custom_text_enabled, additional_copy_hours, minimum_unit_price,
+                   purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes,
                    print_sync_key, print_sync_filename, print_sync_checksum,
@@ -383,7 +390,7 @@ module.exports = async (req, res) => {
             SELECT id, name, cost, grams, description, image, stl_url,
                    source_url, category, category_ids, active, print_hours, print_profile,
                    images, materials, calculated_cost, manual_price_enabled, manual_price,
-                   purge_grams, risk_percent, risk_level, catalog_kind, custom_text_enabled, additional_copy_hours, minimum_unit_price,
+                   purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes,
                    print_sync_key, print_sync_filename, print_sync_checksum,
@@ -392,7 +399,11 @@ module.exports = async (req, res) => {
           `;
       const context = await pricingContext(sql);
       const priced = rows.map((row) => withCurrentPrice(row, context));
-      return res.json(isAdmin ? priced : priced.filter((row) => row.missingRequirements.length === 0).map(publicProduct));
+      // Non-admins see only products the admin published: active and complete.
+      // Inactive products are drafts (3MF imports land here) and must stay hidden.
+      return res.json(isAdmin
+        ? priced
+        : priced.filter((row) => row.active && row.missingRequirements.length === 0).map(publicProduct));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -426,7 +437,6 @@ module.exports = async (req, res) => {
       const riskPercent        = body.riskPercent === '' || body.riskPercent == null ? null : Math.max(Number(body.riskPercent) || 0, 0);
       const riskLevel          = String(body.riskLevel ?? 'medium');
       const catalogKind        = String(body.catalogKind ?? 'printed');
-      const customTextEnabled  = Boolean(body.customTextEnabled);
       if (!['low', 'medium', 'high'].includes(riskLevel)) return res.status(400).json({ error: 'Invalid risk level' });
       if (!['printed', 'idea'].includes(catalogKind)) return res.status(400).json({ error: 'Invalid catalog kind' });
       const additionalCopyHours = body.additionalCopyHours === '' || body.additionalCopyHours == null ? null : Math.max(Number(body.additionalCopyHours) || 0, 0);
@@ -443,7 +453,7 @@ module.exports = async (req, res) => {
           id, name, cost, grams, description, image, stl_url,
           source_url, category, category_ids, active, print_hours, print_profile,
           images, materials, calculated_cost, manual_price_enabled, manual_price,
-          purge_grams, risk_percent, risk_level, catalog_kind, custom_text_enabled, additional_copy_hours, minimum_unit_price,
+          purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
           possible_colors, required_colors, requires_admin_approval,
           allow_multiple, internal_print_notes
         )
@@ -451,7 +461,7 @@ module.exports = async (req, res) => {
           ${id}, ${name}, ${cost}, ${grams}, ${description}, ${image}, ${stlUrl},
           ${sourceUrl}, ${category}, ${categoryIds}, ${active}, ${printHours}, ${printProfile},
           ${images}, ${materials}, ${calculatedCost}, ${manualPriceEnabled}, ${manualPrice},
-          ${purgeGrams}, ${riskPercent}, ${riskLevel}, ${catalogKind}, ${customTextEnabled}, ${additionalCopyHours}, ${minUnitPrice},
+          ${purgeGrams}, ${riskPercent}, ${riskLevel}, ${catalogKind}, ${additionalCopyHours}, ${minUnitPrice},
           ${possibleColors}, ${requiredColors}, ${requiresApproval},
           ${allowMultiple}, ${internalPrintNotes}
         ) RETURNING *

@@ -94,8 +94,6 @@ tool, and historical file ownership scope.
 
 **Must not:** edit HTML, CSS, frontend JS, API handler logic, or DB schema.
 
-**Key constraint:** Do not add Vercel serverless functions or Vercel-specific config.
-
 ---
 
 ## Builder 3 — DB / API / Schema Alignment

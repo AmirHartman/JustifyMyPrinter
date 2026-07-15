@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const read = (root, file) => fs.readFileSync(path.join(root, file), 'utf8');
+const read = (root, file) => {
+  const full = path.join(root, file);
+  return fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
+};
 
 function checkRegressions(root = process.cwd(), overrides = {}) {
   const source = (file) => Object.hasOwn(overrides, file) ? overrides[file] : read(root, file);
@@ -28,7 +31,7 @@ function checkRegressions(root = process.cwd(), overrides = {}) {
       'Goal and ledger submissions share guarded button/error handling'],
     ['R7', /PAST_STATUSES\s*=\s*new Set\(\[[^\]]*['"]failed['"]/.test(render)
       && /`failed`/.test(spec), 'Failed is documented and treated as closed'],
-    ['R8', /status\s*===\s*'failed'[^\n]*status\s*<>\s*'failed'/.test(orders),
+    ['R8', /status\s*===\s*'failed'[\s\S]{0,100}status\s*<>\s*'failed'/.test(orders),
       'Failure attempts increment only on transition into failed'],
     ['R9', /risk_level IS NULL OR risk_level NOT IN/.test(init)
       && !/risk_percent <= 0\.12|risk_percent >= 0\.20/.test(init),

@@ -87,6 +87,6 @@ styles.css     — Global styles (Hebrew RTL)
 
 ## Legacy notes
 
-`.vercel/`, `vercel.json`, and `.github/workflows/deploy-pages.yml` are
-historical artifacts from when the app ran on Vercel/GitHub Pages. The current
-runtime is Express on Render.
+`.github/workflows/deploy-pages.yml` is a historical artifact from when the
+app also published a static preview to GitHub Pages. The current runtime is
+Express on Render.

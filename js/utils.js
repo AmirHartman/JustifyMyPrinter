@@ -15,6 +15,10 @@ export function escapeHtml(value) {
   return div.innerHTML;
 }
 
+// Printer/machine recovery is a flat surcharge on top of the print cost,
+// applied after the risk addition (not an hourly wear rate). Mirrors api/_pricing.js.
+const MACHINE_RECOVERY_PERCENT = 0.10;
+
 export function calculateProductCost(product, filaments, pricingSettings, options = {}) {
   const quantity = Math.max(Number(options.quantity ?? product?.quantity) || 1, 1);
   const printHours = Number(product?.printHours) || 0;
@@ -26,16 +30,18 @@ export function calculateProductCost(product, filaments, pricingSettings, option
                   ?? pricingSettings?.printProfiles?.regular
                   ?? { wattsAvg: 0, riskPercent: 0 };
 
-  const pricePerGram = (filament) => {
+  const pricePerGram = (filamentId) => {
+    const filament = (filaments ?? []).find((item) => item.id === filamentId);
     const spoolPrice = Number(filament?.spoolPrice);
     const spoolGrams = Number(filament?.spoolGrams);
-    if (Number.isFinite(spoolPrice) && spoolPrice >= 0 && spoolGrams > 0) return spoolPrice / spoolGrams;
+    if (Number.isFinite(spoolPrice) && spoolPrice > 0 && spoolGrams > 0) return spoolPrice / spoolGrams;
     return (Number(filament?.pricePerKg) || 0) / 1000;
   };
-  const materialCost = (product?.materials ?? []).reduce((sum, m) => {
-    const f = (filaments ?? []).find((f) => f.id === m.filamentId);
-    return sum + (Number(m.grams) || 0) * quantity * pricePerGram(f);
-  }, (Number(product?.purgeGrams) || 0) * quantity * pricePerGram(filaments?.[0]));
+  // Mirrors api/_pricing.js: purge waste is billed, priced with the first material's filament.
+  const materialCost = (product?.materials ?? []).reduce(
+    (sum, m) => sum + (Number(m.grams) || 0) * quantity * pricePerGram(m.filamentId),
+    (Number(product?.purgeGrams) || 0) * quantity * pricePerGram(product?.materials?.[0]?.filamentId),
+  );
 
   const electricityCost = totalHours * (Number(profile.wattsAvg) || 0) / 1000
     * (Number(pricingSettings?.electricityPricePerKwh) || 0);
@@ -43,12 +49,20 @@ export function calculateProductCost(product, filaments, pricingSettings, option
     .filter((part) => !part.amsOnly || profileKey === 'ams')
     .reduce((sum, part) => sum + Number(part.priceIls) / Number(part.lifetimeHours), 0);
   const wearCost = totalHours * wearRate;
-  const machineCost = totalHours * (Number(pricingSettings?.machine?.priceIls) || 0)
-    / Math.max(Number(pricingSettings?.machine?.lifeHours) || 1, 1);
-  const productionCost = materialCost + electricityCost + wearCost + machineCost;
-  const riskPercent = product?.riskPercent == null ? Number(profile.riskPercent) || 0 : Number(product.riskPercent) || 0;
+  const productionCost = materialCost + electricityCost + wearCost;
+  // Risk follows the configured level, as in api/_pricing.js. profile.riskPercent
+  // is only a last-resort fallback for settings that predate riskPercentByLevel.
+  const riskByLevel = pricingSettings?.riskPercentByLevel ?? pricingSettings?.riskPercents ?? {};
+  const riskLevel = ['low', 'medium', 'high'].includes(product?.riskLevel) ? product.riskLevel : 'medium';
+  const riskPercent = product?.riskLevel != null && riskByLevel[riskLevel] != null
+    ? Number(riskByLevel[riskLevel])
+    : product?.riskPercent == null
+      ? Number(riskByLevel[riskLevel] ?? profile.riskPercent) || 0
+      : Math.max(Number(product.riskPercent) || 0, 0);
   const riskCost = productionCost * riskPercent;
-  const costWithRisk = productionCost + riskCost;
+  const costBeforeMachine = productionCost + riskCost;
+  const machineCost = costBeforeMachine * MACHINE_RECOVERY_PERCENT;
+  const costWithRisk = costBeforeMachine + machineCost;
   const internal = Boolean(options.internal);
   const marginPercent = internal ? 0 : options.marginPercent == null
     ? Number(pricingSettings?.marginPercent) || 0 : Number(options.marginPercent) || 0;

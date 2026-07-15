@@ -18,6 +18,7 @@ export const store = {
   goals:          [],
   ledger:         [],
   transparency:   null,      // aggregate public-safe project data, when the endpoint is available
+  feedback:       [],        // admin only: bug reports & improvement suggestions
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -26,7 +27,7 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback] = await Promise.all([
     api("/api/products"),
     api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
@@ -40,6 +41,7 @@ export async function loadData() {
     isAdmin      ? api("/api/goals")                   : Promise.resolve([]),
     isAdmin      ? api("/api/ledger")                  : Promise.resolve([]),
     !isAdmin     ? api("/api/transparency").catch(() => null) : Promise.resolve(null),
+    isAdmin      ? api("/api/feedback")                : Promise.resolve([]),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -54,6 +56,7 @@ export async function loadData() {
   store.goals            = goals;
   store.ledger           = ledger;
   store.transparency     = transparency;
+  store.feedback         = feedback;
 }
 
 export function findProduct(productId) {

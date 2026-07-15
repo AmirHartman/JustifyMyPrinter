@@ -3,8 +3,8 @@
 ## Current deployment target
 
 **Render** (free / Starter tier) is the current deployment target.
-Vercel was used historically and some legacy files remain (`.vercel/`, `vercel.json`,
-`.github/workflows/deploy-pages.yml`). Those files are legacy artifacts.
+`.github/workflows/deploy-pages.yml` remains from when the app also published
+a static preview to GitHub Pages; it is a legacy artifact.
 
 ## How the app runs
 
@@ -90,8 +90,6 @@ Set these in the Render dashboard under **Environment**:
 
 | File/Directory               | Status  | Notes                                      |
 |------------------------------|---------|--------------------------------------------|
-| `.vercel/`                   | Legacy  | Vercel project metadata — not needed       |
-| `vercel.json`                | Legacy  | `{"framework": null}` — safe to ignore     |
 | `.github/workflows/deploy-pages.yml` | Legacy/Optional | Publishes a static preview only; it does not deploy the Express API or replace Render |
 
 Whether `deploy-pages.yml` is still intentionally used has not been established.
@@ -112,8 +110,6 @@ npm run dev
 
 # App is at http://localhost:3000
 ```
-
-No Vercel CLI needed.
 
 ## Render health check
 

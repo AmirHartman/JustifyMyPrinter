@@ -1,6 +1,8 @@
 import { store, findProduct } from "./state.js";
 import { formatCurrency } from "./utils.js";
 
+const NO_PRICE_YET = "ייקבע לאחר בדיקה";
+
 const orderDialog = document.querySelector("#order-dialog");
 const orderForm   = document.querySelector("#order-form");
 
@@ -35,12 +37,12 @@ export function openOrderDialog(productId, previousOptions = {}) {
   if (greetingElement && store.currentUser) {
     const isFemale = store.currentUser.gender === "female";
     greetingElement.textContent = isFemale
-      ? `שמעי ${store.currentUser.name}, איזו בחירה פגז!\n` +
-        `זה הזמן להחליט כמה יחידות את רוצה, \n` +
-        `וכמה נראה לך הוגן לשלם עבור ההדפסה.`
-      : `שמע ${store.currentUser.name}, איזו בחירה פגז!\n` +
-        `זה הזמן להחליט כמה יחידות אתה רוצה, \n` +
-        `וכמה נראה לך הוגן לשלם עבור ההדפסה.`;
+      ? `איזו החלטה נהדרת, ${store.currentUser.name}! 🎉\n` +
+        `עכשיו נשאר רק לבחור כמה יחידות את רוצה, \n` +
+        `ובהמשך גם כמה נראה לך הוגן לפרגן על ההדפסה.`
+      : `איזו החלטה נהדרת, ${store.currentUser.name}! 🎉\n` +
+        `עכשיו נשאר רק לבחור כמה יחידות אתה רוצה, \n` +
+        `ובהמשך גם כמה נראה לך הוגן לפרגן על ההדפסה.`;
   }
 
   const quantityInput = orderForm.elements.quantity;
@@ -53,37 +55,45 @@ export function openOrderDialog(productId, previousOptions = {}) {
 
   const colorFieldset = document.querySelector("#order-color-fieldset");
   const colorContainer = document.querySelector("#order-color-options");
+  const colorHelp = document.querySelector("#order-color-help");
   const colors = productColorOptions(product);
+  // A colour must be chosen, and only from what is actually in stock. Sold-out
+  // colours stay visible — greyed out — so the choice is understandable.
+  const selectable = colors.filter((option) => option.available);
   colorContainer?.replaceChildren();
   if (colorFieldset) colorFieldset.hidden = colors.length === 0;
-  colors.forEach((option, index) => {
+  colors.forEach((option) => {
     const label = document.createElement("label");
     label.className = `color-option${option.available ? "" : " is-unavailable"}`;
     const input = document.createElement("input");
     input.type = "radio";
     input.name = "selectedColor";
     input.value = option.value;
-    input.required = colors.length > 0;
-    input.checked = previousOptions.selectedColor
-      ? previousOptions.selectedColor === option.value
-      : index === 0;
+    input.required = selectable.length > 0;
+    input.disabled = !option.available;
+    // Nothing is preselected: the friend states the colour deliberately. A reorder
+    // restores the previous colour, unless it has since sold out.
+    input.checked = option.available && previousOptions.selectedColor === option.value;
     input.dataset.available = String(option.available);
+    input.addEventListener("invalid", () => input.setCustomValidity("נא לבחור צבע להזמנה"));
+    // Validity is per-input but the message belongs to the whole group: clearing
+    // only the clicked radio would leave the others invalid and block the form.
+    input.addEventListener("change", () => {
+      colorContainer?.querySelectorAll('[name="selectedColor"]')
+        .forEach((radio) => radio.setCustomValidity(""));
+    });
     const swatch = document.createElement("span");
     swatch.className = "color-swatch";
     if (option.colorHex) swatch.style.backgroundColor = option.colorHex;
     const text = document.createElement("span");
-    text.textContent = `${option.label}${option.available ? "" : " — לא זמין, אפשר לבקש חלופה"}`;
+    text.textContent = `${option.label}${option.available ? "" : " — אזל מהמלאי"}`;
     label.append(input, swatch, text);
     colorContainer?.append(label);
   });
+  if (colorHelp) colorHelp.textContent = selectable.length > 0
+    ? "בחירת צבע היא חובה. אפשר לבחור רק מהצבעים שיש כרגע במלאי."
+    : "כל הצבעים אזלו כרגע. אפשר לשלוח את הבקשה, והמנהל יציע צבע חלופי לפני ההדפסה.";
 
-  const customTextField = document.querySelector("#order-custom-text-field");
-  const customTextInput = orderForm.elements.customText;
-  if (customTextField) customTextField.hidden = !product.customTextEnabled;
-  if (customTextInput) {
-    customTextInput.disabled = !product.customTextEnabled;
-    customTextInput.value = product.customTextEnabled ? String(previousOptions.customText ?? "") : "";
-  }
   const availability = document.querySelector("#order-availability-note");
   if (availability) availability.textContent = product.inventoryAvailable === false
     ? "המוצר אינו זמין בצבעים הרגילים כרגע. אפשר לשלוח בקשה, והמנהל יציע חלופה לפני תחילת ההדפסה."
@@ -97,9 +107,15 @@ export function openOrderDialog(productId, previousOptions = {}) {
   orderDialog.showModal();
 }
 
+// An idea has never been printed, so it has no price yet — the admin quotes one
+// after reviewing. Mirrors api/orders.js, which stores no amount for such orders.
+function isUnpriced(product) {
+  return product?.catalogKind === "idea";
+}
+
 function getBaseCost() {
   const product = findProduct(orderForm?.productId.value);
-  if (!product) return 0;
+  if (!product || isUnpriced(product)) return 0;
   const quantity = product.allowMultiple === false ? 1 : Math.max(Number(orderForm.quantity.value) || 1, 1);
   return Number(product.pricesByQuantity?.[quantity] ?? product.cost * quantity);
 }
@@ -109,8 +125,14 @@ export function updateReviewCosts() {
   if (!product || !orderForm) return;
   const quantity = product.allowMultiple === false ? 1 : Math.max(Number(orderForm.quantity.value) || 1, 1);
   if (product.allowMultiple === false) orderForm.quantity.value = 1;
-  document.querySelector("#review-unit-cost").textContent = formatCurrency(product.cost);
-  document.querySelector("#review-total-cost").textContent = formatCurrency(getBaseCost());
+  const total = getBaseCost();
+  const unpriced = isUnpriced(product);
+  document.querySelector("#review-unit-cost").textContent = unpriced ? NO_PRICE_YET : formatCurrency(product.cost);
+  document.querySelector("#review-total-cost").textContent = unpriced ? NO_PRICE_YET : formatCurrency(total);
+  // Print time is mostly fixed per job, so the total is below unit price x quantity.
+  // Without a word of explanation that reads like an arithmetic error.
+  const note = document.querySelector("#review-quantity-note");
+  if (note) note.hidden = unpriced || !(quantity > 1 && total < Number(product.cost) * quantity);
 }
 
 export function addTip(amount) {
@@ -124,10 +146,13 @@ export function resetTip() {
 }
 
 export function updateTipBreakdown() {
+  const product = findProduct(orderForm?.productId.value);
+  const unpriced = isUnpriced(product);
   const base = getBaseCost();
-  document.querySelector("#tip-base-cost").textContent  = formatCurrency(base);
+  document.querySelector("#tip-base-cost").textContent  = unpriced ? NO_PRICE_YET : formatCurrency(base);
   document.querySelector("#tip-extra-cost").textContent = formatCurrency(tipAmount);
-  document.querySelector("#tip-total-cost").textContent = formatCurrency(base + tipAmount);
+  document.querySelector("#tip-total-cost").textContent = unpriced
+    ? formatCurrency(tipAmount) : formatCurrency(base + tipAmount);
 }
 
 export function updateSummary() {
@@ -141,13 +166,11 @@ export function updateSummary() {
   const colorValue = document.querySelector("#summary-color");
   if (colorRow) colorRow.hidden = !selectedColor;
   if (colorValue) colorValue.textContent = selectedColor?.closest("label")?.textContent?.trim() ?? "";
-  const customText = String(orderForm?.elements.customText?.value ?? "").trim();
-  const customRow = document.querySelector("#summary-custom-text-row");
-  if (customRow) customRow.hidden = !customText;
-  if (document.querySelector("#summary-custom-text")) document.querySelector("#summary-custom-text").textContent = customText;
-  document.querySelector("#summary-base-cost").textContent    = formatCurrency(base);
+  const unpriced = isUnpriced(product);
+  document.querySelector("#summary-base-cost").textContent    = unpriced ? NO_PRICE_YET : formatCurrency(base);
   document.querySelector("#summary-tip-cost").textContent     = formatCurrency(tipAmount);
-  document.querySelector("#summary-total-cost").textContent   = formatCurrency(base + tipAmount);
+  document.querySelector("#summary-total-cost").textContent   = unpriced
+    ? NO_PRICE_YET : formatCurrency(base + tipAmount);
 }
 
 export function goToStep(step) {
@@ -168,10 +191,6 @@ export function getTipAmount() {
   return tipAmount;
 }
 
-export function getOrderTotal() {
-  return getBaseCost() + tipAmount;
-}
-
 export function getOrderFriendName(data) {
   return store.currentUser
     ? store.currentUser.name
@@ -180,11 +199,7 @@ export function getOrderFriendName(data) {
 
 export function getOrderOptions() {
   const selected = orderForm?.querySelector('[name="selectedColor"]:checked');
-  return {
-    selectedColors: selected ? [selected.value] : [],
-    selectedColorAvailable: selected?.dataset.available !== "false",
-    customText: String(orderForm?.elements.customText?.value ?? "").trim(),
-  };
+  return { selectedColors: selected ? [selected.value] : [] };
 }
 
 // ── External-link / custom order dialog ────────────────────────

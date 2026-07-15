@@ -73,7 +73,6 @@
         <section aria-labelledby="product-detail-options-title">
           <h3 id="product-detail-options-title">אפשרויות להזמנה</h3>
           <div id="product-detail-colors"></div>
-          <p id="product-detail-custom-text" hidden>אפשר להוסיף טקסט מותאם אישית בהזמנה.</p>
         </section>
         <p id="product-detail-availability" role="status"></p>
         <div class="product-meta">
@@ -113,14 +112,11 @@
             <div id="order-color-options"></div>
             <small id="order-color-help">צבע שאינו זמין יישלח כבקשה לחלופה ויחייב אישור לפני הדפסה.</small>
           </fieldset>
-          <label id="order-custom-text-field" hidden>
-            טקסט מותאם אישית
-            <input name="customText" maxlength="500" autocomplete="off" />
-          </label>
           <p id="order-availability-note" role="status"></p>
           <div class="cost-review">
             <div class="cost-review-row"><span>עלות ליחידה</span><span id="review-unit-cost"></span></div>
             <div class="cost-review-row cost-review-total"><span>עלות כוללת (מינימום)</span><span id="review-total-cost"></span></div>
+            <small id="review-quantity-note" hidden>ההדפסה מתבצעת ברצף אחד, ולכן כמה יחידות יוצאות זולות יותר מהמחיר ליחידה כפול הכמות.</small>
           </div>
           <menu>
             <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
@@ -158,7 +154,6 @@
             <div class="cost-review-row"><span>מוצר</span><span id="summary-product-name"></span></div>
             <div class="cost-review-row"><span>כמות</span><span id="summary-quantity"></span></div>
             <div class="cost-review-row" id="summary-color-row" hidden><span>צבע</span><span id="summary-color"></span></div>
-            <div class="cost-review-row" id="summary-custom-text-row" hidden><span>טקסט מותאם</span><span id="summary-custom-text"></span></div>
             <div class="cost-review-row"><span>עלות בסיס</span><span id="summary-base-cost"></span></div>
             <div class="cost-review-row"><span>פרגון</span><span id="summary-tip-cost"></span></div>
             <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="summary-total-cost"></span></div>

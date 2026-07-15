@@ -1,175 +1,73 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) and other coding
-agents when working with this repository.
+Repository guidance for Claude Code. Follow `AGENTS.md` for operating rules and
+`docs/PRODUCT_SPEC.md` for product requirements.
 
-> **Full project context:** see `docs/PROJECT_CONTEXT.md` and `docs/PRODUCT_SPEC.md`.
-> **Historical implementation sequence:** see `docs/BUILDER_PLAN.md`.
-> **Deployment notes:** see `docs/RENDER_DEPLOYMENT_NOTES.md`.
+## Product
 
----
-
-## Project overview
-
-JustifyMyPrinter (Hebrew: מדפסת חברים) is a Hebrew-language web app for
-managing 3D-printed product orders between an admin (the printer owner, Amir)
-and "friends" (customers). The UI is entirely in Hebrew (RTL).
-
-This is not a landing page and not a generic shop. It manages catalog, orders,
-friends, admin dashboard, costs, revenue, expenses, and filament
-inventory.
-
----
-
-## Running locally
-
-```bash
-npm install
-cp env.local.example .env.local   # then edit and set DATABASE_URL
-npm run dev                        # node --watch --env-file=.env.local server.js
-```
-
-App runs at `http://localhost:3000`.
-
-No Vercel CLI needed. No build step for the frontend.
-
----
-
-## Database setup
-
-On a fresh Neon database, seed tables and initial data:
-
-```bash
-curl -X POST http://localhost:3000/api/init   # local
-# Production requires INIT_SECRET:
-curl -X POST -H "Authorization: Bearer $INIT_SECRET" \
-  https://<your-render-url>/api/init
-```
-
-This is idempotent — safe to re-run.
-
----
-
-## Deployment
-
-**Current target: Render (Express server)**
-
-The app runs as `node server.js` (an Express app), not as Vercel serverless
-functions. `server.js` routes all `/api/*` calls to the handlers in `api/` and
-serves static files (HTML, CSS, JS modules) from the repo root.
-
-Render setup: see `docs/RENDER_DEPLOYMENT_NOTES.md`.
-
-| Script        | Command                                              |
-|---------------|------------------------------------------------------|
-| `npm start`   | `node server.js` — used by Render in production      |
-| `npm run dev` | `node --watch --env-file=.env.local server.js` — local |
-| `npm run build` | `node scripts/build.js` — static export (optional) |
-
-**Legacy:** `.vercel/`, `vercel.json`, and `.github/workflows/deploy-pages.yml`
-are historical artifacts. Do not add new Vercel serverless functions.
-
----
+JustifyMyPrinter (מדפסת חברים) manages a small 3D-printing service: public
+catalog browsing, friend registration and approval, ordering, manual payment
+tracking, and admin management. The product UI is Hebrew, right-to-left, and
+mobile-friendly.
 
 ## Architecture
 
-### Frontend (no framework, no build)
+```text
+Browser pages (*.html, styles.css)
+        |
+Frontend ES modules (js/)
+        |
+Express routes (server.js -> api/)
+        |
+Neon PostgreSQL
+```
 
-Plain HTML + vanilla JS ES modules. No bundler, no transpiler.
+- The frontend is plain HTML and JavaScript with no bundler or framework.
+- `js/state.js` owns shared client state; `js/render.js` renders from it;
+  `js/app.js` boots the current page; `js/api.js` wraps HTTP requests.
+- `server.js` mounts resource handlers from `api/` and serves approved static
+  files.
+- `api/_middleware.js` contains session and authorization helpers;
+  `api/_db.js` connects to Neon; `api/init.js` defines and migrates the schema.
+- Sessions use an HttpOnly cookie. Authorization must be enforced server-side.
+- Render runs `npm start`.
 
-- `js/state.js` — single shared mutable `store` object; all modules import and
-  mutate it by property (never replace the object). `loadData()` fetches all
-  API endpoints in parallel and populates the store.
-- `js/render.js` — one `render()` function that re-renders every section of
-  the UI from `store`. Called after any state mutation.
-- `js/app.js` — event wiring and boot. On load: checks session, routes between
-  pages, calls `loadData()`, then `render()`.
-- `js/api.js` — thin `fetch` wrapper; throws `Error` with the server's `error`
-  field on non-OK responses.
-- `js/utils.js` — `formatCurrency` (ILS locale), `estimatePlaCost` (₪60/kg PLA),
-  `createAiProductDraft`.
-- `js/orders.js` — order dialog logic.
-- `js/auth.js` — DOM helpers for auth panel, mode toggles.
+## Core invariants
 
-Pages: `index.html` (landing + login), `welcome.html` (friend home),
-`catalog.html` (product catalog), `dashboard.html` (shared dashboard).
+- Active catalog data is publicly browsable; ordering requires an eligible
+  authenticated account.
+- Friends may access only their own orders; administrative data and mutations
+  require admin authorization.
+- Payment is an independently tracked manual paid/unpaid state.
+- Special orders require pricing and customer approval before printing.
+- User and order states must use the canonical values in
+  `docs/PRODUCT_SPEC.md`; preserve compatibility normalization where present.
+- Internal messaging is disabled. Communication uses manually opened WhatsApp
+  links with Hebrew templates.
+- Database evolution is additive and idempotent.
 
-Each page has `data-page="<name>"` on `<body>`. `pageName` in `state.js` reads
-this to know which page is loaded.
+## Development
 
-### Backend (Express handlers in `api/`)
+```bash
+npm install
+cp env.local.example .env.local  # configure DATABASE_URL locally
+npm run dev                       # http://localhost:3000
+npm run build                     # optional static-export check
+```
 
-The files under `api/` were originally Vercel serverless functions. They now
-run via `server.js` which mounts them with `app.all('/api/<name>', require('./api/<name>'))`.
-The function signature is identical — each file exports a single `(req, res)` function.
+Initialize a fresh database with `POST /api/init`. Production initialization is
+protected by `INIT_SECRET`. Never print or commit credentials.
 
-- `api/_db.js` — lazy Neon connection via `DB_JMP_DATABASE_URL` or `DATABASE_URL`.
-- `api/_middleware.js` — `parseBody`, `parseCookies`, `getSession`, `requireAuth`, `requireAdmin`.
-- `api/_seed.js` — static catalog data and demo users/orders; imported by `api/init.js`.
-- `api/auth.js` — `GET` (session check), `POST` with `action: login|register|logout`.
-- `api/init.js` — `POST` creates all tables and upserts seed data (idempotent).
-- `api/orders.js` — order CRUD. `?id=:id` for single-order ops; `?mine=true` for friend's own.
-- `api/products.js` — product CRUD (admin only for write). `?id=:id` for single-product ops.
-- `api/categories.js` — public active-category list; admin category CRUD.
-- `api/users.js` — user management (admin only). `?id=:id` for single-user ops.
-- `api/filaments.js` — filament management. `?id=:id` for single-filament ops.
-- `api/expenses.js` — admin-only expense CRUD.
-- `api/messages.js` — authenticated compatibility stub returning `410 Gone`.
-- `api/notifications.js` — authenticated compatibility stub returning `410 Gone`.
-- `api/settings.js` — pricing/contact settings. Pricing is admin-only; sanitized
-  WhatsApp contact settings are public.
+There is no automated test suite. Inspect affected paths and run targeted
+syntax, endpoint, build, and browser checks.
 
-### Auth & roles
+When the owner says "model" or "מודל", they mean the active conversational
+model, whether Claude or Codex. Any persistent change to agent behavior,
+conversation conventions, or project memory must be implemented for both
+surfaces and use a shared repository source of truth wherever possible.
 
-Sessions are cookie-based (`session` cookie, HttpOnly). The `sessions` table
-stores `token → user_id, user_name, user_role, expires_at`. Passwords are stored
-as scrypt hashes; legacy plaintext values are upgraded after successful login.
+## Updating this guidance
 
-Two roles:
-- `admin` — sees all orders, manages products/users, reads all data.
-- `friend` — sees catalog, places orders, sees own orders.
-
-User statuses: `pending` (awaiting approval), `active` (can order),
-`inactive` (deactivated), `rejected` (with reason).
-
-Registration stores `gender` as `male` or `female`. The authenticated session
-returns it so direct Hebrew address can use the appropriate grammatical form.
-
-New registrations start as `status: 'pending'` and must be approved by admin.
-Pending users can view the catalog but cannot order.
-
-### Database schema (Neon PostgreSQL)
-
-Tables: `users`, `products`, `orders`, `sessions`, `filaments`, `settings`,
-`expenses`, `categories`, `messages` (deprecated), and `notifications`
-(deprecated).
-
-See `api/init.js` for full column definitions. All schema changes use
-`ADD COLUMN IF NOT EXISTS` to be safe to re-run.
-
----
-
-## Implementation status
-
-The runtime, schema, auth, orders, WhatsApp, category/catalog, and UI passes are
-implemented. `docs/BUILDER_PLAN.md` is historical and no longer assigns active
-file ownership. Verify current behavior in code.
-
-There is no automated test script; use targeted syntax, API, and browser checks.
-
----
-
-## General rules for all agents
-
-- Write builder plans, analyses, progress updates, summaries, test results, and
-  final handoffs in English unless the user explicitly requests another language.
-- No new Vercel serverless functions. The deployment target is Render/Express.
-- No paid services or paid add-ons without explicit approval from the owner.
-- No architecture replacement without approval.
-- Preserve Hebrew RTL UI and mobile usability.
-- Store secrets only in env variables. Never expose them.
-- Only admin can see admin data. Users see only their own data.
-- Prefer extending existing endpoints over creating new API files.
-- Keep changes small and focused.
-- Use `ADD COLUMN IF NOT EXISTS` for all schema changes.
-- Do not delete `messages`/`notifications` DB tables yet — just stop using them.
+If this file or another AI-guidance file becomes inaccurate, explain the needed
+change and ask the owner for explicit approval before editing it. Never fold an
+AI-guidance edit into an otherwise approved task without separate confirmation.

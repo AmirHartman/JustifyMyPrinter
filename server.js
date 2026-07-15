@@ -13,7 +13,7 @@ app.use(express.json());
 // ── API routes ────────────────────────────────────────────────────────────────
 // Each handler exports a single (req, res) function, the same signature
 // Express uses. app.all forwards every HTTP method so the handlers can
-// branch on req.method internally, exactly as they did on Vercel.
+// branch on req.method internally.
 // Query strings (?id=, ?mine=true, ?key=pricing) are part of req.query,
 // not the path, so one entry per resource covers all operations.
 app.all('/api/auth',          require('./api/auth'));
@@ -30,6 +30,7 @@ app.all('/api/insights',      require('./api/insights'));
 app.all('/api/ledger',        require('./api/ledger'));
 app.all('/api/goals',         require('./api/goals'));
 app.all('/api/transparency',  require('./api/transparency'));
+app.all('/api/feedback',      require('./api/feedback'));
 app.all('/api/maintenance',   require('./api/maintenance'));
 app.all('/api/print-sync',    require('./api/print-sync'));
 app.all('/api/init',          require('./api/init'));

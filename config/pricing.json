@@ -1,6 +1,5 @@
 {
   "electricityPricePerKwh": 0.6432,
-  "machine": { "priceIls": 4300, "lifeHours": 5000 },
   "wearParts": [
     { "id": "hotend", "name": "הוטאנד ונחיר", "priceIls": 84, "lifetimeHours": 800, "amsOnly": false, "kind": "part" },
     { "id": "build_plate", "name": "משטח הדפסה", "priceIls": 143, "lifetimeHours": 1200, "amsOnly": false, "kind": "part" },
