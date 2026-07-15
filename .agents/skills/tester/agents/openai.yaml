@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tester"
+  short_description: "Adaptive system tester for this repository"
+  default_prompt: "Use $tester to run the full JustifyMyPrinter test suite and report open tasks separately."

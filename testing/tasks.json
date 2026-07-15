@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "statuses": ["open", "later", "done", "dismissed"],
+  "tasks": [
+    {
+      "id": "T1",
+      "fingerprint": "inventory-full-transaction-boundary",
+      "title": "Evaluate a full transaction boundary for order status and inventory changes",
+      "status": "later",
+      "source": "shared-plan",
+      "acceptance": "Status persistence and every related inventory mutation commit or roll back together.",
+      "evidence": "Deferred beyond the current patch; per-deduction SQL remains atomic and retryable."
+    },
+    {
+      "id": "T2",
+      "fingerprint": "quantity-unit-vs-total-price",
+      "title": "Clarify per-unit versus total pricing for quantity products",
+      "status": "later",
+      "source": "shared-plan",
+      "acceptance": "Catalog, order snapshot, API validation, and UI use one documented quantity-price contract.",
+      "evidence": "Deferred nice-to-have."
+    },
+    {
+      "id": "T3",
+      "fingerprint": "catalog-order-submit-lock",
+      "title": "Lock catalog order submission while the request is in flight",
+      "status": "later",
+      "source": "shared-plan",
+      "acceptance": "Repeated clicks cannot create duplicate orders.",
+      "evidence": "Deferred nice-to-have."
+    },
+    {
+      "id": "T4",
+      "fingerprint": "goals-ledger-contract-normalization",
+      "title": "Normalize goals and ledger snake_case/camelCase contracts",
+      "status": "later",
+      "source": "shared-plan",
+      "acceptance": "API DTOs and frontend consumers use a single documented field shape.",
+      "evidence": "Deferred nice-to-have."
+    }
+  ]
+}
