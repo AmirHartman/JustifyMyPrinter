@@ -109,6 +109,16 @@
         <h1>מדפסת לחברים</h1>
       </div>
       <div class="topbar-actions">
+        <div class="notif-bell-wrap admin-only">
+          <button class="notif-bell" id="notif-bell" type="button" aria-label="התראות" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="notif-bell-count" id="notif-bell-count" hidden></span>
+          </button>
+          <div class="notif-panel" id="notif-panel" role="menu" aria-label="התראות חדשות" hidden></div>
+        </div>
         <div class="user-bar" aria-label="משתמש מחובר">
           <span id="current-user"></span>
           <button class="ghost-button" id="logout-button" type="button">יציאה</button>
@@ -128,12 +138,18 @@
           משתמשים
           <span class="tab-badge" id="pending-tab-badge"></span>
         </button>
-        <button class="tab admin-tab" data-view="finance">כספים</button>
+        <button class="tab admin-tab" data-view="finance">
+          כספים
+          <span class="tab-badge" id="maintenance-badge" hidden></span>
+        </button>
         <button class="tab admin-tab" data-view="feedback">
           משוב
           <span class="tab-badge" id="feedback-tab-badge" hidden></span>
         </button>
-        <button class="tab admin-tab" data-view="settings">הגדרות</button>
+        <button class="tab admin-tab" data-view="settings">
+          הגדרות
+          <span class="tab-badge" id="low-filaments-badge" hidden></span>
+        </button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>
 
