@@ -838,6 +838,61 @@ function addImageRow(url = "", isMain = false, idx = null) {
 
 document.querySelector("#add-image-row-btn")?.addEventListener("click", () => addImageRow());
 
+// ── Direct upload to Cloudinary ───────────────────────────────
+// Server signs the request (admin-only); the file goes straight to Cloudinary,
+// and the returned secure_url is added as a normal image row.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+async function uploadImageFile(file) {
+  const sig = await api("/api/uploads");
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", sig.apiKey);
+  form.append("timestamp", sig.timestamp);
+  form.append("folder", sig.folder);
+  form.append("signature", sig.signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let message;
+    try { message = (await res.json()).error?.message; } catch { message = res.statusText; }
+    throw new Error(message || "העלאה נכשלה");
+  }
+  const data = await res.json();
+  return data.secure_url;
+}
+
+const uploadImageBtn = document.querySelector("#upload-image-btn");
+const imageFileInput = document.querySelector("#image-file-input");
+uploadImageBtn?.addEventListener("click", () => imageFileInput?.click());
+imageFileInput?.addEventListener("change", async () => {
+  const file = imageFileInput.files?.[0];
+  imageFileInput.value = ""; // allow re-selecting the same file later
+  if (!file) return;
+  if (file.size > MAX_UPLOAD_BYTES) {
+    alert("הקובץ גדול מדי (מקסימום 10MB).");
+    return;
+  }
+
+  const originalText = uploadImageBtn.textContent;
+  uploadImageBtn.disabled = true;
+  uploadImageBtn.textContent = "מעלה…";
+  try {
+    const url = await uploadImageFile(file);
+    const container = document.querySelector("#product-image-rows");
+    addImageRow(url, (container?.children.length ?? 0) === 0);
+    updateProductReadiness();
+  } catch (err) {
+    alert(`העלאת התמונה נכשלה: ${err.message}`);
+  } finally {
+    uploadImageBtn.disabled = false;
+    uploadImageBtn.textContent = originalText;
+  }
+});
+
 // ── Live cost preview ─────────────────────────────────────────
 function updateCostPreview() {
   const beforePanel = document.querySelector("#cost-preview-before-profit");

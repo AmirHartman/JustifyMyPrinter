@@ -47,6 +47,9 @@ Set these in the Render dashboard under **Environment**:
 | `ADMIN_BOOTSTRAP_PASSWORD` | Required with `ADMIN_BOOTSTRAP_NAME` to create the first admin |
 | `ADMIN_WHATSAPP_PHONE` | Public contact number shown to signed-in friends |
 | `ADMIN_WHATSAPP_LABEL` | Public display label for that WhatsApp contact |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for product photo uploads |
+| `CLOUDINARY_API_KEY`  | Cloudinary API key (used to sign uploads) |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret — server-only signing key; never expose |
 | `NODE_ENV`            | `production`                             |
 | `PORT`                | Set automatically by Render — do not hardcode |
 

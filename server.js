@@ -33,6 +33,7 @@ app.all('/api/transparency',  require('./api/transparency'));
 app.all('/api/feedback',      require('./api/feedback'));
 app.all('/api/maintenance',   require('./api/maintenance'));
 app.all('/api/print-sync',    require('./api/print-sync'));
+app.all('/api/uploads',       require('./api/uploads'));
 app.all('/api/init',          require('./api/init'));
 
 // Unknown /api/* paths → structured 404, never falls through to the HTML catch-all.
