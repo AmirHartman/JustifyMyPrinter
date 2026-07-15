@@ -979,12 +979,124 @@ function renderItemStats() {
 
 // ── Users admin view (active + pending sub-tabs) ──────────────
 
+// Per-customer order breakdown is expandable inline. render() rebuilds the
+// users table on every data change (replaceChildren), so the open/closed state
+// and the open-vs-all scope must live outside the DOM to survive a re-render
+// (e.g. after "סמן הכל כשולם"). Mirrors selectedCategoryId's module-state pattern.
+const expandedCustomers  = new Set(); // user.id values currently expanded
+const customerOrderScope = new Map(); // user.id -> "open" | "all" (default "open")
+
 function getUserOrderStats(user) {
   const orders  = ordersForUser(user).filter((o) => o.status !== "cancelled");
   const revenue = sumOrderAmounts(orders);
   const paid    = sumOrderAmounts(orders.filter((o) => o.paid));
   const support = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
   return { count: orders.length, revenue, paid, debt: revenue - paid, support };
+}
+
+// One order's money split, matching renderOrderCostSummary's meanings:
+// total = what the customer pays (finalAmount), cost = my production cost
+// (materials + electricity + wear), profit = the gap. Any of these is null when
+// the underlying figure is missing (unpriced idea, or non-catalog order without
+// a cost) so it can be shown as "—" and excluded from sums — never invent money.
+function orderCostBreakdown(order) {
+  const total  = orderAmount(order);
+  const cost   = order.productionCost != null ? Number(order.productionCost) : null;
+  const profit = (total != null && cost != null) ? total - cost : null;
+  return { total, cost, profit };
+}
+
+// One figure ("עלות"/"רווח"/"סה\"כ") cell content: "—" when the number is
+// missing so it is never mistaken for ₪0, and NO_PRICE_YET for a missing total.
+function figureLabel(value, { missing = "—" } = {}) {
+  return value == null ? missing : formatCurrency(value);
+}
+
+// Expandable inline row under a customer showing their individual orders with
+// עלות / רווח / סה"כ each, plus a per-customer subtotal. Scope defaults to open
+// orders with a toggle to all-time (both always exclude cancelled, matching
+// getUserOrderStats). Returns the <tr>, hidden unless the customer is expanded.
+function buildCustomerOrdersRow(user) {
+  const scope = customerOrderScope.get(user.id) === "all" ? "all" : "open";
+  const orders = ordersForUser(user)
+    .filter((o) => o.status !== "cancelled")
+    .filter((o) => scope === "all" || !PAST_STATUSES.has(o.status))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "customer-orders-row";
+  detailRow.hidden = !expandedCustomers.has(user.id);
+
+  const cell = document.createElement("td");
+  // Span the full row regardless of how many columns the header currently has
+  // (it varies as columns like "ווטסאפ" are added), so the breakdown never
+  // leaves a stray empty cell.
+  cell.colSpan = document.querySelector("#active-users-sub thead tr")?.children.length || 9;
+
+  // Running subtotals — only priced/known figures contribute (null is skipped),
+  // so unpriced ideas never inflate the totals.
+  let sumCost = 0, sumProfit = 0;
+  const sumTotal = sumOrderAmounts(orders);
+  const debt = sumOrderAmounts(orders.filter((o) => !o.paid));
+
+  const lines = orders.map((order) => {
+    const product = findProduct(order.productId);
+    const name    = product?.name || order.requestDescription || "הבקשה שלך";
+    const { total, cost, profit } = orderCostBreakdown(order);
+    if (cost != null)   sumCost   += cost;
+    if (profit != null) sumProfit += profit;
+    const typeBadge = order.orderType && order.orderType !== "catalog"
+      ? `<span class="status-badge status-inactive">${escapeHtml(ORDER_TYPE_LABELS[order.orderType] ?? order.orderType)}</span>`
+      : "";
+    return `
+      <div class="customer-order-line">
+        <div class="customer-order-main">
+          <span class="customer-order-name">${escapeHtml(name)} ×${order.quantity}</span>
+          <span class="ws-status-chip ws-status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] ?? order.status)}</span>
+          ${order.paid ? '<span class="status-badge status-active">שולם</span>' : '<span class="status-badge status-pending">לא שולם</span>'}
+          ${typeBadge}
+        </div>
+        <div class="customer-order-figures">
+          <span>עלות ${figureLabel(cost)}</span>
+          <span>רווח ${figureLabel(profit)}</span>
+          <span class="customer-order-total">סה"כ ${figureLabel(total, { missing: NO_PRICE_YET })}</span>
+        </div>
+      </div>`;
+  }).join("");
+
+  const emptyLabel = scope === "all" ? "אין הזמנות." : "אין הזמנות פתוחות.";
+  const listMarkup = orders.length
+    ? lines
+    : `<p class="empty-state is-visible">${emptyLabel}</p>`;
+
+  cell.innerHTML = `
+    <div class="customer-orders-detail">
+      <div class="customer-orders-scope filter-chips">
+        <button type="button" class="filter-chip ${scope === "open" ? "is-active" : ""}" data-scope="open">פתוחות</button>
+        <button type="button" class="filter-chip ${scope === "all" ? "is-active" : ""}" data-scope="all">כל ההזמנות</button>
+      </div>
+      <div class="customer-orders-list">${listMarkup}</div>
+      <div class="customer-orders-subtotal">
+        <span class="customer-orders-count">${orders.length} הזמנות</span>
+        <div class="customer-order-figures">
+          <span>עלות ${figureLabel(sumCost)}</span>
+          <span>רווח ${figureLabel(sumProfit)}</span>
+          ${debt > 0 ? `<span class="stat-negative">חוב ${formatCurrency(debt)}</span>` : ""}
+          <span class="customer-order-total">סה"כ ${figureLabel(sumTotal)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  cell.querySelectorAll("[data-scope]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      customerOrderScope.set(user.id, btn.dataset.scope);
+      render();
+    });
+  });
+
+  detailRow.append(cell);
+  return detailRow;
 }
 
 function renderUsersAdmin() {
@@ -1010,6 +1122,7 @@ function renderUsersAdmin() {
       const row = document.createElement("tr");
       row.dataset.userId = user.id;
       row.innerHTML = `
+        <td class="whatsapp-col"></td>
         <td>
           ${escapeHtml(user.name)}
           ${user.role === "admin" ? `<span class="status-badge status-active">מנהל</span>` : ""}
@@ -1024,14 +1137,15 @@ function renderUsersAdmin() {
         <td class="actions-cell"></td>
       `;
 
-      // WhatsApp / edit / delete buttons
-      const actionsCell = row.querySelector(".actions-cell");
-      const whatsappBtn = createWhatsAppLink({
+      // WhatsApp icon (rightmost column, next to the name) + edit / delete buttons
+      row.querySelector(".whatsapp-col").append(createWhatsAppLink({
         phone: user.phone,
         message: whatsappTemplates.general(user.fullName || user.name),
         label: "וואטסאפ",
         className: "btn-sm",
-      });
+        iconOnly: true,
+      }));
+      const actionsCell = row.querySelector(".actions-cell");
       const editBtn = document.createElement("button");
       editBtn.className   = "ghost-button btn-sm";
       editBtn.type        = "button";
@@ -1043,7 +1157,6 @@ function renderUsersAdmin() {
       deleteBtn.textContent = "מחק";
       deleteBtn.addEventListener("click", () => deleteUser(user.id));
 
-      actionsCell.append(whatsappBtn);
       if (stats.debt > 0) {
         actionsCell.append(createWhatsAppLink({
           phone: user.phone,
@@ -1061,6 +1174,20 @@ function renderUsersAdmin() {
         markPaidBtn.addEventListener("click", () => markUserOrdersPaid(user));
         actionsCell.append(markPaidBtn);
       }
+
+      const isExpanded = expandedCustomers.has(user.id);
+      const detailsBtn = document.createElement("button");
+      detailsBtn.className   = "ghost-button btn-sm";
+      detailsBtn.type        = "button";
+      detailsBtn.textContent = isExpanded ? "הסתר הזמנות" : "פירוט הזמנות";
+      detailsBtn.setAttribute("aria-expanded", String(isExpanded));
+      detailsBtn.addEventListener("click", () => {
+        if (expandedCustomers.has(user.id)) expandedCustomers.delete(user.id);
+        else expandedCustomers.add(user.id);
+        render();
+      });
+      actionsCell.append(detailsBtn);
+
       actionsCell.append(editBtn, deleteBtn);
 
       // ── Edit row (hidden by default) ──────────────────────
@@ -1080,7 +1207,7 @@ function renderUsersAdmin() {
       `;
 
       const editCell = document.createElement("td");
-      editCell.colSpan = 8;
+      editCell.colSpan = 9;
       editCell.innerHTML = `
         <form class="user-edit-form">
           <div class="user-edit-fields">
@@ -1147,7 +1274,7 @@ function renderUsersAdmin() {
         }
       });
 
-      activeTable.append(row, editRow);
+      activeTable.append(row, buildCustomerOrdersRow(user), editRow);
     });
   }
 
@@ -1161,6 +1288,7 @@ function renderUsersAdmin() {
     pending.forEach((user) => {
       const row = document.createElement("tr");
       row.innerHTML = `
+        <td class="whatsapp-col"></td>
         <td>${escapeHtml(user.name)}</td>
         <td>${escapeHtml(user.fullName ?? "")}</td>
         <td>${escapeHtml(user.howYouKnowAdmin ?? "")}</td>
@@ -1169,14 +1297,15 @@ function renderUsersAdmin() {
         <td class="actions-cell"></td>
       `;
 
-      const cell = row.querySelector(".actions-cell");
-      const whatsappBtn = createWhatsAppLink({
+      row.querySelector(".whatsapp-col").append(createWhatsAppLink({
         phone: user.phone,
         message: whatsappTemplates.general(user.fullName || user.name),
         label: "וואטסאפ",
         className: "btn-sm",
-      });
+        iconOnly: true,
+      }));
 
+      const cell = row.querySelector(".actions-cell");
       const approveBtn = document.createElement("button");
       approveBtn.className   = "primary-button btn-sm";
       approveBtn.type        = "button";
@@ -1194,7 +1323,7 @@ function renderUsersAdmin() {
       deleteBtn.textContent = "מחק";
       deleteBtn.addEventListener("click", () => deleteUser(user.id));
 
-      cell.append(whatsappBtn, approveBtn, rejectBtn, deleteBtn);
+      cell.append(approveBtn, rejectBtn, deleteBtn);
       pendingTable.append(row);
 
       // ── Reject-reason row (replaces window.prompt) ─────────
@@ -1202,7 +1331,7 @@ function renderUsersAdmin() {
       rejectRow.className = "user-edit-row";
       rejectRow.hidden = true;
       const rejectCell = document.createElement("td");
-      rejectCell.colSpan = 6;
+      rejectCell.colSpan = 7;
       rejectCell.innerHTML = `
         <form class="user-edit-form">
           <div class="user-edit-fields">

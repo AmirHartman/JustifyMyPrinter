@@ -159,10 +159,20 @@ document.querySelectorAll(".sub-tab").forEach((btn) => {
   });
 });
 
-document.querySelector("#reset-demo")?.addEventListener("click", async () => {
-  await loadData();
-  render();
-  syncPricingRiskFields();
+document.querySelector("#reset-demo")?.addEventListener("click", async (event) => {
+  const btn = event.currentTarget;
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "מרענן...";
+  try {
+    await loadData();
+    render();
+    syncPricingRiskFields();
+    btn.textContent = "✓ המחירים עודכנו";
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = origLabel; }, 1400);
+  }
 });
 
 // ── Notification bell (top bar) ───────────────────────────────

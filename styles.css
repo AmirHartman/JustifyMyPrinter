@@ -1296,6 +1296,7 @@ td.actions-cell > * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 36px;
   padding: 8px 12px;
   border: 0;
@@ -1307,6 +1308,21 @@ td.actions-cell > * {
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
+}
+
+.whatsapp-button-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.whatsapp-button-icon-only {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 6px;
+}
+
+.whatsapp-col {
+  width: 1%;
 }
 
 .whatsapp-button:hover {
@@ -2310,6 +2326,7 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   padding: 11px 14px;
   background: var(--soft);
   border-radius: 8px;
@@ -2324,16 +2341,19 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
 .ws-order-product {
   font-weight: 600;
   font-size: var(--text-base);
+  overflow-wrap: anywhere;
 }
 
 .ws-order-meta {
   font-size: var(--text-xs);
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .ws-order-right {
@@ -2341,7 +2361,9 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ws-status-chip {
@@ -2362,7 +2384,14 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
 .ws-paid-chip   { font-size: var(--text-xs); color: var(--teal); font-weight: 600; }
 .ws-unpaid-chip { font-size: var(--text-xs); color: var(--gold); font-weight: 600; }
 
-.ws-order-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.ws-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 4px;
+}
 
 .ws-cancel-hint {
   flex-basis: 100%;
@@ -2461,6 +2490,68 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
   font-weight: 800;
   font-size: var(--text-base);
   color: var(--teal-dark);
+}
+
+/* ── Per-customer expandable order breakdown (users table) ── */
+.customer-orders-detail {
+  padding: 12px 14px;
+  background: #f0faf8;
+  border: 1px solid rgba(15, 127, 122, 0.22);
+  border-radius: 8px;
+  font-size: var(--text-sm);
+}
+.customer-orders-scope { margin-bottom: 10px; }
+.customer-order-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(220, 229, 225, 0.6);
+}
+.customer-order-line:last-child { border-bottom: none; }
+.customer-order-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.customer-order-name { font-weight: 700; }
+.customer-order-figures {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.customer-order-total { font-weight: 800; color: var(--teal-dark); }
+.customer-orders-subtotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--line);
+  font-weight: 800;
+}
+@media (max-width: 700px) {
+  /* The generic responsive-table td rule turns cells into space-between
+     flex rows; the breakdown needs its own block layout instead. */
+  .admin-responsive-table tr.customer-orders-row {
+    border: 0;
+    padding: 0;
+    margin-bottom: 10px;
+    background: transparent;
+  }
+  .admin-responsive-table tr.customer-orders-row td {
+    display: block;
+    padding: 0;
+  }
+  .admin-responsive-table tr.customer-orders-row td::before { content: none; }
 }
 
 /* ── Material row ── */
@@ -3033,19 +3124,21 @@ dialog.side-drawer[open] {
   .items-stats-table td:nth-child(8)::before { content: "חוב"; }
   .items-stats-table td:nth-child(9)::before { content: "תמיכה"; }
 
-  .users-stats-table td:nth-child(1)::before { content: "שם משתמש"; }
-  .users-stats-table td:nth-child(2)::before { content: "שם מלא"; }
-  .users-stats-table td:nth-child(3)::before { content: "הזמנות"; }
-  .users-stats-table td:nth-child(4)::before { content: "הכנסה"; }
-  .users-stats-table td:nth-child(5)::before { content: "שולם"; }
-  .users-stats-table td:nth-child(6)::before { content: "חוב"; }
-  .users-stats-table td:nth-child(7)::before { content: "תמיכה"; }
+  .users-stats-table td:nth-child(1)::before { content: ""; }
+  .users-stats-table td:nth-child(2)::before { content: "שם משתמש"; }
+  .users-stats-table td:nth-child(3)::before { content: "שם מלא"; }
+  .users-stats-table td:nth-child(4)::before { content: "הזמנות"; }
+  .users-stats-table td:nth-child(5)::before { content: "הכנסה"; }
+  .users-stats-table td:nth-child(6)::before { content: "שולם"; }
+  .users-stats-table td:nth-child(7)::before { content: "חוב"; }
+  .users-stats-table td:nth-child(8)::before { content: "תמיכה"; }
 
-  .pending-users-table td:nth-child(1)::before { content: "שם משתמש"; }
-  .pending-users-table td:nth-child(2)::before { content: "שם מלא"; }
-  .pending-users-table td:nth-child(3)::before { content: "איך הכיר"; }
-  .pending-users-table td:nth-child(4)::before { content: "הודעה"; }
-  .pending-users-table td:nth-child(5)::before { content: "תאריך הרשמה"; }
+  .pending-users-table td:nth-child(1)::before { content: ""; }
+  .pending-users-table td:nth-child(2)::before { content: "שם משתמש"; }
+  .pending-users-table td:nth-child(3)::before { content: "שם מלא"; }
+  .pending-users-table td:nth-child(4)::before { content: "איך הכיר"; }
+  .pending-users-table td:nth-child(5)::before { content: "הודעה"; }
+  .pending-users-table td:nth-child(6)::before { content: "תאריך הרשמה"; }
 
   .categories-table td:nth-child(1)::before { content: "שם"; }
   .categories-table td:nth-child(2)::before { content: "תיאור"; }
