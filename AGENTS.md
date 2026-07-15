@@ -2,6 +2,7 @@
 
 Operating rules for AI coding agents. Product requirements live in
 `docs/PRODUCT_SPEC.md`; the current implementation is authoritative for behavior.
+The vendor-neutral role and workflow source of truth is `agent-system/README.md`.
 
 ## Purpose
 
@@ -19,6 +20,10 @@ registration and ordering, order and payment tracking, and admin operations.
 - `*.html`, `styles.css` — Hebrew RTL pages and shared responsive styling.
 - `docs/PRODUCT_SPEC.md` — intended product behavior.
 - `api/init.js` — canonical database schema and additive migrations.
+- `agent-system/` — shared roles, lifecycle, contracts, verification tiers, and
+  evidence-based learning rules for Claude and Codex.
+- `testing/`, `tests/`, `scripts/run-tester.js` — automated T0-T2 verification,
+  optional local smoke, regression state, and task reminders.
 
 The production stack is Node.js/Express, plain HTML and JavaScript, Neon
 PostgreSQL, and Render. Legacy deployment files are not part of the runtime.
@@ -30,8 +35,9 @@ PostgreSQL, and Render. Legacy deployment files are not part of the runtime.
    the specification and implementation instead of silently choosing one.
 3. Keep changes focused and preserve unrelated work.
 4. Reuse existing patterns and endpoints before adding abstractions or files.
-5. Validate in proportion to risk. There is no automated test suite, so use
-   targeted syntax, API, build, and browser checks.
+5. Validate in proportion to risk. Run the automated suite and tester, then add
+   targeted API, build, database, or browser checks when the evidence tier and
+   change risk require them.
 6. Report the outcome, files changed, checks run, and any remaining risk.
 
 Communicate in English unless the user requests another language. Keep product
@@ -41,6 +47,22 @@ When the owner says "model" or "מודל", they mean the active conversational
 model, whether Claude or Codex. Any persistent change to agent behavior,
 conversation conventions, or project memory must be implemented for both
 surfaces and use a shared repository source of truth wherever possible.
+
+## Multi-agent workflow
+
+- The active model is Coordinator and may work directly. Delegate only when a
+  specialized or independent scope provides a clear benefit.
+- Normally use zero to two workers; three is exceptional. Workers never spawn
+  agents, and concurrent writers must have exclusive, non-overlapping scopes.
+- Every delegated unit uses the task contract and handoff schemas under
+  `agent-system/contracts/` with a minimal context pack.
+- Tester is strictly read-only. Quality Curator alone changes tests, regression
+  or task state, and approved durable agent-system knowledge.
+- Git Steward alone stages, commits, integrates, or recommends publication.
+  Commit, push, merge, deployment, and worktree cleanup are separate authority
+  boundaries.
+- Follow `agent-system/workflows/verification-matrix.md`; never present T0-T2
+  source evidence as database, browser, or deployment proof.
 
 ## Production constraints
 
@@ -73,6 +95,9 @@ npm install
 cp env.local.example .env.local
 npm run dev
 curl -X POST http://localhost:3000/api/init
+npm test
+npm run tester
+npm run --silent tester -- --json
 npm run build
 ```
 

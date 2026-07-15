@@ -5,7 +5,8 @@ Not a landing page; not a generic shop — a small operating system around a
 Bambu Lab printer: catalog, orders, friends, admin dashboard, costs, and filament.
 
 > **Full context:** `docs/PROJECT_CONTEXT.md` | **Product spec:** `docs/PRODUCT_SPEC.md`
-> **Deployment:** `docs/RENDER_DEPLOYMENT_NOTES.md` | **Builder plan:** `docs/BUILDER_PLAN.md`
+> **Deployment:** `docs/RENDER_DEPLOYMENT_NOTES.md` | **Agent system:** `agent-system/README.md`
+> **Historical context only:** archived `docs/BUILDER_PLAN.md`
 
 ---
 
@@ -64,6 +65,9 @@ See `docs/RENDER_DEPLOYMENT_NOTES.md` for full setup.
 api/           — Express-compatible API handlers (Neon, auth, orders, products…)
 js/            — Frontend ES modules (state, render, app, api, utils…)
 docs/          — Canonical project documentation
+agent-system/  — Vendor-neutral AI roles, workflows, contracts, and knowledge
+testing/       — Tester manifest, regression catalog, system map, and task ledger
+tests/         — Automated Node.js unit and governance checks
 index.html     — Landing page + login
 welcome.html   — Friend home
 catalog.html   — Product catalog
@@ -81,7 +85,8 @@ styles.css     — Global styles (Hebrew RTL)
 - No online payment in MVP — manual paid/unpaid tracking only.
 - Internal messaging is removed; WhatsApp links replace it.
 - Secrets stay in env variables only.
-- See `AGENTS.md` and `docs/BUILDER_PLAN.md` before editing any file.
+- See `AGENTS.md` and `agent-system/README.md` before editing. The Builder Plan
+  is archived implementation history, not active routing or ownership.
 
 ---
 
