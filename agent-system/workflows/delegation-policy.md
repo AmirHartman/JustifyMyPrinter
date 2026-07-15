@@ -29,3 +29,15 @@ must prevent collisions.
 Before spawning, the Coordinator must state why delegation is better, why scope
 is independent, who owns writes, what concise output is expected, what context
 can be omitted, and how the result will be independently checked.
+
+## Announce delegation and agent changes
+
+The Coordinator must tell the owner, in the conversation, every time it:
+
+- Delegates to an existing role or project agent (name which one and why).
+- Defines a new agent or role that did not exist before.
+- Changes an existing agent or role — its prompt, scope, tools, or wrapper.
+
+This announcement is required regardless of risk tier or delegation size; it is
+a communication rule, not a risk gate. It applies on both platforms per
+`AGENTS.md` and `CLAUDE.md`.

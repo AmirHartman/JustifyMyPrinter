@@ -63,6 +63,9 @@ surfaces and use a shared repository source of truth wherever possible.
   boundaries.
 - Follow `agent-system/workflows/verification-matrix.md`; never present T0-T2
   source evidence as database, browser, or deployment proof.
+- Announce delegation and agent changes to the owner in the conversation: every
+  time an existing agent is used, a new agent is defined, or an existing agent
+  is changed. See `agent-system/workflows/delegation-policy.md`.
 
 ## Production constraints
 

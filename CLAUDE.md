@@ -16,6 +16,9 @@ is authoritative for implemented behavior. Project subagent wrappers live in
   lessons; Git Steward owns Git integration.
 - Follow the shared task-contract, handoff, context-pack, verification, and Git
   workflows rather than duplicating them here.
+- Announce in the conversation every time an existing project agent is used,
+  a new agent is defined, or an existing agent is changed — see
+  `agent-system/workflows/delegation-policy.md`.
 
 Run `npm test`, `npm run tester`, and risk-appropriate checks. Structured tester
 output is `npm run --silent tester -- --json`; optional smoke is restricted to
