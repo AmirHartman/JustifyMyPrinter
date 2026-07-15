@@ -37,7 +37,15 @@ module.exports = async (req, res) => {
     const risk = Object.entries(config.printProfiles).map(([profile, profileConfig]) => { const relevant = orders.filter((o) => o.print_profile === profile && ['completed', 'failed'].includes(o.status)); const failed = relevant.filter((o) => o.status === 'failed').length; return { profile, label: profileConfig.label, samples: relevant.length, failed, actualPercent: relevant.length ? failed / relevant.length : null, configuredPercent: profileConfig.riskPercent, enoughData: relevant.length >= 10 }; });
     return res.json({
       maintenance: { accrued: maintenanceAccrued, spent: maintenanceSpent, balance: maintenanceAccrued - maintenanceSpent },
-      partsHealth, maintenanceTasks: config.maintenanceTasks.map((task) => ({ ...task, lastEvent: latest.get(`${task.id}:service`) || null })),
+      partsHealth, maintenanceTasks: config.maintenanceTasks.map((task) => {
+        const lastEvent = latest.get(`${task.id}:service`) || null;
+        const hoursSince = totalHours - Number(lastEvent?.hours_at_event || 0);
+        const daysSince = lastEvent?.performed_at ? (Date.now() - new Date(lastEvent.performed_at).getTime()) / 86400000 : null;
+        const dueSoon = !lastEvent
+          || (Number(task.everyHours) > 0 && hoursSince >= Number(task.everyHours) * 0.8)
+          || (Number(task.everyDays) > 0 && daysSince != null && daysSince >= Number(task.everyDays) * 0.8);
+        return { ...task, lastEvent, hoursSince, daysSince, dueSoon: Boolean(dueSoon) };
+      }),
       business: { accrued: businessAccrued, allocated, withdrawals, available: businessAccrued - allocated - withdrawals },
       owner: { entries: ledger, investments, balance: ownerBalance }, goals,
       pnl: { revenue: pnlRevenue, expenses: pnlExpenses, profit: pnlRevenue - pnlExpenses, monthly, internalConsumption: orders.filter((o) => o.internal).reduce((s, o) => s + Number(o.production_cost || 0), 0) }, risk,

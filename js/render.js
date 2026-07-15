@@ -78,6 +78,104 @@ export function render() {
   renderExpenses();
   renderBusinessInsights();
   renderFeedback();
+  renderNotifications();
+}
+
+// ── Admin notifications (tab badges + top-bar bell) ───────────
+// Derived "needs action" counts: each number reflects items that currently
+// require the admin's attention and drops as they are handled (order promoted,
+// registration approved, filament refilled, maintenance done). No unread state.
+const FILAMENT_LOW_RATIO = 0.1; // ≤10% of a full spool counts as "running low"
+
+function isFilamentLow(filament) {
+  if (!filament || filament.active === false) return false;
+  const remaining = filament.remainingGrams;
+  if (remaining == null) return false; // untracked spools are ignored
+  const spool = Number(filament.spoolGrams) || 1000;
+  return Number(remaining) <= spool * FILAMENT_LOW_RATIO;
+}
+
+function maintenanceAttentionCount(insights) {
+  if (!insights) return 0;
+  const partsDue = (insights.partsHealth || []).filter((p) => p.warning).length;
+  const tasksDue = (insights.maintenanceTasks || []).filter((t) => t.dueSoon).length;
+  return partsDue + tasksDue;
+}
+
+// Every admin notification category in one place. `view`/`sub` drive navigation
+// when a bell-panel row is clicked; adding a category is a single entry here.
+function computeAdminNotifications() {
+  return [
+    { key: "orders",      label: "הזמנות חדשות",      view: "orders",   count: store.orders.filter((o) => o.status === "new").length },
+    { key: "users",       label: "הרשמות ממתינות",    view: "users",    sub: "pending-users",       count: store.users.filter((u) => u.status === "pending").length },
+    { key: "feedback",    label: "משוב חדש",           view: "feedback", count: (store.feedback || []).filter((f) => f.status !== "resolved").length },
+    { key: "filaments",   label: "חומר עומד להיגמר",   view: "settings", sub: "settings-filaments",   count: store.filaments.filter(isFilamentLow).length },
+    { key: "maintenance", label: "טיפול או חלק שמתקרב", view: "finance",  sub: "finance-business",     count: maintenanceAttentionCount(store.insights) },
+  ];
+}
+
+// A category can drive several badge elements (e.g. tab + matching sub-tab).
+const NOTIF_BADGE_IDS = {
+  orders:      ["new-orders-badge"],
+  users:       ["pending-tab-badge", "pending-sub-badge"],
+  feedback:    ["feedback-tab-badge"],
+  filaments:   ["low-filaments-badge"],
+  maintenance: ["maintenance-badge"],
+};
+
+function goToNotification(entry) {
+  setView(entry.view);
+  if (entry.sub) document.querySelector(`.sub-tab[data-sub="${entry.sub}"]`)?.click();
+}
+
+// Single source of truth for every admin badge + the top-bar bell, so the tab
+// counts and the aggregate bell count can never drift apart.
+function renderNotifications() {
+  const categories = computeAdminNotifications();
+
+  categories.forEach((entry) => {
+    (NOTIF_BADGE_IDS[entry.key] || []).forEach((id) => {
+      const el = document.querySelector(`#${id}`);
+      if (!el) return;
+      el.textContent = entry.count || "";
+      el.hidden = entry.count === 0;
+    });
+  });
+
+  const total = categories.reduce((sum, entry) => sum + entry.count, 0);
+  const bellCount = document.querySelector("#notif-bell-count");
+  if (bellCount) {
+    bellCount.textContent = total || "";
+    bellCount.hidden = total === 0;
+  }
+  document.querySelector("#notif-bell")?.classList.toggle("has-notifications", total > 0);
+
+  const panel = document.querySelector("#notif-panel");
+  if (!panel) return;
+  panel.replaceChildren();
+
+  const active = categories.filter((entry) => entry.count > 0);
+  if (active.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "notif-panel-empty";
+    empty.textContent = "אין התראות חדשות 🎉";
+    panel.append(empty);
+    return;
+  }
+
+  active.forEach((entry) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "notif-panel-row";
+    row.setAttribute("role", "menuitem");
+    row.innerHTML = `<span class="notif-panel-label">${escapeHtml(entry.label)}</span><span class="notif-panel-count">${entry.count}</span>`;
+    row.addEventListener("click", () => {
+      goToNotification(entry);
+      panel.hidden = true;
+      document.querySelector("#notif-bell")?.setAttribute("aria-expanded", "false");
+    });
+    panel.append(row);
+  });
 }
 
 const FEEDBACK_KIND_LABELS = { bug: "באג / תקלה", improvement: "הצעה לשיפור" };
@@ -87,12 +185,7 @@ function renderFeedback() {
   if (!list) return;
 
   const items = store.feedback || [];
-  const badge = document.querySelector("#feedback-tab-badge");
-  if (badge) {
-    const open = items.filter((f) => f.status !== "resolved").length;
-    badge.textContent = open || "";
-    badge.hidden = open === 0;
-  }
+  // #feedback-tab-badge is owned centrally by renderNotifications().
 
   document.querySelector("#feedback-empty")
     ?.classList.toggle("is-visible", items.length === 0);
@@ -799,13 +892,7 @@ function renderOrders() {
 
   const filtered = store.orders.filter(matchesOrderFilter);
 
-  const newOrdersBadge = document.querySelector("#new-orders-badge");
-  if (newOrdersBadge) {
-    const count = store.orders.filter((o) => o.status === "new").length;
-    newOrdersBadge.textContent = count || "";
-    newOrdersBadge.hidden = count === 0;
-  }
-
+  // Tab badge counts are owned centrally by renderNotifications().
   groupsContainer.replaceChildren();
   document.querySelector("#orders-empty")?.classList.toggle("is-visible", filtered.length === 0);
 
@@ -906,9 +993,7 @@ function renderUsersAdmin() {
   const inactive = store.users.filter((u) => u.status === "inactive");
   const rejected = store.users.filter((u) => u.status === "rejected");
 
-  const count = pending.length;
-  [document.querySelector("#pending-tab-badge"), document.querySelector("#pending-sub-badge")]
-    .forEach((el) => { if (el) el.textContent = count || ""; });
+  // Pending-count badges (tab + sub-tab) are owned by renderNotifications().
 
   // ── Active users ──────────────────────────────────────────
   const activeTable = document.querySelector("#active-users-table");

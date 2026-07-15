@@ -1770,6 +1770,126 @@ menu {
 }
 
 /* ============================================================
+   NOTIFICATION BELL (top-bar aggregate count + dropdown panel)
+   ============================================================ */
+.notif-bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.notif-bell:hover,
+.notif-bell[aria-expanded="true"],
+.notif-bell.has-notifications {
+  color: var(--teal-dark);
+  border-color: var(--teal);
+}
+
+.notif-bell-count {
+  position: absolute;
+  top: -4px;
+  inset-inline-end: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.notif-bell-count[hidden] {
+  display: none;
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 60;
+  min-width: 240px;
+  max-width: min(320px, 82vw);
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(23, 33, 38, 0.16);
+}
+
+.notif-panel[hidden] {
+  display: none;
+}
+
+.notif-panel-empty {
+  margin: 0;
+  padding: 14px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.notif-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.notif-panel-row:hover {
+  background: var(--surface-2);
+}
+
+.notif-panel-label {
+  font-weight: 600;
+}
+
+.notif-panel-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* ============================================================
    SUB-TABS (users view: active / pending)
    ============================================================ */
 .admin-sub-tabs {
