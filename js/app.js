@@ -165,6 +165,33 @@ document.querySelector("#reset-demo")?.addEventListener("click", async () => {
   syncPricingRiskFields();
 });
 
+// ── Notification bell (top bar) ───────────────────────────────
+// The panel's contents + row navigation are built in render.js; here we only
+// handle opening/closing the dropdown. Rows live inside #notif-panel.
+(() => {
+  const bell  = document.querySelector("#notif-bell");
+  const panel = document.querySelector("#notif-panel");
+  if (!bell || !panel) return;
+
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    bell.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+
+  bell.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(panel.hidden);
+  });
+
+  // Close on outside click or Escape.
+  document.addEventListener("click", (event) => {
+    if (!panel.hidden && !panel.contains(event.target) && !bell.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !panel.hidden) setOpen(false);
+  });
+})();
+
 // ── Order dialog ──────────────────────────────────────────────
 document.querySelector(".close-button")?.addEventListener("click", () => orderDialog?.close());
 document.querySelector("#cancel-order")?.addEventListener("click", () => orderDialog?.close());
