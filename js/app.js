@@ -448,7 +448,6 @@ productForm?.addEventListener("submit", async (event) => {
     printHours:         Number(data.get("printHours")) || 0,
     printProfile:       String(data.get("printProfile") ?? "regular"),
     purgeGrams:         Number(data.get("purgeGrams")) || 0,
-    additionalCopyHours: data.get("additionalCopyHours") === "" ? null : Number(data.get("additionalCopyHours")),
     riskLevel:          String(data.get("riskLevel") ?? "medium"),
     riskPercent:        riskPercentFromForm(),
     minUnitPrice:       data.get("minUnitPrice") === "" ? null : Number(data.get("minUnitPrice")),
@@ -459,6 +458,10 @@ productForm?.addEventListener("submit", async (event) => {
     requiredColors,
     allowMultiple:      data.get("allowMultiple") !== null,
     internalPrintNotes: String(data.get("internalPrintNotes") ?? "").trim(),
+    printFileUrl:       String(data.get("printFileUrl") ?? "").trim(),
+    printFileName:      String(data.get("printFileName") ?? "").trim(),
+    printFileChecksum:  String(data.get("printFileChecksum") ?? "").trim(),
+    printFileUploadedAt: String(data.get("printFileUploadedAt") ?? "").trim(),
     manualPriceEnabled: data.get("manualPriceEnabled") !== null,
     manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
     calculatedCost:     computedCostFromForm(),
@@ -507,8 +510,13 @@ function collectMaterialRows() {
   const rows = document.querySelectorAll("#product-materials-rows .material-row");
   return Array.from(rows).map((row) => ({
     filamentId: row.querySelector("select")?.value ?? "",
-    grams:      Number(row.querySelector("input[type='number']")?.value) || 0,
+    grams:      roundToTwoDecimals(row.querySelector("input[type='number']")?.value),
   })).filter((m) => m.filamentId);
+}
+
+function roundToTwoDecimals(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.round((numeric + Number.EPSILON) * 100) / 100 : 0;
 }
 
 function renderCategoryCheckboxes(selectedIds = []) {
@@ -543,7 +551,7 @@ function collectCategoryRows() {
 }
 
 function collectColorOptions(kind) {
-  const selector = `#product-${kind}-colors input[type='checkbox']:checked`;
+  const selector = `#product-${kind}-colors input[data-color-option]:checked`;
   return Array.from(document.querySelectorAll(selector)).map((box) => box.value);
 }
 
@@ -560,14 +568,28 @@ function renderColorOptions(possibleColors = [], requiredColors = []) {
       container.append(note);
       continue;
     }
+    let selectAllCheckbox = null;
+    if (kind === "possible") {
+      const selectAllLabel = document.createElement("label");
+      selectAllLabel.className = "checkbox-label";
+      selectAllCheckbox = document.createElement("input");
+      selectAllCheckbox.type = "checkbox";
+      selectAllCheckbox.style.width = "auto";
+      selectAllCheckbox.dataset.colorSelectAll = "true";
+      selectAllLabel.append(selectAllCheckbox, " בחר הכול");
+      container.append(selectAllLabel);
+    }
+    const optionCheckboxes = [];
     store.filaments.forEach((filament) => {
       const label = document.createElement("label");
       label.className = "checkbox-label";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = filament.id;
+      checkbox.dataset.colorOption = kind;
       checkbox.checked = selections[kind].has(filament.id) || selections[kind].has(filament.name);
       checkbox.style.width = "auto";
+      optionCheckboxes.push(checkbox);
       const swatch = document.createElement("span");
       swatch.className = "color-swatch";
       swatch.style.background = filament.colorHex || "#ccc";
@@ -575,6 +597,21 @@ function renderColorOptions(possibleColors = [], requiredColors = []) {
       label.append(checkbox, swatch, ` ${filament.name}${filament.active === false ? " (לא פעיל)" : ""}`);
       container.append(label);
     });
+    if (selectAllCheckbox) {
+      const updateSelectAllState = () => {
+        const selectedCount = optionCheckboxes.filter((checkbox) => checkbox.checked).length;
+        selectAllCheckbox.checked = selectedCount === optionCheckboxes.length;
+        selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < optionCheckboxes.length;
+      };
+      optionCheckboxes.forEach((checkbox) => checkbox.addEventListener("change", updateSelectAllState));
+      selectAllCheckbox.addEventListener("change", () => {
+        optionCheckboxes.forEach((checkbox) => { checkbox.checked = selectAllCheckbox.checked; });
+        selectAllCheckbox.indeterminate = false;
+        productFormDirty = true;
+        updateProductReadiness();
+      });
+      updateSelectAllState();
+    }
   }
 }
 
@@ -616,10 +653,10 @@ function updateProductReadiness(serverMissing = null) {
 
 function collectImageRows() {
   const rows = document.querySelectorAll("#product-image-rows .image-row");
-  return Array.from(rows).map((row, i) => ({
-    url:    String(row.querySelector("input[type='url']")?.value ?? "").trim(),
-    isMain: row.querySelector("input[name='mainImage']")?.checked || (i === 0 && !document.querySelector("#product-image-rows input[name='mainImage']:checked")),
-  })).filter((img) => img.url);
+  return Array.from(rows)
+    .map((row) => String(row.querySelector("input[type='url']")?.value ?? "").trim())
+    .filter(Boolean)
+    .map((url, index) => ({ url, isMain: index === 0 }));
 }
 
 function computedCostFromForm() {
@@ -628,7 +665,7 @@ function computedCostFromForm() {
     printProfile: document.querySelector("#product-form [name='printProfile']")?.value ?? "regular",
     materials:    collectMaterialRows(),
     purgeGrams: Number(document.querySelector("#product-form [name='purgeGrams']")?.value) || 0,
-    additionalCopyHours: document.querySelector("#product-form [name='additionalCopyHours']")?.value === "" ? null : Number(document.querySelector("#product-form [name='additionalCopyHours']")?.value),
+    additionalCopyHours: null,
     riskLevel: document.querySelector("#product-form [name='riskLevel']")?.value ?? "medium",
     riskPercent: riskPercentFromForm(),
     minUnitPrice: document.querySelector("#product-form [name='minUnitPrice']")?.value === "" ? null : Number(document.querySelector("#product-form [name='minUnitPrice']")?.value),
@@ -649,6 +686,8 @@ function resetProductForm() {
   document.querySelector("#product-submit-btn").textContent = "הוספת מוצר";
   document.querySelector("#product-editor-title").textContent = "מוצר חדש";
   document.querySelector("#product-import-summary")?.setAttribute("hidden", "");
+  const printFileStatus = document.querySelector("#print-file-status");
+  if (printFileStatus) printFileStatus.textContent = "";
   renderCategoryCheckboxes([]);
   renderColorOptions([], []);
   productFormDirty = false;
@@ -696,11 +735,20 @@ window.openProductEditForm = function openProductEditForm(product) {
   productForm.elements["printProfile"].value = product.printProfile ?? "regular";
   productForm.elements["minUnitPrice"].value = product.minUnitPrice ?? "";
   productForm.elements["purgeGrams"].value = product.purgeGrams ?? 0;
-  productForm.elements["additionalCopyHours"].value = product.additionalCopyHours ?? "";
   productForm.elements["riskLevel"].value = product.riskLevel ?? riskLevelFromPercent(product.riskPercent);
   productForm.elements["catalogKind"].value = product.catalogKind ?? "printed";
   productForm.elements["allowMultiple"].checked = product.allowMultiple !== false;
   productForm.elements["internalPrintNotes"].value = product.internalPrintNotes ?? "";
+  productForm.elements["printFileUrl"].value        = product.printFileUrl ?? "";
+  productForm.elements["printFileName"].value       = product.printFileName ?? "";
+  productForm.elements["printFileChecksum"].value   = product.printFileChecksum ?? "";
+  productForm.elements["printFileUploadedAt"].value = product.printFileUploadedAt ?? "";
+  const printFileStatusEl = document.querySelector("#print-file-status");
+  if (printFileStatusEl) {
+    printFileStatusEl.textContent = product.printFileName
+      ? `קובץ מצורף: ${product.printFileName} — העלאת קובץ חדש תחליף אותו.`
+      : "";
+  }
   document.querySelector("#edit-product-id").value = product.id;
   document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
   renderCategoryCheckboxes(product.categoryIds ?? []);
@@ -725,8 +773,12 @@ window.openProductEditForm = function openProductEditForm(product) {
   // Rebuild image rows
   const imagesContainer = document.querySelector("#product-image-rows");
   imagesContainer.replaceChildren();
-  const productImages = product.images?.length ? product.images : product.image ? [{ url: product.image, isMain: true }] : [];
-  productImages.forEach((img, i) => addImageRow(img.url, img.isMain, i));
+  const productImages = product.images?.length
+    ? product.images.map((image) => typeof image === "string" ? { url: image, isMain: false } : { ...image })
+    : product.image ? [{ url: product.image, isMain: true }] : [];
+  const currentMainIndex = productImages.findIndex((image) => image.isMain || image.url === product.image);
+  if (currentMainIndex > 0) productImages.unshift(...productImages.splice(currentMainIndex, 1));
+  productImages.forEach((img) => addImageRow(img.url));
 
   const importSummary = document.querySelector("#product-import-summary");
   if (importSummary && product.printSync) {
@@ -801,10 +853,18 @@ function addMaterialRow(filamentId = "", grams = "") {
   const gramsInput = document.createElement("input");
   gramsInput.type        = "number";
   gramsInput.min         = "0";
-  gramsInput.step        = "1";
+  gramsInput.step        = "0.01";
   gramsInput.placeholder = "גרם";
-  gramsInput.value       = grams;
-  gramsInput.addEventListener("input", updateCostPreview);
+  gramsInput.value       = grams === "" ? "" : roundToTwoDecimals(grams).toFixed(2);
+  gramsInput.addEventListener("input", () => {
+    const decimalPart = gramsInput.value.split(".")[1] ?? "";
+    if (decimalPart.length > 2) gramsInput.value = roundToTwoDecimals(gramsInput.value).toFixed(2);
+    updateCostPreview();
+  });
+  gramsInput.addEventListener("blur", () => {
+    if (gramsInput.value !== "") gramsInput.value = roundToTwoDecimals(gramsInput.value).toFixed(2);
+    updateCostPreview();
+  });
 
   const deleteBtn = document.createElement("button");
   deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
@@ -833,11 +893,21 @@ function autoSwitchProfileForMultiMaterial() {
 }
 
 // ── Image rows ────────────────────────────────────────────────
-function addImageRow(url = "", isMain = false, idx = null) {
+function refreshImageRowOrder() {
+  const rows = Array.from(document.querySelectorAll("#product-image-rows .image-row"));
+  rows.forEach((row, index) => {
+    const primaryBadge = row.querySelector("[data-image-primary]");
+    if (primaryBadge) primaryBadge.hidden = index !== 0;
+    const moveUp = row.querySelector("[data-move-image='up']");
+    const moveDown = row.querySelector("[data-move-image='down']");
+    if (moveUp) moveUp.disabled = index === 0;
+    if (moveDown) moveDown.disabled = index === rows.length - 1;
+  });
+}
+
+function addImageRow(url = "") {
   const container = document.querySelector("#product-image-rows");
   if (!container) return;
-
-  const rowIdx = idx ?? container.children.length;
 
   const row = document.createElement("div");
   row.className = "image-row";
@@ -848,14 +918,35 @@ function addImageRow(url = "", isMain = false, idx = null) {
   urlInput.value       = url;
   urlInput.addEventListener("input", updateProductReadiness);
 
-  const radioLabel = document.createElement("label");
-  radioLabel.className = "radio-label";
-  const radio = document.createElement("input");
-  radio.type    = "radio";
-  radio.name    = "mainImage";
-  radio.dataset.idx = String(rowIdx);
-  radio.checked = isMain || rowIdx === 0;
-  radioLabel.append(radio, " ראשי");
+  const orderControls = document.createElement("div");
+  orderControls.className = "image-order-controls";
+  const primaryBadge = document.createElement("span");
+  primaryBadge.className = "image-primary-badge";
+  primaryBadge.dataset.imagePrimary = "true";
+  primaryBadge.textContent = "ראשית";
+
+  const moveButton = (direction, label, glyph) => {
+    const button = document.createElement("button");
+    button.className = "ghost-button btn-sm image-order-button";
+    button.type = "button";
+    button.dataset.moveImage = direction;
+    button.textContent = glyph;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", () => {
+      const sibling = direction === "up" ? row.previousElementSibling : row.nextElementSibling;
+      if (!sibling) return;
+      if (direction === "up") container.insertBefore(row, sibling);
+      else container.insertBefore(sibling, row);
+      productFormDirty = true;
+      refreshImageRowOrder();
+      updateProductReadiness();
+    });
+    return button;
+  };
+  const moveUp = moveButton("up", "העבר תמונה למעלה", "↑");
+  const moveDown = moveButton("down", "העבר תמונה למטה", "↓");
+  orderControls.append(primaryBadge, moveUp, moveDown);
 
   const deleteBtn = document.createElement("button");
   deleteBtn.className   = "ghost-button btn-sm user-delete-btn";
@@ -863,14 +954,14 @@ function addImageRow(url = "", isMain = false, idx = null) {
   deleteBtn.textContent = "✕";
   deleteBtn.addEventListener("click", () => {
     row.remove();
-    // Make first remaining row's radio checked
-    const firstRadio = document.querySelector("#product-image-rows input[type='radio']");
-    if (firstRadio) firstRadio.checked = true;
+    productFormDirty = true;
+    refreshImageRowOrder();
     updateProductReadiness();
   });
 
-  row.append(urlInput, radioLabel, deleteBtn);
+  row.append(urlInput, orderControls, deleteBtn);
   container.append(row);
+  refreshImageRowOrder();
 }
 
 document.querySelector("#add-image-row-btn")?.addEventListener("click", () => addImageRow());
@@ -919,14 +1010,101 @@ imageFileInput?.addEventListener("change", async () => {
   uploadImageBtn.textContent = "מעלה…";
   try {
     const url = await uploadImageFile(file);
-    const container = document.querySelector("#product-image-rows");
-    addImageRow(url, (container?.children.length ?? 0) === 0);
+    addImageRow(url);
     updateProductReadiness();
   } catch (err) {
     alert(`העלאת התמונה נכשלה: ${err.message}`);
   } finally {
     uploadImageBtn.disabled = false;
     uploadImageBtn.textContent = originalText;
+  }
+});
+
+// ── Direct upload of a print-ready slice file (e.g. .gcode.3mf) ──────
+// Same signed-upload pattern as images, but raw resource type + a server-side
+// extraction step (POST /api/print-files) after the Cloudinary upload finishes.
+const MAX_PRINT_FILE_BYTES = 50 * 1024 * 1024;
+
+async function uploadPrintFile(file) {
+  const sig = await api("/api/uploads?type=print");
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", sig.apiKey);
+  form.append("timestamp", sig.timestamp);
+  form.append("folder", sig.folder);
+  form.append("signature", sig.signature);
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let message;
+    try { message = (await res.json()).error?.message; } catch { message = res.statusText; }
+    throw new Error(message || "העלאת קובץ ההדפסה נכשלה");
+  }
+  const data = await res.json();
+  const extraction = await api("/api/print-files", {
+    method: "POST",
+    body: JSON.stringify({ url: data.secure_url, filename: file.name }),
+  });
+  return extraction;
+}
+
+const uploadPrintFileBtn = document.querySelector("#upload-print-file-btn");
+const printFileInput     = document.querySelector("#print-file-input");
+uploadPrintFileBtn?.addEventListener("click", () => printFileInput?.click());
+printFileInput?.addEventListener("change", async () => {
+  const file = printFileInput.files?.[0];
+  printFileInput.value = ""; // allow re-selecting the same file later
+  if (!file) return;
+  if (file.size > MAX_PRINT_FILE_BYTES) {
+    alert("הקובץ גדול מדי (מקסימום 50MB).");
+    return;
+  }
+
+  const originalText = uploadPrintFileBtn.textContent;
+  uploadPrintFileBtn.disabled = true;
+  uploadPrintFileBtn.textContent = "מעלה…";
+  try {
+    const result = await uploadPrintFile(file);
+
+    productForm.elements["printHours"].value   = result.printHours ?? 0;
+    productForm.elements["printProfile"].value = result.printProfile ?? "regular";
+    productForm.elements["purgeGrams"].value   = result.purgeGrams ?? 0;
+    // A fresh upload is an explicit new intent — replace the material rows
+    // with the newly extracted weights (the admin still picks a filament per row).
+    const materialsContainer = document.querySelector("#product-materials-rows");
+    materialsContainer?.replaceChildren();
+    (result.materialGrams ?? []).forEach((grams) => addMaterialRow("", grams));
+
+    productForm.elements["printFileUrl"].value        = result.url ?? "";
+    productForm.elements["printFileName"].value       = result.filename ?? file.name;
+    productForm.elements["printFileChecksum"].value   = result.checksum ?? "";
+    productForm.elements["printFileUploadedAt"].value = new Date().toISOString();
+
+    const printFileStatus = document.querySelector("#print-file-status");
+    if (printFileStatus) {
+      printFileStatus.textContent = `קובץ מצורף: ${productForm.elements["printFileName"].value} — העלאת קובץ חדש תחליף אותו.`;
+    }
+
+    const importSummary = document.querySelector("#product-import-summary");
+    if (importSummary) {
+      const grams = (result.materialGrams ?? []).reduce((sum, value) => sum + Number(value || 0), 0);
+      const warnings = (result.warnings ?? []).length ? ` אזהרות: ${result.warnings.join("; ")}` : "";
+      const purge = Number(result.purgeGrams || 0);
+      const purgeSummary = purge > 0 ? ` ועוד ${purge.toFixed(2)} גרם purge` : "";
+      importSummary.textContent = `נקלט מקובץ שהועלה: ${Number(result.printHours || 0).toFixed(2)} שעות, ${grams.toFixed(2)} גרם${purgeSummary}.${warnings}`;
+      importSummary.hidden = false;
+    }
+
+    updateCostPreview();
+    updateProductReadiness();
+  } catch (err) {
+    alert(`העלאת קובץ ההדפסה נכשלה: ${err.message}`);
+  } finally {
+    uploadPrintFileBtn.disabled = false;
+    uploadPrintFileBtn.textContent = originalText;
   }
 });
 
@@ -941,7 +1119,7 @@ function updateCostPreview() {
     printProfile: productForm?.elements["printProfile"]?.value ?? "regular",
     materials:    collectMaterialRows(),
     purgeGrams: Number(productForm?.elements["purgeGrams"]?.value) || 0,
-    additionalCopyHours: productForm?.elements["additionalCopyHours"]?.value === "" ? null : Number(productForm?.elements["additionalCopyHours"]?.value),
+    additionalCopyHours: null,
     riskLevel: productForm?.elements["riskLevel"]?.value ?? "medium",
     riskPercent: riskPercentFromForm(),
     minUnitPrice: productForm?.elements["minUnitPrice"]?.value === "" ? null : Number(productForm?.elements["minUnitPrice"]?.value),
@@ -962,6 +1140,7 @@ function updateCostPreview() {
   const manualPrice = Number(productForm?.elements["manualPrice"]?.value) || null;
   const manualOverrideActive = manualPriceEnabled && manualPrice;
   const finalCost = manualOverrideActive ? manualPrice : b.finalCost;
+  const marginAmount = manualOverrideActive ? manualPrice - b.costWithRisk : b.marginAmount;
 
   beforePanel.innerHTML = `
     <div class="cost-preview-row"><span>עלות חומרים</span><span>${formatCurrency(b.materialCost)}</span></div>
@@ -972,11 +1151,11 @@ function updateCostPreview() {
     <div class="cost-preview-final"><span>עלות ייצור לפני רווח</span><span>${formatCurrency(b.costWithRisk)}</span></div>
   `;
   afterPanel.innerHTML = `
-    <div class="cost-preview-row"><span>רווח</span><span>${formatCurrency(b.marginAmount)}</span></div>
+    <div class="cost-preview-row"><span>רווח</span><span>${formatCurrency(marginAmount)}</span></div>
     <div class="cost-preview-row"><span>מינימום מוצר</span><span>${formatCurrency(b.productFloor)}</span></div>
     <div class="cost-preview-row"><span>מינימום הזמנה</span><span>${formatCurrency(b.minOrderPrice)}</span></div>
     ${manualOverrideActive ? `<div class="cost-preview-row"><span>מחיר ידני (דורס את החישוב)</span><span>${formatCurrency(manualPrice)}</span></div>` : ""}
-    <div class="cost-preview-final"><span>מחיר לאחר רווח, מעוגל מעלה</span><span>${formatCurrency(finalCost)}</span></div>
+    <div class="cost-preview-final"><span>${manualOverrideActive ? "מחיר סופי ידני" : "מחיר לאחר רווח, מעוגל מעלה"}</span><span>${formatCurrency(finalCost)}</span></div>
   `;
   updateProductReadiness();
 }
@@ -984,7 +1163,7 @@ function updateCostPreview() {
 // Wire live preview to form inputs (input covers number fields; change covers select)
 productForm?.addEventListener("input",  (e) => {
   productFormDirty = true;
-  if (e.target.matches("[name='printHours'], [name='additionalCopyHours'], [name='purgeGrams'], [name='minUnitPrice'], [name='manualPrice']")) updateCostPreview();
+  if (e.target.matches("[name='printHours'], [name='minUnitPrice'], [name='manualPrice']")) updateCostPreview();
   else updateProductReadiness();
 });
 productForm?.addEventListener("change", (e) => {
@@ -1017,8 +1196,8 @@ document.querySelector("#add-filament-btn")?.addEventListener("click", () => {
   form.elements["materialType"].value = "PLA";
   form.hidden = false;
   updateFilamentPreview();
-  setView("settings");
-  activateSubTab("settings-filaments");
+  setView("materials");
+  activateSubTab("materials-filaments");
   form.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
@@ -1385,9 +1564,9 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
   applyAuth();
   applyMode();
 
-  // welcome.html is the personal area — it requires a session.
-  // catalog.html is public: active products are visible without login.
-  if (pageName === "welcome" && !store.currentUser) {
+  // Personal and catalog pages require a valid session. The server enforces the
+  // catalog route too; this client guard also covers static-build deployments.
+  if (["welcome", "catalog"].includes(pageName) && !store.currentUser) {
     window.location.href = "dashboard.html";
     return;
   }
@@ -1403,8 +1582,7 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
     applyMode();
   }
 
-  const shouldLoadData =
-    pageName === "catalog" || (store.currentUser && ["app", "welcome"].includes(pageName));
+  const shouldLoadData = store.currentUser && ["app", "welcome", "catalog"].includes(pageName);
   if (shouldLoadData) {
     try {
       await loadData();

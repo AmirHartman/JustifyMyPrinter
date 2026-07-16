@@ -54,7 +54,7 @@
       "mutation": "none",
       "timeoutMs": 60000,
       "requires": ["Node.js 20-22"],
-      "proves": "The exercised pure behavior, runner policy, wrapper constraints, and sensitivity fixtures pass.",
+      "proves": "The exercised pure behavior, mocked authorization handlers, runner policy, wrapper constraints, and sensitivity fixtures pass.",
       "doesNotProve": "Database, browser, deployment, or unexercised behavior.",
       "owner": "Quality Curator"
     },
@@ -185,6 +185,20 @@
       "owner": "Quality Curator"
     },
     {
+      "id": "R10",
+      "label": "authenticated catalog contract",
+      "tier": "T2",
+      "kind": "source-contract",
+      "command": "checkRegressions R10",
+      "when": "always",
+      "mutation": "none",
+      "timeoutMs": 1000,
+      "requires": ["repository sources"],
+      "proves": "API collections, the server catalog route, the client boot guard, and the product specification retain the authenticated-catalog source contract.",
+      "doesNotProve": "Runtime session handling, database access, HTTP routing, browser redirects, or deployment behavior; mocked handler tests and optional local smoke provide separate limited evidence.",
+      "owner": "Quality Curator"
+    },
+    {
       "id": "local-http-smoke",
       "label": "isolated local HTTP smoke",
       "tier": "T3",
@@ -194,8 +208,8 @@
       "mutation": "read-only GET",
       "timeoutMs": 3000,
       "requires": ["isolated server on literal loopback"],
-      "proves": "The exercised local server returns non-redirect success responses for health, root, and catalog.",
-      "doesNotProve": "Database mutation paths, authentication, browser workflows, or deployment.",
+      "proves": "The exercised local server returns success for health and root, and redirects an unauthenticated catalog request to the login dashboard.",
+      "doesNotProve": "Authenticated catalog access, database mutation paths, browser workflows, or deployment.",
       "owner": "Tester",
       "defaultSkipReason": "not requested; requires an isolated local server"
     },

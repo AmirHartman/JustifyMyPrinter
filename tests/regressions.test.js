@@ -7,10 +7,10 @@ const { DEFINITIONS, checkRegressions } = require('../scripts/lib/regression-che
 const root = path.resolve(__dirname, '..');
 const source = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('R1-R9 pass against the repository with honest T2 metadata', () => {
+test('R1-R10 pass against the repository with honest T2 metadata', () => {
   const checks = checkRegressions(root);
   assert.deepEqual(checks.map((check) => check.id), DEFINITIONS.map((definition) => definition.id));
-  assert.equal(checks.length, 9);
+  assert.equal(checks.length, 10);
   assert.deepEqual(checks.filter((check) => !check.passed), []);
   for (const check of checks) {
     assert.equal(check.tier, 'T2');
@@ -30,6 +30,7 @@ const negativeFixtures = {
   R7: { 'js/render.js': '' },
   R8: { 'api/orders.js': '' },
   R9: { 'api/init.js': '' },
+  R10: { 'api/products.js': '' },
 };
 
 for (const [id, overrides] of Object.entries(negativeFixtures)) {

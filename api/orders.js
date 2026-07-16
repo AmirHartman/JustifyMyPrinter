@@ -440,6 +440,9 @@ module.exports = async (req, res) => {
           ? Number(product.manual_price) * quantity
           : breakdown.shopPrice
         : null;
+      const marginComponent = baseCost == null || !breakdown
+        ? null
+        : baseCost - breakdown.costWithRisk;
       const supportAmount = Math.max(Number(body.supportAmount) || 0, 0);
       const finalAmount = baseCost == null ? null : baseCost + supportAmount;
       const selectedColorsArray = Array.isArray(body.selectedColors) ? body.selectedColors.map(colorValue).filter(Boolean) : [];
@@ -509,7 +512,7 @@ module.exports = async (req, res) => {
           ${product ? numberOrNull(product.print_hours) : null},
           ${requiresPriceApproval}, FALSE,
           ${breakdown?.productionCost ?? null}, ${breakdown?.wearCost ?? null},
-          ${breakdown?.machineCost ?? null}, ${breakdown?.marginAmount ?? null},
+          ${breakdown?.machineCost ?? null}, ${marginComponent},
           ${breakdown?.totalHours ?? null}, ${product?.print_profile || 'regular'}, ${breakdown?.materialGrams ?? null},
           ${breakdown?.marginPercent ?? null}, FALSE,
           ${status}, FALSE, NOW(), NOW()

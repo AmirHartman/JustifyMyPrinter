@@ -48,9 +48,10 @@ async function syncEntry(entry, products, cookie) {
   const filePath = path.resolve(printDir, entry.file);
   if (path.relative(printDir, filePath).startsWith('..')) throw new Error('File must be inside PRINT_FILES_DIR');
 
-  const estimates = await extract3mfEstimates(filePath);
+  const buffer = await fs.readFile(filePath);
+  const estimates = await extract3mfEstimates(buffer);
   const totalGrams = estimates.materialGrams.reduce((sum, value) => sum + value, 0);
-  const checksum = createHash('sha256').update(await fs.readFile(filePath)).digest('hex');
+  const checksum = createHash('sha256').update(buffer).digest('hex');
   const result = await request('/api/products?action=sync', {
     method: 'POST',
     body: JSON.stringify({
@@ -67,7 +68,8 @@ async function syncEntry(entry, products, cookie) {
   }, cookie);
   entry.productId = result.payload.id;
   const status = result.payload.printSync?.status === 'needs_material' ? 'ממתין לבחירת פילמנט' : `₪${Number(result.payload.cost).toFixed(2)}`;
-  console.log(`${entry.file}: ${estimates.printHours.toFixed(2)}h, ${totalGrams.toFixed(2)}g, ${status} -> ${result.payload.name}`);
+  const purge = estimates.purgeGrams > 0 ? ` + ${estimates.purgeGrams.toFixed(2)}g purge` : '';
+  console.log(`${entry.file}: ${estimates.printHours.toFixed(2)}h, ${totalGrams.toFixed(2)}g${purge}, ${status} -> ${result.payload.name}`);
 }
 
 async function main() {
@@ -77,9 +79,10 @@ async function main() {
     let failures = 0;
     for (const file of files) {
       try {
-        const result = await extract3mfEstimates(path.join(printDir, file));
+        const result = await extract3mfEstimates(await fs.readFile(path.join(printDir, file)));
         const grams = result.materialGrams.reduce((sum, value) => sum + value, 0);
-        console.log(`${file}: ${result.printHours.toFixed(2)}h, ${grams.toFixed(2)}g`);
+        const purge = result.purgeGrams > 0 ? ` + ${result.purgeGrams.toFixed(2)}g purge` : '';
+        console.log(`${file}: ${result.printHours.toFixed(2)}h, ${grams.toFixed(2)}g${purge}`);
       } catch (error) {
         failures += 1;
         console.error(`${file}: ${error.message}`);

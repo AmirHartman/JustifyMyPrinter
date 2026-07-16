@@ -14,10 +14,10 @@
   JSON output.
 - `testing/test-manifest.json`: check tiers, prerequisites, mutation level,
   proof limits, timeouts, and default skip reasons.
-- `scripts/lib/regression-checks.js`: missing-file-sensitive R1-R9 T2 source
+- `scripts/lib/regression-checks.js`: missing-file-sensitive R1-R10 T2 source
   contracts.
-- `tests/`: T1 unit, runner-policy, wrapper-governance, and negative-fixture
-  sensitivity coverage.
+- `tests/`: T1 unit and mocked-handler behavior, runner-policy,
+  wrapper-governance, and negative-fixture sensitivity coverage.
 - `agent-system/roles/tester.md`: independent read-only verification role.
 - `agent-system/roles/quality-curator.md`: sole owner of tests, regression/task
   state, and approved durable system knowledge.
@@ -34,8 +34,9 @@ skipped integration, browser, or remote checks remain visible but non-failing.
 
 ## Core flows and invariants
 
-- Public catalog reads expose only published product DTOs; ordering requires an
-  eligible authenticated account.
+- Catalog page, product reads, and category reads require a session. Authenticated
+  friends receive only published product DTOs; ordering additionally requires an
+  eligible active account.
 - Friends can read only their own orders; administrative data and mutations are
   admin-only.
 - Payment is manual and independent of order status.

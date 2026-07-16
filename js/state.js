@@ -6,7 +6,7 @@ export const store = {
   currentUser:    null,
   appMode:        "friend",
   products:       [],
-  categories:     [],        // dynamic product categories (public: active only, admin: all)
+  categories:     [],        // authenticated friends: active only; admin: all
   orders:         [],        // admin: all orders
   users:          [],        // admin: all users
   myOrders:       [],        // friend: own orders

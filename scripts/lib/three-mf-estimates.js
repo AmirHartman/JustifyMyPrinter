@@ -1,7 +1,6 @@
 'use strict';
 
-const { spawn, spawnSync } = require('child_process');
-const readline = require('readline');
+const AdmZip = require('adm-zip');
 
 function parseDuration(value) {
   const text = String(value || '').trim().toLowerCase();
@@ -30,6 +29,68 @@ function numberList(value) {
     .split(/[,;\s]+/)
     .map((part) => Number(part))
     .filter((number) => Number.isFinite(number) && number >= 0);
+}
+
+function average(values, fallback) {
+  return values.length
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : fallback;
+}
+
+function filamentLengthToGrams(lengthMm, densities, diameters) {
+  const density = average(densities, 1.24);
+  const diameter = average(diameters, 1.75);
+  const volumeMm3 = Math.max(Number(lengthMm) || 0, 0) * Math.PI * (diameter / 2) ** 2;
+  return volumeMm3 / 1000 * density;
+}
+
+function createGcodeState() {
+  return {
+    inFlush: false,
+    relativeExtrusion: true,
+    lastExtrusion: 0,
+    explicitFlushMm: 0,
+    commandFlushMm: 0,
+    densities: [],
+    diameters: [],
+  };
+}
+
+function collectPurgeFromGcodeLine(line, state) {
+  const text = String(line || '').trim();
+  const densityMatch = text.match(/^;\s*filament_density\s*[:=]\s*(.+)$/i);
+  if (densityMatch) state.densities = numberList(densityMatch[1]);
+  const diameterMatch = text.match(/^;\s*filament_diameter\s*[:=]\s*(.+)$/i);
+  if (diameterMatch) state.diameters = numberList(diameterMatch[1]);
+
+  if (/^;\s*V?FLUSH_START\b/i.test(text)) {
+    state.inFlush = true;
+    return;
+  }
+  if (/^;\s*V?FLUSH_END\b/i.test(text)) {
+    state.inFlush = false;
+    return;
+  }
+  if (/^M82\b/i.test(text)) state.relativeExtrusion = false;
+  if (/^M83\b/i.test(text)) state.relativeExtrusion = true;
+
+  const resetMatch = text.match(/^G92\b[^;]*\bE(-?[\d.]+)/i);
+  if (resetMatch) state.lastExtrusion = Number(resetMatch[1]) || 0;
+
+  if (state.inFlush) {
+    const extrusionMatch = text.match(/^G(?:0?1)\b[^;]*\bE(-?[\d.]+)/i);
+    if (extrusionMatch) {
+      const extrusion = Number(extrusionMatch[1]);
+      const delta = state.relativeExtrusion ? extrusion : extrusion - state.lastExtrusion;
+      if (Number.isFinite(delta) && delta > 0) state.explicitFlushMm += delta;
+      if (!state.relativeExtrusion && Number.isFinite(extrusion)) state.lastExtrusion = extrusion;
+    }
+  }
+
+  // Newer Bambu G-code delegates the flush movement to firmware. A1 selects
+  // the incoming-filament command; counting only it avoids counting A0 twice.
+  const commandMatch = text.match(/^M620\.10\b(?=[^;]*\bA1\b)[^;]*\bL([\d.]+)/i);
+  if (commandMatch) state.commandFlushMm += Number(commandMatch[1]) || 0;
 }
 
 function collectFromLine(line, result) {
@@ -83,32 +144,47 @@ function collectFromMetadata(text, result) {
   if (weights.length && !result.materialGrams.length) result.materialGrams = weights;
 }
 
-function archiveEntries(filePath) {
-  const listed = spawnSync('unzip', ['-Z1', filePath], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
-  if (listed.error?.code === 'ENOENT') throw new Error('The unzip command is required but was not found');
-  if (listed.status !== 0) throw new Error(`Invalid or unreadable 3MF archive: ${listed.stderr.trim()}`);
-  return listed.stdout.split(/\r?\n/).filter(Boolean);
+function openArchive(buffer) {
+  try {
+    return new AdmZip(buffer);
+  } catch (err) {
+    throw new Error(`Invalid or unreadable 3MF archive: ${err.message}`);
+  }
 }
 
-function readEntry(filePath, entry, maxBytes = 4 * 1024 * 1024) {
-  const extracted = spawnSync('unzip', ['-p', filePath, entry], { encoding: 'utf8', maxBuffer: maxBytes });
-  if (extracted.status !== 0) return '';
-  return extracted.stdout;
+function archiveEntries(zip) {
+  return zip.getEntries().map((entry) => entry.entryName).filter(Boolean);
 }
 
-async function scanGcode(filePath, entry, result) {
-  const child = spawn('unzip', ['-p', filePath, entry], { stdio: ['ignore', 'pipe', 'pipe'] });
-  const lines = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
-  for await (const line of lines) collectFromLine(line, result);
-  const exitCode = await new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('close', resolve);
-  });
-  if (exitCode !== 0) throw new Error(`Could not inspect ${entry}`);
+function readEntry(zip, entry, maxBytes = 4 * 1024 * 1024) {
+  const zipEntry = zip.getEntry(entry);
+  if (!zipEntry) return '';
+  const data = zipEntry.getData();
+  if (!data || !data.length) return '';
+  return data.subarray(0, maxBytes).toString('utf8');
 }
 
-async function extract3mfEstimates(filePath) {
-  const entries = archiveEntries(filePath);
+async function scanGcode(zip, entry, result) {
+  const zipEntry = zip.getEntry(entry);
+  if (!zipEntry) throw new Error(`Could not inspect ${entry}`);
+  let data;
+  try {
+    data = zipEntry.getData();
+  } catch {
+    throw new Error(`Could not inspect ${entry}`);
+  }
+  const state = createGcodeState();
+  for (const line of data.toString('utf8').split(/\r?\n/)) {
+    collectFromLine(line, result);
+    collectPurgeFromGcodeLine(line, state);
+  }
+  const purgeLengthMm = state.explicitFlushMm || state.commandFlushMm;
+  result.purgeGrams += filamentLengthToGrams(purgeLengthMm, state.densities, state.diameters);
+}
+
+async function extract3mfEstimates(buffer) {
+  const zip = openArchive(buffer);
+  const entries = archiveEntries(zip);
   const gcodeEntries = entries.filter((name) => /\.gcode$/i.test(name));
   const result = {
     printHours: null, materialGrams: [], sources: [], productName: '',
@@ -118,14 +194,14 @@ async function extract3mfEstimates(filePath) {
     /(?:slice_info|project_settings|model_settings|metadata).*(?:\.config|\.xml|\.json)$/i.test(entry)
   );
   for (const entry of metadataEntries) {
-    const text = readEntry(filePath, entry);
+    const text = readEntry(zip, entry);
     if (!text) continue;
     collectFromMetadata(text, result);
     result.sources.push(entry);
   }
 
   for (const entry of gcodeEntries) {
-    await scanGcode(filePath, entry, result);
+    await scanGcode(zip, entry, result);
     result.sources.push(entry);
   }
 
@@ -136,8 +212,7 @@ async function extract3mfEstimates(filePath) {
     }
     throw new Error('No sliced print-time and material estimates were found in the 3MF');
   }
-  // Bambu's sliced "filament used [g]" is total consumption for the plate,
-  // including purge/wipe. Adding purge again would overprice the item.
+  result.purgeGrams = Math.round(result.purgeGrams * 100) / 100;
   result.printProfile = inferredProfile(result);
   return result;
 }

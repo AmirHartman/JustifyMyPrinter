@@ -31,19 +31,52 @@ test('smoke accepts only credential-free literal loopback base URLs', () => {
   assert.throws(() => validateLocalBaseUrl('http://127.0.0.1:3102/path'), /path, query, or fragment/);
 });
 
-test('smoke uses bounded GET requests and refuses redirects', async () => {
+function fakeResponse(status, location = '') {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name) => name.toLowerCase() === 'location' ? location : null },
+  };
+}
+
+test('smoke uses bounded GET requests and accepts the exact unauthenticated catalog redirect', async () => {
   const requests = [];
   const fakeFetch = async (url, options) => {
     requests.push({ url: String(url), options });
-    return { ok: false, status: 302 };
+    return new URL(url).pathname === '/catalog.html'
+      ? fakeResponse(302, '/dashboard.html')
+      : fakeResponse(200);
   };
   const results = await runSmoke('http://127.0.0.1:3102', fakeFetch, 25);
   assert.equal(results.length, 3);
-  assert.equal(results.every((result) => !result.passed), true);
-  assert.equal(results.every((result) => /redirects are refused/.test(result.detail)), true);
+  assert.equal(results.every((result) => result.passed), true);
+  assert.match(results.find(({ endpoint }) => endpoint === '/catalog.html').detail, /302 -> \/dashboard\.html/);
   assert.equal(requests.every(({ options }) => options.method === 'GET'), true);
   assert.equal(requests.every(({ options }) => options.redirect === 'manual'), true);
   assert.equal(requests.every(({ options }) => options.signal instanceof AbortSignal), true);
+});
+
+test('smoke rejects every other redirect, including near-match catalog targets', async () => {
+  const cases = [
+    { endpoint: '/healthz', status: 302, location: '/dashboard.html' },
+    { endpoint: '/catalog.html', status: 301, location: '/dashboard.html' },
+    { endpoint: '/catalog.html', status: 302, location: '/welcome.html' },
+    { endpoint: '/catalog.html', status: 302, location: '/dashboard.html?next=catalog' },
+    { endpoint: '/catalog.html', status: 302, location: '/dashboard.html#login' },
+    { endpoint: '/catalog.html', status: 302, location: 'https://example.com/dashboard.html' },
+    { endpoint: '/catalog.html', status: 302, location: '' },
+  ];
+
+  for (const scenario of cases) {
+    const results = await runSmoke('http://127.0.0.1:3102', async (url) => {
+      const endpoint = new URL(url).pathname;
+      if (endpoint === scenario.endpoint) return fakeResponse(scenario.status, scenario.location);
+      if (endpoint === '/catalog.html') return fakeResponse(302, '/dashboard.html');
+      return fakeResponse(200);
+    }, 25);
+    const result = results.find(({ endpoint }) => endpoint === scenario.endpoint);
+    assert.equal(result.passed, false, JSON.stringify(scenario));
+  }
 });
 
 test('only executed failures determine the tester exit code', () => {
@@ -86,7 +119,7 @@ test('manifest covers deterministic, regression, and optional evidence tiers', (
   assert.equal(manifest.schemaVersion, SCHEMA_VERSION);
   const ids = new Set(manifest.checks.map(({ id }) => id));
   for (const id of ['manifest-json', 'syntax-js', 'json-config', 'node-tests',
-    'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9',
+    'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10',
     'local-http-smoke', 'local-db-api', 'browser-workflows', 'remote-smoke']) {
     assert.equal(ids.has(id), true, `missing manifest check ${id}`);
   }

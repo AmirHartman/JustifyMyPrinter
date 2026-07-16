@@ -61,6 +61,10 @@ export function applyAuth() {
   document.body.dataset.role = store.currentUser?.role ?? "friend";
   document.body.dataset.gender = store.currentUser?.gender ?? "";
 
+  document.querySelectorAll(".global-tab[data-tab='catalog']").forEach((link) => {
+    link.setAttribute("href", store.currentUser ? "catalog.html" : "dashboard.html");
+  });
+
   const userLabel = document.querySelector("#current-user");
   if (userLabel && store.currentUser) {
     userLabel.innerHTML = `שלום <strong>${store.currentUser.name}</strong> 👋`;
@@ -82,16 +86,26 @@ export function applyAuth() {
 
   const hero  = document.querySelector("#landing-store-button-hero");
   const final = document.querySelector("#landing-store-button-final");
+  const catalogHero = document.querySelector("#landing-catalog-button-hero");
+  const catalogFinal = document.querySelector("#landing-catalog-button-final");
   if (store.currentUser) {
     hero?.setAttribute("href", "catalog.html");
     if (hero)  hero.textContent  = "חזרה לאזור האישי";
     final?.setAttribute("href", "catalog.html");
     if (final) final.textContent = "חזרה לאזור האישי";
+    catalogHero?.setAttribute("href", "catalog.html");
+    if (catalogHero) catalogHero.textContent = "לצפייה בקטלוג";
+    catalogFinal?.setAttribute("href", "catalog.html");
+    if (catalogFinal) catalogFinal.textContent = "לצפייה בקטלוג";
   } else {
     hero?.setAttribute("href", "dashboard.html");
     if (hero)  hero.textContent  = "כניסה / הרשמה";
     final?.setAttribute("href", "dashboard.html");
     if (final) final.textContent = "כניסה / הרשמה";
+    catalogHero?.setAttribute("href", "dashboard.html");
+    if (catalogHero) catalogHero.textContent = "כניסה לצפייה בקטלוג";
+    catalogFinal?.setAttribute("href", "dashboard.html");
+    if (catalogFinal) catalogFinal.textContent = "כניסה לצפייה בקטלוג";
   }
 }
 

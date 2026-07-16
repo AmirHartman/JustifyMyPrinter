@@ -2,6 +2,7 @@
 
 const express = require('express');
 const path    = require('path');
+const { getSession } = require('./api/_middleware');
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.all('/api/transparency',  require('./api/transparency'));
 app.all('/api/feedback',      require('./api/feedback'));
 app.all('/api/maintenance',   require('./api/maintenance'));
 app.all('/api/print-sync',    require('./api/print-sync'));
+app.all('/api/print-files',   require('./api/print-files'));
 app.all('/api/uploads',       require('./api/uploads'));
 app.all('/api/init',          require('./api/init'));
 
@@ -57,8 +59,13 @@ app.use((req, res, next) => {
 });
 
 // HTML pages
-const HTML_PAGES = ['index.html', 'welcome.html', 'catalog.html', 'dashboard.html'];
+const HTML_PAGES = ['index.html', 'welcome.html', 'dashboard.html'];
 app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+app.get('/catalog.html', async (req, res) => {
+  const user = await getSession(req);
+  if (!user) return res.redirect(302, '/dashboard.html');
+  return res.sendFile(path.join(ROOT, 'catalog.html'));
+});
 for (const page of HTML_PAGES) {
   app.get(`/${page}`, (req, res) => res.sendFile(path.join(ROOT, page)));
 }
@@ -75,4 +82,17 @@ app.use((req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`JustifyMyPrinter running on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`JustifyMyPrinter running on port ${PORT}`));
+
+// Without this handler a bind failure (most commonly EADDRINUSE from a previous
+// `npm run dev` still holding the port) makes the process hang silently instead
+// of exiting — the banner prints, then nothing. Surface it and exit non-zero.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use — another server is still running.`);
+    console.error(`Stop it with:  lsof -ti :${PORT} | xargs kill   (or set PORT to a free port), then retry.`);
+  } else {
+    console.error('Failed to start server:', err);
+  }
+  process.exit(1);
+});

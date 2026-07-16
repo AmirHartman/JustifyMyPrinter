@@ -140,6 +140,10 @@
         </button>
         <button class="tab admin-tab" data-view="finance">
           כספים
+        </button>
+        <button class="tab admin-tab" data-view="materials">
+          חומרים ותחזוקה
+          <span class="tab-badge" id="low-filaments-badge" hidden></span>
           <span class="tab-badge" id="maintenance-badge" hidden></span>
         </button>
         <button class="tab admin-tab" data-view="feedback">
@@ -148,7 +152,6 @@
         </button>
         <button class="tab admin-tab" data-view="settings">
           הגדרות
-          <span class="tab-badge" id="low-filaments-badge" hidden></span>
         </button>
         <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
       </nav>
@@ -224,10 +227,19 @@
                 <h4 id="product-print-data-title">1. נתונים הכרחיים להדפסה</h4>
                 <div class="product-import-summary" id="product-import-summary" hidden></div>
                 <p class="form-hint">אפשר לסנכרן קובץ 3MF או להזין ידנית זמן, פרופיל, חומרים ומשקלים.</p>
+                <div>
+                  <button class="ghost-button btn-sm" type="button" id="upload-print-file-btn">⬆ העלה קובץ הדפסה (slice)</button>
+                  <input id="print-file-input" type="file" accept=".3mf,.gcode" hidden />
+                </div>
+                <p id="print-file-status" class="form-hint"></p>
+                <input name="printFileUrl" type="hidden" />
+                <input name="printFileName" type="hidden" />
+                <input name="printFileChecksum" type="hidden" />
+                <input name="printFileUploadedAt" type="hidden" />
+                <input name="purgeGrams" type="hidden" value="0" />
                 <label>זמן הדפסה (שעות)<input name="printHours" type="number" min="0" step="0.01" value="0" /></label>
-                <label>זמן נוסף לכל עותק (שעות)<input name="additionalCopyHours" type="number" min="0" step="0.01" placeholder="ברירת המחדל היא זמן ההדפסה המלא" /></label>
                 <label>פרופיל הדפסה<select name="printProfile" id="product-print-profile"><option value="regular">רגיל</option><option value="ams">AMS / ריבוי צבעים</option><option value="complex">מורכב</option></select></label>
-                <label>Purge משוער (גרם)<input name="purgeGrams" type="number" min="0" step="0.1" value="0" /></label>
+                <p class="form-hint">זמן לעותקים נוספים מחושב אוטומטית לפי זמן ההדפסה; purge מחושב אוטומטית מקובץ ההדפסה הפרוס.</p>
                 <div>
                   <strong>פילמנט ומשקל להדפסה</strong>
                   <button class="ghost-button btn-sm" type="button" id="add-material-row-btn">+ הוסף חומר</button>
@@ -269,6 +281,7 @@
                     <button class="ghost-button btn-sm" type="button" id="upload-image-btn">⬆ העלה תמונה</button>
                     <input id="image-file-input" type="file" accept="image/*" hidden />
                   </div>
+                  <p class="form-hint">התמונה הראשונה ברשימה היא התמונה הראשית; זהו גם סדר התמונות בגלריה.</p>
                   <div id="product-image-rows"></div>
                 </div>
                 <input name="image" type="hidden" />
@@ -455,13 +468,11 @@
 
         <div class="sub-view" id="finance-business-sub">
           <div class="finance-summary-grid" id="business-summary-grid"></div>
-          <h3>בריאות המדפסת</h3><div id="parts-health-list" class="business-list"></div>
-          <h3>טיפולים תקופתיים</h3><div id="maintenance-tasks-list" class="business-list"></div>
           <h3>סיכון אמפירי</h3><div id="risk-list" class="business-list"></div>
           <h3>יעדי צמיחה</h3><div id="goals-list" class="business-list"></div>
-          <form id="goal-form" class="filament-inline-form"><input name="name" required placeholder="שם יעד"><input name="targetAmount" type="number" min="1" required placeholder="סכום יעד"><input name="publicLabel" placeholder="כותרת ציבורית (אופציונלי)"><label class="inline-check"><input name="publicVisible" type="checkbox"> הצג בשקיפות</label><button class="primary-button btn-sm">הוסף יעד</button></form>
+          <form id="goal-form" class="filament-inline-form"><input name="name" required placeholder="שם יעד"><input name="targetAmount" type="number" min="1" required placeholder="סכום יעד"><input name="publicLabel" placeholder="כותרת ציבורית (אופציונלי)"><label class="checkbox-label"><input name="publicVisible" type="checkbox"> הצג בשקיפות</label><button class="primary-button btn-sm">הוסף יעד</button></form>
           <h3>חשבון בעלים</h3><div id="ledger-list" class="business-list"></div>
-          <form id="ledger-form" class="filament-inline-form"><select name="kind"><option value="investment">השקעה</option><option value="withdrawal">משיכה</option></select><input name="description" required placeholder="תיאור"><input name="amount" type="number" min="0.01" step="0.01" required placeholder="סכום"><input name="publicLabel" placeholder="כותרת ציבורית (אופציונלי)"><label class="inline-check"><input name="publicVisible" type="checkbox"> הצג בשקיפות</label><button class="primary-button btn-sm">הוסף תנועה</button></form>
+          <form id="ledger-form" class="filament-inline-form"><select name="kind"><option value="investment">השקעה</option><option value="withdrawal">משיכה</option></select><input name="description" required placeholder="תיאור"><input name="amount" type="number" min="0.01" step="0.01" required placeholder="סכום"><input name="publicLabel" placeholder="כותרת ציבורית (אופציונלי)"><label class="checkbox-label"><input name="publicVisible" type="checkbox"> הצג בשקיפות</label><button class="primary-button btn-sm">הוסף תנועה</button></form>
         </div>
 
         <div class="sub-view is-active" id="finance-summary-sub">
@@ -530,53 +541,21 @@
         </div>
       </section>
 
-      <!-- ── Settings ── -->
-      <!-- ── Feedback ── -->
-      <section class="view" id="feedback-view" aria-labelledby="feedback-title">
+      <!-- ── Materials & Maintenance ── -->
+      <section class="view" id="materials-view" aria-labelledby="materials-title">
         <div class="section-heading">
           <div>
-            <h2 id="feedback-title">משוב</h2>
-            <p>דיווחי תקלות והצעות לשיפור מהמשתמשים והמבקרים.</p>
-          </div>
-        </div>
-        <div class="feedback-list" id="feedback-list"></div>
-        <p class="empty-state" id="feedback-empty">אין עדיין פניות.</p>
-      </section>
-
-      <section class="view" id="settings-view" aria-labelledby="settings-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="settings-title">הגדרות</h2>
-            <p>תמחור, חומרים ופרטי יצירת קשר.</p>
+            <h2 id="materials-title">חומרים ותחזוקה</h2>
+            <p>ניהול פילמנטים, בריאות המדפסת וטיפולים תקופתיים.</p>
           </div>
         </div>
 
         <div class="admin-sub-tabs">
-          <button class="sub-tab is-active" data-sub="settings-pricing">תמחור</button>
-          <button class="sub-tab" data-sub="settings-filaments">חומרים</button>
-          <button class="sub-tab" data-sub="settings-contact">יצירת קשר</button>
+          <button class="sub-tab is-active" data-sub="materials-filaments">חומרים</button>
+          <button class="sub-tab" data-sub="materials-maintenance">תחזוקה</button>
         </div>
 
-        <div class="sub-view is-active" id="settings-pricing-sub">
-          <form class="product-form" id="pricing-form">
-            <label>
-              אחוז רווח ברירת מחדל
-              <input name="marginPercent" type="number" min="0" max="500" step="1" placeholder="50" required />
-            </label>
-            <label>מינימום להזמנה (₪)<input name="minOrderPrice" type="number" min="0" step="0.01" placeholder="5" required /></label>
-            <fieldset>
-              <legend>תוספת סיכון לפי רמה</legend>
-              <label>סיכון נמוך (%)<input name="riskLowPercent" type="number" min="0" max="500" step="1" value="8" required /></label>
-              <label>סיכון בינוני (%)<input name="riskMediumPercent" type="number" min="0" max="500" step="1" value="15" required /></label>
-              <label>סיכון גבוה (%)<input name="riskHighPercent" type="number" min="0" max="500" step="1" value="25" required /></label>
-            </fieldset>
-            <div class="cost-preview-panel"><strong>קבועי עלות (לקריאה בלבד)</strong><div id="pricing-readonly-breakdown"></div></div>
-            <button class="primary-button" type="submit">שמור הגדרות</button>
-            <p class="form-hint" id="pricing-save-status" role="status"></p>
-          </form>
-        </div>
-
-        <div class="sub-view" id="settings-filaments-sub">
+        <div class="sub-view is-active" id="materials-filaments-sub">
           <div class="section-heading section-heading--sub">
             <p>ניהול הצבעים וחומרי ההדפסה לחישוב עלות אוטומטי.</p>
             <button class="primary-button btn-sm" id="add-filament-btn" type="button">+ הוספת חומר</button>
@@ -639,6 +618,56 @@
             </table>
           </div>
           <p class="empty-state" id="filaments-empty">אין חומרים מוגדרים עדיין.</p>
+        </div>
+
+        <div class="sub-view" id="materials-maintenance-sub">
+          <h3>בריאות המדפסת</h3><div id="parts-health-list" class="business-list"></div>
+          <h3>טיפולים תקופתיים</h3><div id="maintenance-tasks-list" class="business-list"></div>
+        </div>
+      </section>
+
+      <!-- ── Feedback ── -->
+      <section class="view" id="feedback-view" aria-labelledby="feedback-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="feedback-title">משוב</h2>
+            <p>דיווחי תקלות והצעות לשיפור מהמשתמשים והמבקרים.</p>
+          </div>
+        </div>
+        <div class="feedback-list" id="feedback-list"></div>
+        <p class="empty-state" id="feedback-empty">אין עדיין פניות.</p>
+      </section>
+
+      <section class="view" id="settings-view" aria-labelledby="settings-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="settings-title">הגדרות</h2>
+            <p>תמחור ופרטי יצירת קשר.</p>
+          </div>
+        </div>
+
+        <div class="admin-sub-tabs">
+          <button class="sub-tab is-active" data-sub="settings-pricing">תמחור</button>
+          <button class="sub-tab" data-sub="settings-contact">יצירת קשר</button>
+        </div>
+
+        <div class="sub-view is-active" id="settings-pricing-sub">
+          <form class="product-form" id="pricing-form">
+            <label>
+              אחוז רווח ברירת מחדל
+              <input name="marginPercent" type="number" min="0" max="500" step="1" placeholder="50" required />
+            </label>
+            <label>מינימום להזמנה (₪)<input name="minOrderPrice" type="number" min="0" step="0.01" placeholder="5" required /></label>
+            <fieldset>
+              <legend>תוספת סיכון לפי רמה</legend>
+              <label>סיכון נמוך (%)<input name="riskLowPercent" type="number" min="0" max="500" step="1" value="8" required /></label>
+              <label>סיכון בינוני (%)<input name="riskMediumPercent" type="number" min="0" max="500" step="1" value="15" required /></label>
+              <label>סיכון גבוה (%)<input name="riskHighPercent" type="number" min="0" max="500" step="1" value="25" required /></label>
+            </fieldset>
+            <div class="cost-preview-panel"><strong>קבועי עלות (לקריאה בלבד)</strong><div id="pricing-readonly-breakdown"></div></div>
+            <button class="primary-button" type="submit">שמור הגדרות</button>
+            <p class="form-hint" id="pricing-save-status" role="status"></p>
+          </form>
         </div>
 
         <div class="sub-view" id="settings-contact-sub">

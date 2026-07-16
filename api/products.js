@@ -1,7 +1,21 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
-const { parseBody, getSession, requireAdmin } = require('./_middleware');
+const { parseBody, requireAuth, requireAdmin } = require('./_middleware');
 const { calculateProductCost } = require('./_pricing');
+
+function roundGrams(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round((numeric + Number.EPSILON) * 100) / 100;
+}
+
+function normalizedMaterials(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((material) => ({
+    ...material,
+    grams: roundGrams(material?.grams),
+  }));
+}
 
 // Full shape — admin only. Includes internal pricing mechanics and print notes.
 function normalizeRow(row) {
@@ -35,6 +49,10 @@ function normalizeRow(row) {
     requiresAdminApproval: Boolean(row.requires_admin_approval),
     allowMultiple:      row.allow_multiple !== false,
     internalPrintNotes: row.internal_print_notes ?? '',
+    printFileUrl:       row.print_file_url ?? '',
+    printFileName:      row.print_file_name ?? '',
+    printFileChecksum:  row.print_file_checksum ?? '',
+    printFileUploadedAt: row.print_file_uploaded_at ?? null,
     printSync: row.print_sync_key ? {
       status: row.print_sync_status ?? '',
       filename: row.print_sync_filename ?? '',
@@ -46,8 +64,8 @@ function normalizeRow(row) {
   };
 }
 
-// Public/friend shape — omits internal-only admin fields (pricing mechanics,
-// internal print notes). Never returned to unauthenticated/non-admin callers.
+// Friend shape — omits internal-only admin fields (pricing mechanics and
+// internal print notes). Never returned to unauthenticated callers.
 function missingRequirements(product) {
   const missing = [];
   const hasImage = Boolean(product.image || product.images?.length);
@@ -188,11 +206,11 @@ module.exports = async (req, res) => {
       const checksum = String(body.checksum ?? '').trim();
       const printHours = Math.max(Number(body.printHours) || 0, 0);
       const materialGrams = (Array.isArray(body.materialGrams) ? body.materialGrams : [])
-        .map(Number).filter((grams) => Number.isFinite(grams) && grams > 0);
+        .map(roundGrams).filter((grams) => grams > 0);
       const warnings = Array.isArray(body.warnings) ? body.warnings.map(String).slice(0, 20) : [];
       const printProfile = ['regular', 'ams', 'complex'].includes(body.printProfile)
         ? body.printProfile : materialGrams.length > 1 ? 'ams' : 'regular';
-      const purgeGrams = Math.max(Number(body.purgeGrams) || 0, 0);
+      const purgeGrams = Math.max(roundGrams(body.purgeGrams), 0);
       if (!syncKey || syncKey.length > 200) return res.status(400).json({ error: 'Missing or invalid sync key' });
       if (!name || !filename || !printHours || !materialGrams.length) {
         return res.status(400).json({ error: 'Name, filename, print time, and material estimates are required' });
@@ -203,7 +221,7 @@ module.exports = async (req, res) => {
         SELECT id, materials FROM products WHERE print_sync_key = ${syncKey} LIMIT 1
       `;
       const existing = existingRows[0];
-      const totalGrams = Math.max(1, Math.round(materialGrams.reduce((sum, grams) => sum + grams, 0)));
+      const totalGrams = Math.max(0.01, roundGrams(materialGrams.reduce((sum, grams) => sum + grams, 0)));
       const preservedMaterials = Array.isArray(existing?.materials) && existing.materials.length === materialGrams.length
         ? existing.materials.map((material, index) => ({ ...material, grams: materialGrams[index] }))
         : [];
@@ -267,11 +285,11 @@ module.exports = async (req, res) => {
         const body               = await parseBody(req);
         const sql                = getSql();
         const cost               = body.cost               !== undefined ? Math.max(Number(body.cost) || 0.01, 0.01)       : null;
-        const grams              = body.grams              !== undefined ? Math.max(Number(body.grams) || 1, 1)             : null;
+        const grams              = body.grams              !== undefined ? Math.max(roundGrams(body.grams), 0.01)           : null;
         const printHours         = body.printHours         !== undefined ? Math.max(Number(body.printHours) || 0, 0)        : null;
         const calculatedCost     = body.calculatedCost     !== undefined ? Number(body.calculatedCost)                      : null;
         const manualPrice        = body.manualPrice        !== undefined ? Number(body.manualPrice)                         : null;
-        const purgeGrams         = body.purgeGrams         !== undefined ? Math.max(Number(body.purgeGrams) || 0, 0)        : null;
+        const purgeGrams         = body.purgeGrams         !== undefined ? Math.max(roundGrams(body.purgeGrams), 0)         : null;
         const riskPercent        = body.riskPercent === '' ? null : body.riskPercent !== undefined ? Math.max(Number(body.riskPercent) || 0, 0) : undefined;
         const riskLevel          = body.riskLevel !== undefined ? String(body.riskLevel) : null;
         if (riskLevel !== null && !['low', 'medium', 'high'].includes(riskLevel)) return res.status(400).json({ error: 'Invalid risk level' });
@@ -283,7 +301,7 @@ module.exports = async (req, res) => {
         const active             = body.active             !== undefined ? Boolean(body.active)                             : null;
         const manualPriceEnabled = body.manualPriceEnabled !== undefined ? Boolean(body.manualPriceEnabled)                 : null;
         const images             = body.images             !== undefined ? JSON.stringify(body.images)                      : null;
-        const materials          = body.materials          !== undefined ? JSON.stringify(body.materials)                   : null;
+        const materials          = body.materials          !== undefined ? JSON.stringify(normalizedMaterials(body.materials)) : null;
         const name               = body.name               !== undefined ? String(body.name).trim()                        : null;
         const description        = body.description        !== undefined ? String(body.description).trim()                 : null;
         const image              = body.image              !== undefined ? String(body.image).trim()                       : null;
@@ -297,6 +315,10 @@ module.exports = async (req, res) => {
         const requiresApproval   = body.requiresAdminApproval !== undefined ? Boolean(body.requiresAdminApproval)           : null;
         const allowMultiple      = body.allowMultiple      !== undefined ? Boolean(body.allowMultiple)                       : null;
         const internalPrintNotes = body.internalPrintNotes !== undefined ? String(body.internalPrintNotes).trim()            : null;
+        const printFileUrl       = body.printFileUrl       !== undefined ? String(body.printFileUrl).trim()                  : null;
+        const printFileName      = body.printFileName      !== undefined ? String(body.printFileName).trim()                 : null;
+        const printFileChecksum  = body.printFileChecksum  !== undefined ? String(body.printFileChecksum).trim()              : null;
+        const printFileUploadedAt = body.printFileUploadedAt !== undefined ? String(body.printFileUploadedAt).trim()          : null;
         const syncStatus         = body.materials !== undefined
           ? (Array.isArray(body.materials) && body.materials.length ? 'ready' : 'needs_material')
           : null;
@@ -331,6 +353,10 @@ module.exports = async (req, res) => {
             requires_admin_approval = COALESCE(${requiresApproval}, requires_admin_approval),
             allow_multiple      = COALESCE(${allowMultiple}, allow_multiple),
             internal_print_notes = COALESCE(${internalPrintNotes}, internal_print_notes),
+            print_file_url      = COALESCE(${printFileUrl}, print_file_url),
+            print_file_name     = COALESCE(${printFileName}, print_file_name),
+            print_file_checksum = COALESCE(${printFileChecksum}, print_file_checksum),
+            print_file_uploaded_at = COALESCE(${printFileUploadedAt}::timestamptz, print_file_uploaded_at),
             print_sync_status = CASE WHEN ${body.materials !== undefined} AND print_sync_key IS NOT NULL THEN ${syncStatus} ELSE print_sync_status END,
             updated_at          = NOW()
           WHERE id = ${id}
@@ -341,6 +367,7 @@ module.exports = async (req, res) => {
             purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
             possible_colors, required_colors, requires_admin_approval,
             allow_multiple, internal_print_notes,
+            print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at,
             print_sync_key, print_sync_filename, print_sync_checksum,
             print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
         `;
@@ -368,10 +395,11 @@ module.exports = async (req, res) => {
   }
 
   // ── /api/products — collection operations ─────────────────────
-  // Active products are public (no login required); admin sees all.
+  // The catalog requires a valid session; admin sees drafts and internal fields.
   if (req.method === 'GET') {
     try {
-      const user = await getSession(req);
+      const user = await requireAuth(req, res);
+      if (!user) return;
       const isAdmin = user?.role === 'admin';
       const sql = getSql();
       const rows = isAdmin
@@ -382,6 +410,7 @@ module.exports = async (req, res) => {
                    purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes,
+                   print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at,
                    print_sync_key, print_sync_filename, print_sync_checksum,
                    print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
             FROM products ORDER BY created_at ASC
@@ -393,6 +422,7 @@ module.exports = async (req, res) => {
                    purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes,
+                   print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at,
                    print_sync_key, print_sync_filename, print_sync_checksum,
                    print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
             FROM products ORDER BY created_at ASC
@@ -418,7 +448,7 @@ module.exports = async (req, res) => {
       const id                 = randomUUID();
       const name               = String(body.name ?? '').trim();
       const cost               = Math.max(Number(body.cost) || 0.01, 0.01);
-      const grams              = Math.max(Number(body.grams) || 1, 1);
+      const grams              = Math.max(roundGrams(body.grams), 0.01);
       const description        = String(body.description ?? '').trim();
       const image              = String(body.image ?? '').trim();
       const stlUrl             = String(body.stlUrl ?? '').trim();
@@ -429,17 +459,18 @@ module.exports = async (req, res) => {
       const printHours         = Math.max(Number(body.printHours) || 0, 0);
       const printProfile       = String(body.printProfile ?? 'regular').trim();
       const images             = JSON.stringify(Array.isArray(body.images) ? body.images : []);
-      const materials          = JSON.stringify(Array.isArray(body.materials) ? body.materials : []);
+      const materials          = JSON.stringify(normalizedMaterials(body.materials));
       const calculatedCost     = body.calculatedCost != null ? Number(body.calculatedCost) : null;
       const manualPriceEnabled = Boolean(body.manualPriceEnabled);
       const manualPrice        = body.manualPrice != null ? Number(body.manualPrice) : null;
-      const purgeGrams         = Math.max(Number(body.purgeGrams) || 0, 0);
+      const purgeGrams         = Math.max(roundGrams(body.purgeGrams), 0);
       const riskPercent        = body.riskPercent === '' || body.riskPercent == null ? null : Math.max(Number(body.riskPercent) || 0, 0);
       const riskLevel          = String(body.riskLevel ?? 'medium');
       const catalogKind        = String(body.catalogKind ?? 'printed');
       if (!['low', 'medium', 'high'].includes(riskLevel)) return res.status(400).json({ error: 'Invalid risk level' });
       if (!['printed', 'idea'].includes(catalogKind)) return res.status(400).json({ error: 'Invalid catalog kind' });
-      const additionalCopyHours = body.additionalCopyHours === '' || body.additionalCopyHours == null ? null : Math.max(Number(body.additionalCopyHours) || 0, 0);
+      // NULL means pricing automatically uses the full print time per copy.
+      const additionalCopyHours = null;
       const minUnitPrice       = body.minUnitPrice === '' || body.minUnitPrice == null ? null : Number(body.minUnitPrice);
       if (minUnitPrice !== null && (!Number.isFinite(minUnitPrice) || minUnitPrice < 0)) return res.status(400).json({ error: 'מחיר מינימום ליחידה חייב להיות לא־שלילי' });
       const possibleColors     = JSON.stringify(Array.isArray(body.possibleColors) ? body.possibleColors : []);
@@ -447,6 +478,10 @@ module.exports = async (req, res) => {
       const requiresApproval   = Boolean(body.requiresAdminApproval);
       const allowMultiple      = body.allowMultiple !== false;
       const internalPrintNotes = String(body.internalPrintNotes ?? '').trim();
+      const printFileUrl       = String(body.printFileUrl ?? '').trim();
+      const printFileName      = String(body.printFileName ?? '').trim();
+      const printFileChecksum  = String(body.printFileChecksum ?? '').trim();
+      const printFileUploadedAt = body.printFileUploadedAt ? String(body.printFileUploadedAt).trim() : null;
 
       const rows = await sql`
         INSERT INTO products (
@@ -455,7 +490,8 @@ module.exports = async (req, res) => {
           images, materials, calculated_cost, manual_price_enabled, manual_price,
           purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
           possible_colors, required_colors, requires_admin_approval,
-          allow_multiple, internal_print_notes
+          allow_multiple, internal_print_notes,
+          print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at
         )
         VALUES (
           ${id}, ${name}, ${cost}, ${grams}, ${description}, ${image}, ${stlUrl},
@@ -463,7 +499,8 @@ module.exports = async (req, res) => {
           ${images}, ${materials}, ${calculatedCost}, ${manualPriceEnabled}, ${manualPrice},
           ${purgeGrams}, ${riskPercent}, ${riskLevel}, ${catalogKind}, ${additionalCopyHours}, ${minUnitPrice},
           ${possibleColors}, ${requiredColors}, ${requiresApproval},
-          ${allowMultiple}, ${internalPrintNotes}
+          ${allowMultiple}, ${internalPrintNotes},
+          ${printFileUrl}, ${printFileName}, ${printFileChecksum}, ${printFileUploadedAt}::timestamptz
         ) RETURNING *
       `;
       const context = await pricingContext(sql);

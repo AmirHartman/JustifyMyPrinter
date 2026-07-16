@@ -109,8 +109,8 @@ function computeAdminNotifications() {
     { key: "orders",      label: "הזמנות חדשות",      view: "orders",   count: store.orders.filter((o) => o.status === "new").length },
     { key: "users",       label: "הרשמות ממתינות",    view: "users",    sub: "pending-users",       count: store.users.filter((u) => u.status === "pending").length },
     { key: "feedback",    label: "משוב חדש",           view: "feedback", count: (store.feedback || []).filter((f) => f.status !== "resolved").length },
-    { key: "filaments",   label: "חומר עומד להיגמר",   view: "settings", sub: "settings-filaments",   count: store.filaments.filter(isFilamentLow).length },
-    { key: "maintenance", label: "טיפול או חלק שמתקרב", view: "finance",  sub: "finance-business",     count: maintenanceAttentionCount(store.insights) },
+    { key: "filaments",   label: "חומר עומד להיגמר",   view: "materials", sub: "materials-filaments",   count: store.filaments.filter(isFilamentLow).length },
+    { key: "maintenance", label: "טיפול או חלק שמתקרב", view: "materials", sub: "materials-maintenance", count: maintenanceAttentionCount(store.insights) },
   ];
 }
 
@@ -376,7 +376,19 @@ function renderCatalog() {
 
   visibleProducts.forEach((product) => {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
-    renderProductImage(card.querySelector(".product-image"), product);
+    const cardImage = card.querySelector(".product-image");
+    const cardImages = normalizedProductImages(product);
+    if (cardImages.length) {
+      cardImage.classList.add("is-clickable");
+      cardImage.removeAttribute("aria-hidden");
+      createImageGallery(cardImage, {
+        images: cardImages,
+        altText: product.name,
+        activateLabel: `פתיחת פרטי ${product.name}`,
+        onActivate: () => openProductDetail(product, eligibility),
+        lazy: true,
+      });
+    }
     card.querySelector("h3").textContent = product.name;
     card.querySelector("p").textContent  = product.description;
     const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
@@ -446,13 +458,129 @@ function normalizedProductImages(product) {
   if (product.image && !images.some((image) => image.url === product.image)) {
     images.unshift({ url: product.image, isMain: images.length === 0 });
   }
-  return images.sort((a, b) => Number(Boolean(b.isMain)) - Number(Boolean(a.isMain)));
+  const legacyMainIndex = images.findIndex((image) => image.isMain || image.url === product.image);
+  if (legacyMainIndex > 0) images.unshift(...images.splice(legacyMainIndex, 1));
+  return images;
 }
 
 function publicColorOptions(product) {
   if (Array.isArray(product.colorOptions) && product.colorOptions.length) return product.colorOptions;
   return (product.possibleColors ?? []).map((color) => ({ value: color, label: color, available: true }));
 }
+
+// Tap-vs-swipe detection on a single element using Pointer Events.
+// Swipe toward the reading-forward side (left, in RTL) advances to the next image.
+function attachSwipe(element, { onNext, onPrev, onTap } = {}) {
+  let startX = 0;
+  let startY = 0;
+  let active = false;
+  element.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    active = true; startX = event.clientX; startY = event.clientY;
+    try { element.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
+  });
+  element.addEventListener("pointerup", (event) => {
+    if (!active) return;
+    active = false;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+      (dx < 0 ? onNext : onPrev)?.();
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      onTap?.();
+    }
+  });
+  element.addEventListener("pointercancel", () => { active = false; });
+}
+
+// Renders a swipeable single-image gallery into `container` (an array of
+// { url, isMain }). Returns a controller { go, set, index } or null when empty.
+function createImageGallery(container, { images, altText, startIndex = 0, onActivate, activateLabel, onChange, lazy = false } = {}) {
+  container.replaceChildren();
+  container.classList.remove("is-zoomable");
+  if (!images?.length) return null;
+  let index = Math.min(Math.max(startIndex, 0), images.length - 1);
+
+  const img = document.createElement("img");
+  img.alt = altText || "";
+  img.referrerPolicy = "no-referrer";
+  img.loading = lazy ? "lazy" : "eager";
+  img.draggable = false;
+  if (onActivate && activateLabel) {
+    img.setAttribute("role", "button");
+    img.setAttribute("tabindex", "0");
+    img.setAttribute("aria-label", activateLabel);
+    img.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onActivate(index); }
+    });
+  }
+  container.append(img);
+
+  let counter = null;
+  if (images.length > 1) {
+    const makeNav = (dir, label, glyph) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `gallery-nav gallery-nav-${dir}`;
+      button.setAttribute("aria-label", label);
+      button.textContent = glyph;
+      button.addEventListener("click", () => go(dir === "prev" ? -1 : 1));
+      return button;
+    };
+    counter = document.createElement("span");
+    counter.className = "gallery-counter";
+    container.append(
+      makeNav("prev", "התמונה הקודמת", "›"),
+      makeNav("next", "התמונה הבאה", "‹"),
+      counter,
+    );
+  }
+
+  function update() {
+    img.src = images[index]?.url || "";
+    if (counter) counter.textContent = `${index + 1} / ${images.length}`;
+    onChange?.(index);
+  }
+  function go(delta) {
+    index = (index + delta + images.length) % images.length;
+    update();
+  }
+  function set(next) {
+    index = Math.min(Math.max(next, 0), images.length - 1);
+    update();
+  }
+
+  attachSwipe(img, {
+    onNext: () => go(1),
+    onPrev: () => go(-1),
+    onTap: onActivate ? () => onActivate(index) : undefined,
+  });
+  if (onActivate) container.classList.add("is-zoomable");
+
+  update();
+  return { go, set, get index() { return index; } };
+}
+
+let lightboxGallery = null;
+function openImageLightbox(images, altText, startIndex = 0) {
+  const dialog = document.querySelector("#image-lightbox-dialog");
+  const stage = document.querySelector("#lightbox-stage");
+  if (!dialog || !stage || !images?.length) return;
+  lightboxGallery = createImageGallery(stage, { images, altText, startIndex });
+  dialog.showModal();
+}
+
+(function initImageLightbox() {
+  const dialog = document.querySelector("#image-lightbox-dialog");
+  if (!dialog) return;
+  dialog.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowRight") { event.preventDefault(); lightboxGallery?.go(-1); }
+    else if (event.key === "ArrowLeft") { event.preventDefault(); lightboxGallery?.go(1); }
+  });
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog || event.target.hasAttribute?.("data-close-lightbox")) dialog.close();
+  });
+})();
 
 function openProductDetail(product, eligibility = getOrderEligibility()) {
   const dialog = document.querySelector("#product-detail-dialog");
@@ -512,19 +640,36 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
   const images = normalizedProductImages(product);
   const main = document.querySelector("#product-detail-main-image");
   const thumbs = document.querySelector("#product-detail-thumbnails");
-  const showImage = (image) => {
-    main.replaceChildren();
-    if (!image) { main.textContent = "אין תמונה זמינה"; return; }
-    const img = document.createElement("img"); img.src = image.url; img.alt = product.name; main.append(img);
-  };
-  showImage(images[0]);
   thumbs.replaceChildren();
-  images.forEach((image, index) => {
-    const button = document.createElement("button"); button.type = "button"; button.className = "product-thumb";
-    button.setAttribute("aria-label", `הצגת תמונה ${index + 1} מתוך ${images.length}`);
-    const img = document.createElement("img"); img.src = image.url; img.alt = ""; button.append(img);
-    button.addEventListener("click", () => showImage(image)); thumbs.append(button);
-  });
+  main.classList.remove("is-empty");
+  if (!images.length) {
+    main.replaceChildren();
+    main.classList.add("is-empty");
+    main.textContent = "אין תמונה זמינה";
+  } else {
+    const thumbButtons = images.length > 1
+      ? images.map((image, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "product-thumb";
+          button.setAttribute("aria-label", `הצגת תמונה ${index + 1} מתוך ${images.length}`);
+          const thumbImg = document.createElement("img");
+          thumbImg.src = image.url; thumbImg.alt = ""; thumbImg.referrerPolicy = "no-referrer";
+          button.append(thumbImg);
+          return button;
+        })
+      : [];
+    const gallery = createImageGallery(main, {
+      images,
+      altText: product.name,
+      onActivate: (index) => openImageLightbox(images, product.name, index),
+      onChange: (index) => thumbButtons.forEach((btn, i) => btn.classList.toggle("is-active", i === index)),
+    });
+    thumbButtons.forEach((button, index) => {
+      button.addEventListener("click", () => gallery.set(index));
+      thumbs.append(button);
+    });
+  }
 
   const orderButton = document.querySelector("#product-detail-order");
   orderButton.disabled = !eligibility.canOrder && !eligibility.clickable;
@@ -1837,19 +1982,6 @@ function openExpenseEditForm(expense) {
 
 // ── Shared rendering helpers ──────────────────────────────────
 
-function renderProductImage(container, product) {
-  const mainUrl = product.images?.find((i) => i.isMain)?.url || product.image || "";
-  container.replaceChildren();
-  container.classList.toggle("has-image", Boolean(mainUrl));
-  if (!mainUrl) return;
-  const img = document.createElement("img");
-  img.src = mainUrl;
-  img.alt = product.name;
-  img.loading = "lazy";
-  img.referrerPolicy = "no-referrer";
-  container.append(img);
-}
-
 function renderStlLink(card, product) {
   const stlLink = card.querySelector(".stl-link");
   if (!product.stlUrl) { stlLink?.remove(); return; }
@@ -2023,8 +2155,8 @@ function renderWelcome() {
     openCount.hidden = open.length === 0;
   }
 
-  renderWsOrderList(document.querySelector("#ws-open-orders"), open, "אין לך הזמנות פתוחות כרגע");
-  renderWsOrderList(document.querySelector("#ws-past-orders"), past, "אין לך הזמנות שהסתיימו עדיין");
+  renderWsOrderList(document.querySelector("#ws-open-orders"), open, "אין לך הזמנות פתוחות כרגע", { allowReorder: false });
+  renderWsOrderList(document.querySelector("#ws-past-orders"), past, "אין לך הזמנות שהסתיימו עדיין", { allowReorder: true });
 
   const whatsappContainer = document.querySelector("#ws-whatsapp-action");
   if (whatsappContainer) {
@@ -2044,7 +2176,7 @@ function renderWelcome() {
   }
 }
 
-function renderWsOrderList(container, orders, emptyMsg) {
+function renderWsOrderList(container, orders, emptyMsg, { allowReorder = true } = {}) {
   if (!container) return;
   container.replaceChildren();
   if (orders.length === 0) {
@@ -2126,12 +2258,14 @@ function renderWsOrderList(container, orders, emptyMsg) {
       actions.append(cancelHint);
     }
 
-    const reorderBtn = document.createElement("button");
-    reorderBtn.className = "ghost-button btn-sm";
-    reorderBtn.type = "button";
-    reorderBtn.textContent = "להזמין שוב";
-    reorderBtn.addEventListener("click", () => reorder(order, product, title));
-    actions.append(reorderBtn);
+    if (allowReorder) {
+      const reorderBtn = document.createElement("button");
+      reorderBtn.className = "ghost-button btn-sm";
+      reorderBtn.type = "button";
+      reorderBtn.textContent = "להזמין שוב";
+      reorderBtn.addEventListener("click", () => reorder(order, product, title));
+      actions.append(reorderBtn);
+    }
 
     container.append(div);
   });

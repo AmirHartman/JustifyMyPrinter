@@ -87,7 +87,9 @@ Set these in the Render dashboard under **Environment**:
   `INIT_SECRET`.
 - `ADMIN_WHATSAPP_PHONE` is intentionally public to authenticated friends. It
   is contact data, not a secret; no other environment values are returned.
-- Do not run destructive migrations. All schema changes use `ADD COLUMN IF NOT EXISTS`.
+- Do not run destructive migrations. Schema changes must be idempotent and
+  preserve existing data; the product-weight migration widens `INTEGER` to
+  `NUMERIC(10,2)` in place so decimal gram values can be stored safely.
 
 ## Legacy files (do not delete without review)
 

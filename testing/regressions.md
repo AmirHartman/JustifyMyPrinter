@@ -2,8 +2,9 @@
 
 Quality Curator changes this catalog. A status becomes `fixed` only after the
 owning deterministic check passes and an independent Tester rerun confirms it.
-All R1-R9 runner checks are T2 source contracts; R2 and R4 also have the listed
-T1 behavioral support. T2 does not prove database, API, or browser execution.
+All R1-R10 runner checks are T2 source contracts; R2, R4, and R10 also have the
+listed T1 behavioral support. T2 does not prove database, API, or browser
+execution.
 
 | ID | Area | Root cause / regression | Detection | Evidence tier | Status | Date |
 |---|---|---|---|---|---|---|
@@ -16,3 +17,4 @@ T1 behavioral support. T2 does not prove database, API, or browser execution.
 | R7 | Status UI | Failed orders remained open and the specification drifted | Closed-status/spec source contract plus negative fixture | T2 | fixed | 2026-07-15 |
 | R8 | Orders | `failed_attempts` incremented on every save | Prior-status transition source contract plus negative fixture | T2 | fixed | 2026-07-15 |
 | R9 | Migration | Init re-derived valid manager risk choices | Idempotent migration source contract plus negative fixture | T2 | fixed | 2026-07-15 |
+| R10 | Catalog authorization | Anonymous page and API access remained possible after catalog visibility became account-only | Mocked allowed/forbidden handler tests, negative-sensitive source contract, and optional isolated HTTP smoke | T1 + T2; optional T3 | fixed | 2026-07-16 |

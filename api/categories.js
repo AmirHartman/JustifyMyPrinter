@@ -1,6 +1,6 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
-const { parseBody, getSession, requireAdmin } = require('./_middleware');
+const { parseBody, requireAuth, requireAdmin } = require('./_middleware');
 
 function normalizeRow(row) {
   return {
@@ -68,10 +68,11 @@ module.exports = async (req, res) => {
   }
 
   // ── /api/categories — collection operations ────────────────────
-  // Active categories are public (needed for the catalog filter); admin sees all.
+  // Catalog filters require a valid session; admin sees inactive categories too.
   if (req.method === 'GET') {
     try {
-      const user = await getSession(req);
+      const user = await requireAuth(req, res);
+      if (!user) return;
       const sql = getSql();
       const rows = user?.role === 'admin'
         ? await sql`SELECT id, name, description, active, sort_order FROM categories ORDER BY sort_order ASC, name ASC`

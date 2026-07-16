@@ -1,10 +1,16 @@
 const { createHash } = require('crypto');
 const { requireAdmin } = require('./_middleware');
 
-// Signs a direct browser→Cloudinary image upload. The file itself never passes
+// Signs a direct browser→Cloudinary upload. The file itself never passes
 // through this server (avoids body-size limits and Neon transfer); the browser
 // POSTs the file plus these signed params straight to the Cloudinary upload API.
 // Admin-only so the signing secret is never exposed and only admins can upload.
+//
+// type=image (default, backward compatible): product photos, folder=products,
+// resourceType=image.
+// type=print: sliced print-ready files (.gcode.3mf), folder=print-files,
+// resourceType=raw — the browser must then POST to the raw/upload Cloudinary
+// endpoint, not image/upload.
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
 
@@ -18,13 +24,17 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Upload not configured' });
   }
 
+  const type = String(req.query.type || 'image').trim();
+  const isPrint = type === 'print';
   const timestamp = Math.floor(Date.now() / 1000);
-  const folder = 'products';
+  const folder = isPrint ? 'print-files' : 'products';
+  const resourceType = isPrint ? 'raw' : 'image';
 
   // Cloudinary signature: signed params sorted alphabetically as key=value&...,
-  // then api_secret appended, hashed with SHA-1.
+  // then api_secret appended, hashed with SHA-1. resourceType is not part of
+  // the signed payload (Cloudinary does not require it in the signature).
   const toSign = `folder=${folder}&timestamp=${timestamp}`;
   const signature = createHash('sha1').update(toSign + apiSecret).digest('hex');
 
-  return res.json({ cloudName, apiKey, timestamp, folder, signature });
+  return res.json({ cloudName, apiKey, timestamp, folder, signature, resourceType });
 };

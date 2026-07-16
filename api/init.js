@@ -55,13 +55,17 @@ module.exports = async (req, res) => {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         cost NUMERIC(10,2) NOT NULL,
-        grams INTEGER NOT NULL,
+        grams NUMERIC(10,2) NOT NULL,
         description TEXT DEFAULT '',
         image TEXT DEFAULT '',
         stl_url TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+
+    // Product material totals may come from slicers with decimal gram values.
+    // Widen legacy INTEGER columns in place while preserving all existing data.
+    await sql`ALTER TABLE products ALTER COLUMN grams TYPE NUMERIC(10,2) USING grams::NUMERIC(10,2)`;
 
     await sql`
       CREATE TABLE IF NOT EXISTS orders (
@@ -187,6 +191,12 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_status TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_sync_warnings JSONB NOT NULL DEFAULT '[]'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_synced_at TIMESTAMPTZ`;
+    // Direct-upload sliced print file (Cloudinary raw resource), replacing the
+    // manual print-files/ + npm run sync:prints workflow for single-item use.
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_file_url TEXT DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_file_name TEXT DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_file_checksum TEXT DEFAULT ''`;
+    await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_file_uploaded_at TIMESTAMPTZ`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS catalog_kind TEXT NOT NULL DEFAULT 'printed'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS risk_level TEXT NOT NULL DEFAULT 'medium'`;
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS custom_text_enabled BOOLEAN NOT NULL DEFAULT FALSE`;

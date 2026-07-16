@@ -102,10 +102,20 @@ async function runSmoke(baseUrl, fetchImpl = globalThis.fetch, timeoutMs = DEFAU
         signal: AbortSignal.timeout(timeoutMs),
       });
       const redirected = response.status >= 300 && response.status < 400;
+      const location = response.headers?.get?.('location') || '';
+      const redirectTarget = new URL(location, base);
+      const catalogRedirect = endpoint === '/catalog.html'
+        && response.status === 302
+        && redirectTarget.origin === base.origin
+        && redirectTarget.pathname === '/dashboard.html'
+        && !redirectTarget.search
+        && !redirectTarget.hash;
       results.push({
         endpoint,
-        passed: response.ok && !redirected,
-        detail: redirected ? `HTTP ${response.status}; redirects are refused` : `HTTP ${response.status}`,
+        passed: endpoint === '/catalog.html' ? catalogRedirect : response.ok && !redirected,
+        detail: redirected
+          ? `HTTP ${response.status}${location ? ` -> ${location}` : '; missing Location'}`
+          : `HTTP ${response.status}`,
       });
     } catch (error) {
       results.push({ endpoint, passed: false, detail: error.message });

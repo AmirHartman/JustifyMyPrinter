@@ -6,7 +6,8 @@
 ## 1. Product goal
 
 "מדפסת חברים" is a real app for managing 3D-printing orders for friends.
-It supports public browsing, friend registration, admin approval, ordering,
+It supports a public landing page, friend registration, an authenticated catalog,
+admin approval, ordering,
 order tracking, manual payment tracking, income/expense tracking, and
 transparent reinvestment/support.
 
@@ -16,7 +17,7 @@ Long-term direction: possibly become a public paid business. MVP is for friends.
 
 ### Public visitor
 - Can view landing/explanation page.
-- Can view public catalog (no login required — active products are always public).
+- Cannot view the catalog without registering and logging in.
 - Cannot order.
 - Cannot access personal or admin areas.
 
@@ -66,7 +67,7 @@ User statuses:
 
 Pages/areas needed:
 - landing/explanation page;
-- public catalog;
+- authenticated catalog;
 - printed products catalog;
 - ideas/future prints area;
 - product details modal;
@@ -102,7 +103,7 @@ Entry behavior:
 - No final price. Require admin review before printing.
 - Future: friends may suggest ideas.
 
-All active products are **publicly visible** (no login required).
+Published products are visible only to authenticated users.
 Ordering requires active friend status.
 
 Product fields:
@@ -135,9 +136,12 @@ disappearing. Public product responses are explicit DTOs and never include
 internal print notes, inventory quantities, spool costs, or pricing internals.
 
 The admin product editor is a full-page form ordered by printing necessity. It
-supports possible and required colors, multiple images and a primary image,
-quantity restrictions, extra print time per copy, internal notes, risk level,
-and readiness feedback. Product descriptions are entered manually;
+supports possible and required colors and an ordered image gallery whose first
+image is automatically the primary image,
+quantity restrictions, internal notes, risk level, and readiness feedback.
+Extra print time per copy defaults automatically to the full product print time,
+and purge is extracted automatically from color-change commands in a sliced
+print file. Neither value is entered manually. Product descriptions are entered manually;
 the application does not generate them.
 
 Categories must be dynamic, editable in admin, and products may belong to multiple.
@@ -242,6 +246,8 @@ price after profit in separate cards. Material cost is derived from spool price
 and spool weight (cost per gram); there is no independently editable price-per-
 kilogram field. A machine-recovery component adds 10% after the configured risk
 component and before the margin is applied.
+Material quantities accept decimal gram values, are rounded automatically to
+two decimal places, and are stored without integer truncation.
 
 Known catalog product:
 - clear price upfront; can auto-approve.
@@ -384,7 +390,6 @@ Must-have before first friend release:
 - clear landing/explanation page;
 - registration/login;
 - admin user approval;
-- public catalog (no login required);
 - catalog for logged-in friends;
 - catalog order;
 - external-link order;

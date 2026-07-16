@@ -1,6 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 
+function authenticatedCollectionContract(source, marker) {
+  const start = source.indexOf(marker);
+  if (start < 0) return false;
+  const end = source.indexOf("if (req.method === 'POST')", start);
+  const block = source.slice(start, end < 0 ? undefined : end);
+  const guard = block.indexOf('await requireAuth(req, res)');
+  const stop = block.indexOf('if (!user) return');
+  const database = block.indexOf('const sql = getSql()');
+  return guard >= 0 && stop > guard && database > stop && !/getSession/.test(block);
+}
+
 const DEFINITIONS = [
   {
     id: 'R1',
@@ -75,6 +86,26 @@ const DEFINITIONS = [
     relatedEvidence: [],
     evaluate: ({ sources }) => /risk_level IS NULL OR risk_level NOT IN/.test(sources['api/init.js'])
       && !/risk_percent <= 0\.12|risk_percent >= 0\.20/.test(sources['api/init.js']),
+  },
+  {
+    id: 'R10',
+    description: 'Catalog page and collection data require authentication',
+    requiredFiles: ['api/products.js', 'api/categories.js', 'server.js', 'js/app.js', 'docs/PRODUCT_SPEC.md'],
+    relatedEvidence: ['T1 tests/catalog-auth.test.js', 'T3 optional isolated local HTTP smoke'],
+    evaluate: ({ sources }) => {
+      const serverRoute = sources['server.js'].match(/app\.get\(['"]\/catalog\.html['"][\s\S]*?\n\}\);/)?.[0] || '';
+      const clientGuard = sources['js/app.js'].match(/if \(\[[\s\S]{0,80}\.includes\(pageName\) && !store\.currentUser\)[\s\S]{0,120}\n\s*\}/)?.[0] || '';
+      return authenticatedCollectionContract(sources['api/products.js'], '/api/products — collection operations')
+        && authenticatedCollectionContract(sources['api/categories.js'], '/api/categories — collection operations')
+        && /await getSession\(req\)/.test(serverRoute)
+        && /if \(!user\) return res\.redirect\(302, ['"]\/dashboard\.html['"]\)/.test(serverRoute)
+        && /sendFile\([\s\S]*['"]catalog\.html['"]/.test(serverRoute)
+        && /["']welcome["'][\s\S]{0,40}["']catalog["']/.test(clientGuard)
+        && /dashboard\.html/.test(clientGuard)
+        && /const shouldLoadData\s*=\s*store\.currentUser\s*&&/.test(sources['js/app.js'])
+        && /Cannot view the catalog without registering and logging in/.test(sources['docs/PRODUCT_SPEC.md'])
+        && /Published products are visible only to authenticated users/.test(sources['docs/PRODUCT_SPEC.md']);
+    },
   },
 ];
 
