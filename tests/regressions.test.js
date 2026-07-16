@@ -30,12 +30,41 @@ const negativeFixtures = {
   R7: { 'js/render.js': '' },
   R8: { 'api/orders.js': '' },
   R9: { 'api/init.js': '' },
-  R10: { 'api/products.js': '' },
+  R10: {
+    'api/products.js': source('api/products.js').replace(
+      'const user = await requireAuth(req, res);',
+      'const user = await getSession(req);',
+    ),
+  },
 };
 
 for (const [id, overrides] of Object.entries(negativeFixtures)) {
   test(`${id} fails its negative sensitivity fixture`, () => {
     const check = checkRegressions(root, overrides).find((candidate) => candidate.id === id);
+    assert.equal(check.passed, false);
+    assert.deepEqual(check.missingFiles, []);
+  });
+}
+
+const r10NegativeFixtures = {
+  'api/categories.js': source('api/categories.js').replace(
+    'const user = await requireAuth(req, res);',
+    'const user = await getSession(req);',
+  ),
+  'server.js': source('server.js').replace("res.redirect(302, '/dashboard.html')", "res.redirect(302, '/index.html')"),
+  'js/app.js': source('js/app.js').replace(
+    'const shouldLoadData = store.currentUser &&',
+    'const shouldLoadData =',
+  ),
+  'docs/PRODUCT_SPEC.md': source('docs/PRODUCT_SPEC.md').replace(
+    'Published products are visible only to authenticated users.',
+    'Published products are publicly visible.',
+  ),
+};
+
+for (const [file, replacement] of Object.entries(r10NegativeFixtures)) {
+  test(`R10 fails when ${file} loses part of its catalog authentication contract`, () => {
+    const check = checkRegressions(root, { [file]: replacement }).find(({ id }) => id === 'R10');
     assert.equal(check.passed, false);
     assert.deepEqual(check.missingFiles, []);
   });
