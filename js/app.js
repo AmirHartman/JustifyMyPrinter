@@ -236,8 +236,9 @@ orderForm?.addEventListener("submit", async (event) => {
   const supportAmount = getTipAmount();
   const orderOptions  = getOrderOptions();
 
+  let order;
   try {
-    const order = await api("/api/orders", {
+    order = await api("/api/orders", {
       method: "POST",
       body: JSON.stringify({
         productId:  product.id,
@@ -247,12 +248,20 @@ orderForm?.addEventListener("submit", async (event) => {
         selectedColors: orderOptions.selectedColors,
       }),
     });
-    if (store.appMode === "admin") store.orders.unshift(order);
-    else store.myOrders.unshift(order);
-    render();
-    goToStep("thanks");
   } catch (err) {
     alert(`שגיאה ביצירת הזמנה: ${err.message}`);
+    return;
+  }
+
+  if (store.appMode === "admin") store.orders.unshift(order);
+  else store.myOrders.unshift(order);
+  goToStep("thanks");
+  try {
+    render();
+  } catch (err) {
+    // The order already exists. A browser-specific repaint failure must not be
+    // reported as a failed order and tempt the customer to submit it again.
+    console.error("Order created, but the UI refresh failed:", err);
   }
 });
 

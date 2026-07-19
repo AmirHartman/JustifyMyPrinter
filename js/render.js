@@ -560,6 +560,27 @@ function ordersForUser(user) {
 // store since it's a local view filter, not app data.
 let selectedCategoryId = null;
 
+// Some iOS in-app browsers and restricted WebKit contexts deny Web Storage
+// access by throwing a SecurityError. Reorder state is a convenience only, so
+// a blocked sessionStorage must never prevent the catalog from rendering.
+function readAndClearPendingReorder() {
+  try {
+    const pendingReorder = sessionStorage.getItem("pendingReorder");
+    if (pendingReorder) sessionStorage.removeItem("pendingReorder");
+    return pendingReorder;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingReorder(previous) {
+  try {
+    sessionStorage.setItem("pendingReorder", JSON.stringify(previous));
+  } catch {
+    // Keep navigation usable even when the browser blocks session storage.
+  }
+}
+
 function renderCategoryFilters() {
   const container = document.querySelector("#category-filters");
   if (!container) return;
@@ -678,9 +699,8 @@ function renderCatalog() {
   if (ideasSection) ideasSection.hidden = !hasIdeas;
   if (printedSection) printedSection.hidden = !hasPrinted;
 
-  const pendingReorder = sessionStorage.getItem("pendingReorder");
+  const pendingReorder = readAndClearPendingReorder();
   if (pendingReorder) {
-    sessionStorage.removeItem("pendingReorder");
     try {
       const previous = JSON.parse(pendingReorder);
       const currentProduct = findProduct(previous.productId);
@@ -2603,7 +2623,7 @@ function reorder(order, product, title) {
     quantity: order.quantity,
     selectedColor: order.selectedColors?.[0] ?? "",
   };
-  sessionStorage.setItem("pendingReorder", JSON.stringify(previous));
+  savePendingReorder(previous);
   window.location.href = "catalog.html";
 }
 
