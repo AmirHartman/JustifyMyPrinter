@@ -10,10 +10,9 @@ const CLOUDINARY_URL_RE = /^https:\/\/res\.cloudinary\.com\//i;
 // Admin-only. The browser uploads the raw sliced file directly to Cloudinary
 // (see /api/uploads?type=print), then hands this endpoint the resulting
 // secure_url + original filename. This endpoint downloads the file back into
-// memory, extracts print-time/material estimates from it (the same logic the
-// local `npm run sync:prints` script uses), and reports the results — it never
-// writes to the database itself; the caller persists the fields via the normal
-// POST/PUT /api/products flow.
+// memory, extracts print-time/material estimates from it, and reports the
+// results — it never writes to the database itself; the caller persists the
+// fields via the normal POST/PUT /api/products flow.
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
 

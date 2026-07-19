@@ -8,7 +8,8 @@ public/
 .DS_Store
 Thumbs.db
 
-# Local sliced print files and their machine-specific mapping stay off-server.
+# Keep machine-specific sliced files out of Git if the retired local directory
+# is ever reused for troubleshooting or manual transfer.
 print-files/*.3mf
 print-files/*.3MF
 print-files/manifest.json

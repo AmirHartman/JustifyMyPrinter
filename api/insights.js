@@ -1,6 +1,6 @@
 const { getSql } = require('./_db');
 const { requireAdmin } = require('./_middleware');
-const { config } = require('./_pricing');
+const { config, mergedSettings } = require('./_pricing');
 
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -8,11 +8,13 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).end();
   try {
     const sql = getSql();
-    const [orders, expenses, ledger, goals, events] = await Promise.all([
+    const [orders, expenses, ledger, goals, events, settingsRows] = await Promise.all([
       sql`SELECT status, paid, internal, final_amount, support_amount, wear_component, machine_component, margin_component, production_cost, print_hours, print_profile, completed_at, created_at FROM orders`,
       sql`SELECT amount, category, expense_date FROM expenses`, sql`SELECT * FROM owner_ledger ORDER BY occurred_at`,
       sql`SELECT * FROM goals ORDER BY sort_order`, sql`SELECT * FROM maintenance_events ORDER BY performed_at DESC`,
+      sql`SELECT value FROM settings WHERE key = 'pricing'`,
     ]);
+    const pricing = mergedSettings(settingsRows[0]?.value || {});
     const completed = orders.filter((o) => o.status === 'completed');
     const totalHours = completed.reduce((s, o) => s + Number(o.print_hours || 0), 0);
     const maintenanceAccrued = completed.reduce((s, o) => s + Number(o.wear_component || 0), 0);
@@ -21,7 +23,7 @@ module.exports = async (req, res) => {
     const allocated = goals.reduce((s, g) => s + Number(g.saved), 0);
     const withdrawals = ledger.filter((e) => e.kind === 'withdrawal').reduce((s, e) => s + Math.abs(Number(e.amount)), 0);
     const latest = new Map(); events.forEach((event) => { if (!latest.has(`${event.part_id}:${event.event_type}`)) latest.set(`${event.part_id}:${event.event_type}`, event); });
-    const partsHealth = config.wearParts.map((part) => { const event = latest.get(`${part.id}:replace`); const used = Math.max(totalHours - Number(event?.hours_at_event || 0), 0); return { ...part, usedHours: used, percent: used / part.lifetimeHours * 100, warning: used / part.lifetimeHours >= 0.8 }; });
+    const partsHealth = pricing.wearParts.map((part) => { const event = latest.get(`${part.id}:replace`); const used = Math.max(totalHours - Number(event?.hours_at_event || 0), 0); return { ...part, usedHours: used, percent: used / part.lifetimeHours * 100, warning: used / part.lifetimeHours >= 0.8 }; });
     const pnlRevenue = orders.filter((o) => o.paid && !o.internal).reduce((s, o) => s + Number(o.final_amount || 0), 0);
     const pnlExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
     const ownerBalance = ledger.reduce((s, e) => s + Number(e.amount), 0);
@@ -37,7 +39,7 @@ module.exports = async (req, res) => {
     const risk = Object.entries(config.printProfiles).map(([profile, profileConfig]) => { const relevant = orders.filter((o) => o.print_profile === profile && ['completed', 'failed'].includes(o.status)); const failed = relevant.filter((o) => o.status === 'failed').length; return { profile, label: profileConfig.label, samples: relevant.length, failed, actualPercent: relevant.length ? failed / relevant.length : null, configuredPercent: profileConfig.riskPercent, enoughData: relevant.length >= 10 }; });
     return res.json({
       maintenance: { accrued: maintenanceAccrued, spent: maintenanceSpent, balance: maintenanceAccrued - maintenanceSpent },
-      partsHealth, maintenanceTasks: config.maintenanceTasks.map((task) => {
+      partsHealth, maintenanceTasks: pricing.maintenanceTasks.map((task) => {
         const lastEvent = latest.get(`${task.id}:service`) || null;
         const hoursSince = totalHours - Number(lastEvent?.hours_at_event || 0);
         const daysSince = lastEvent?.performed_at ? (Date.now() - new Date(lastEvent.performed_at).getTime()) / 86400000 : null;

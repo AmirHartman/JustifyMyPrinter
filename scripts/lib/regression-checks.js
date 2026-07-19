@@ -31,7 +31,7 @@ const DEFINITIONS = [
     requiredFiles: ['api/init.js', 'api/orders.js'],
     relatedEvidence: ['T1 tests/order-inventory.test.js'],
     evaluate: ({ sources }) => /waste_deducted_grams/.test(sources['api/init.js'])
-      && /deductOrderInventory/.test(sources['api/orders.js']),
+      && /finalizeOrder/.test(sources['api/orders.js']),
   },
   {
     id: 'R3',

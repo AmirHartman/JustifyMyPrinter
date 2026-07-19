@@ -11,8 +11,7 @@
     "dev:watch": "node --watch --env-file=.env.local server.js",
     "test": "node --test",
     "tester": "node scripts/run-tester.js",
-    "build": "node scripts/build.js",
-    "sync:prints": "node --env-file=.env.local scripts/sync-print-estimates.js"
+    "build": "node scripts/build.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

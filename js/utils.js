@@ -9,6 +9,15 @@ export function formatCurrency(value) {
   }).format(numericValue);
 }
 
+// Filament display name is derived, not entered: manufacturer + type + color,
+// e.g. "eSun PLA Black". Mirrors composeFilamentName in api/filaments.js.
+export function composeFilamentName(manufacturer, materialType, colorName) {
+  return [manufacturer, materialType, colorName]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value;

@@ -33,8 +33,10 @@ app.all('/api/goals',         require('./api/goals'));
 app.all('/api/transparency',  require('./api/transparency'));
 app.all('/api/feedback',      require('./api/feedback'));
 app.all('/api/maintenance',   require('./api/maintenance'));
-app.all('/api/print-sync',    require('./api/print-sync'));
+app.all('/api/maintenance-items', require('./api/maintenance-items'));
 app.all('/api/print-files',   require('./api/print-files'));
+app.all('/api/print-jobs',    require('./api/print-jobs'));
+app.all('/api/printer',       require('./api/printer'));
 app.all('/api/uploads',       require('./api/uploads'));
 app.all('/api/init',          require('./api/init'));
 

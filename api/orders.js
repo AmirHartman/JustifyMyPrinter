@@ -9,7 +9,7 @@ const {
   requireAdmin,
 } = require('./_middleware');
 const { calculateProductCost } = require('./_pricing');
-const { deductOrderInventory } = require('./_order-inventory');
+const { finalizeOrder } = require('./_order-inventory');
 
 const LEGACY_WRITE_STATUS = {
   approved: 'waiting_print',
@@ -320,12 +320,7 @@ module.exports = async (req, res) => {
         `;
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
         const updated = rows[0];
-        if (status === 'completed' && updated.internal) {
-          await sql`INSERT INTO owner_ledger (id, kind, description, amount, order_id)
-            VALUES (${randomUUID()}, 'self_print', ${`הדפסה עצמית ${updated.id}`}, ${-Number(updated.production_cost || 0)}, ${updated.id})
-            ON CONFLICT (order_id, kind) WHERE order_id IS NOT NULL DO NOTHING`;
-        }
-        await deductOrderInventory(sql, updated, status);
+        await finalizeOrder(sql, updated, status);
         return res.json(normalizeRow(updated, await filamentNames(sql)));
       } catch (err) {
         return res.status(500).json({ error: err.message });

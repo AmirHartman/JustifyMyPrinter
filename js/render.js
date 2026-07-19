@@ -1,5 +1,5 @@
 import { store, loadData, findProduct } from "./state.js";
-import { formatCurrency, escapeHtml, calculateProductCost } from "./utils.js";
+import { formatCurrency, escapeHtml, calculateProductCost, composeFilamentName } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog, openCustomOrderDialog } from "./orders.js";
 import { createWhatsAppLink, whatsappTemplates, STATUS_LABELS } from "./whatsapp.js";
@@ -61,11 +61,259 @@ function orderColorNames(order) {
   return (names ?? []).filter(Boolean);
 }
 
+// ── One-click print jobs (admin) ──────────────────────────────
+
+const JOB_STATUS_LABELS = {
+  awaiting_approval: "ממתין לאישור ידני",
+  queued:    "בתור",
+  claimed:   "נתפס ע״י הגשר",
+  uploading: "מעלה קובץ",
+  printing:  "מדפיס",
+  done:      "הושלם",
+  failed:    "נכשל",
+  cancelled: "בוטל",
+};
+const JOB_UNSETTLED_STATUSES = new Set(["awaiting_approval", "queued", "claimed", "uploading", "printing"]);
+const JOB_MOVING_STATUSES = new Set(["claimed", "uploading", "printing"]);
+const JOB_CANCELLABLE_STATUSES = new Set(["awaiting_approval", "queued", "claimed", "uploading"]);
+let jobsPollTimer = null;
+let lastJobsSignature = "";
+
+// Send a catalog product to the printer as a self-print (builds stock). The
+// server creates the internal order, records cost and leaves the job awaiting
+// manual approval. On success the whole view reloads, so the button (which is
+// re-rendered) is only restored on failure.
+async function startProductPrint(product, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "שולח…";
+  try {
+    await api("/api/print-jobs", { method: "POST", body: JSON.stringify({ productId: product.id }) });
+    await loadData();
+    render();
+  } catch (err) {
+    alert(`שליחת ההדפסה נכשלה: ${err.message}`);
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+// Create a pending print job for an existing customer order. Material is only
+// deducted later, when the order is marked completed; a separate admin action
+// approves the job before the bridge may claim it.
+async function startOrderPrint(order, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "שולח…";
+  try {
+    await api("/api/print-jobs", { method: "POST", body: JSON.stringify({ orderId: order.id }) });
+    await loadData();
+    render();
+  } catch (err) {
+    alert(`שליחת ההדפסה נכשלה: ${err.message}`);
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+async function cancelPrintJob(jobId) {
+  if (!confirm("לבטל את משימת ההדפסה?")) return;
+  try {
+    await api(`/api/print-jobs?id=${encodeURIComponent(jobId)}&action=cancel`, { method: "PUT", body: "{}" });
+    await loadData();
+    render();
+  } catch (err) {
+    alert(`ביטול נכשל: ${err.message}`);
+  }
+}
+
+async function approvePrintJob(jobId, button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "מאשר…";
+  try {
+    await api(`/api/print-jobs?id=${encodeURIComponent(jobId)}&action=approve`, { method: "PUT", body: "{}" });
+    await refreshPrintJobs({ forceRender: true });
+  } catch (err) {
+    alert(`אישור המשימה נכשל: ${err.message}`);
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+async function markPrinterFree(button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "מעדכן…";
+  try {
+    store.printer = await api("/api/printer?action=free", { method: "PUT", body: "{}" });
+    renderPrintJobs();
+  } catch (err) {
+    // The API returns 409 while a claimed/uploading/printing job still owns the
+    // printer. Surface its Hebrew explanation instead of pretending it was freed.
+    alert(`לא ניתן לסמן את המדפסת כפנויה: ${err.message}`);
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+function formatPrintEventTime(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+}
+
+function printStateSignature(jobs, printer) {
+  const jobsPart = jobs.map((job) => {
+    const events = (job.events ?? []).map((event) => `${event.at}:${event.kind}:${event.message}`).join(",");
+    return `${job.id}:${job.status}:${Math.round(Number(job.progress) || 0)}:${events}`;
+  }).join("|");
+  const printerPart = printer
+    ? `${printer.state}:${printer.bridgeOnline}:${printer.currentJobId ?? ""}:${printer.currentJob?.status ?? ""}:${Math.round(Number(printer.currentJob?.progress) || 0)}`
+    : "none";
+  return `${jobsPart}#${printerPart}`;
+}
+
+// Poll throughout admin mode so bridge online/offline state remains truthful
+// even when no job is moving. When a job settles, orders and inventory may have
+// changed too, so reload all admin data; otherwise repaint only this panel.
+function ensureJobsPolling() {
+  const shouldPoll = store.appMode === "admin";
+  if (shouldPoll && !jobsPollTimer) {
+    jobsPollTimer = setInterval(refreshPrintJobs, 8000);
+  } else if (!shouldPoll && jobsPollTimer) {
+    clearInterval(jobsPollTimer);
+    jobsPollTimer = null;
+  }
+}
+
+async function refreshPrintJobs({ forceRender = false } = {}) {
+  if (store.appMode !== "admin") {
+    if (jobsPollTimer) { clearInterval(jobsPollTimer); jobsPollTimer = null; }
+    return;
+  }
+  try {
+    const [jobs, printer] = await Promise.all([api("/api/print-jobs"), api("/api/printer")]);
+    const signature = printStateSignature(jobs, printer);
+    if (!forceRender && signature === lastJobsSignature) return;
+    const previous = new Map((store.printJobs ?? []).map((job) => [job.id, job.status]));
+    const settled = jobs.some((job) => ["done", "failed"].includes(job.status) && JOB_UNSETTLED_STATUSES.has(previous.get(job.id)));
+    store.printJobs = jobs;
+    store.printer = printer;
+    lastJobsSignature = signature;
+    if (settled) { await loadData(); render(); }
+    else renderPrintJobs();
+  } catch {
+    // Transient poll failure: keep the last known state and try again next tick.
+  }
+}
+
+function renderPrintJobs() {
+  const panel = document.querySelector("#print-jobs-panel");
+  const list = document.querySelector("#print-jobs-list");
+  const printerContainer = document.querySelector("#printer-status");
+  if (!panel || !list || !printerContainer) return;
+  const jobs = store.printJobs ?? [];
+  const printer = store.printer;
+  panel.hidden = store.appMode !== "admin";
+  list.replaceChildren();
+  printerContainer.replaceChildren();
+
+  if (!printer) {
+    printerContainer.innerHTML = '<p class="stat-muted">מצב המדפסת עדיין לא זמין.</p>';
+  } else {
+    const busy = printer.state === "busy";
+    const currentJob = printer.currentJob;
+    const pct = Math.min(Math.max(Math.round(Number(currentJob?.progress) || 0), 0), 100);
+    const activePrint = currentJob && JOB_MOVING_STATUSES.has(currentJob.status);
+    printerContainer.innerHTML = `
+      <div class="printer-status-main">
+        <div>
+          <span class="printer-state printer-state--${busy ? "busy" : "idle"}">${busy ? "בעבודה" : "פנויה"}</span>
+          <strong>${escapeHtml(printer.name || "Bambu Lab P2S")}</strong>
+        </div>
+        <span class="bridge-state bridge-state--${printer.bridgeOnline ? "online" : "offline"}">
+          <span aria-hidden="true"></span> הגשר ${printer.bridgeOnline ? "מחובר" : "לא מחובר"}
+        </span>
+      </div>
+      ${currentJob ? `
+        <div class="printer-current-job">
+          <span>משימה נוכחית: <strong>${escapeHtml(currentJob.productName || currentJob.id)}</strong></span>
+          <span>${escapeHtml(JOB_STATUS_LABELS[currentJob.status] ?? currentJob.status)}${currentJob.status === "printing" ? ` · ${pct}%` : ""}</span>
+          <div class="print-job-progress" role="progressbar" aria-label="התקדמות ההדפסה" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+            <div class="print-job-progress-bar" style="width:${pct}%"></div>
+          </div>
+        </div>` : '<p class="stat-muted">אין משימה שמקושרת כרגע למדפסת.</p>'}
+    `;
+    const freeBtn = document.createElement("button");
+    freeBtn.className = "ghost-button btn-sm";
+    freeBtn.type = "button";
+    freeBtn.textContent = "סמן מדפסת כפנויה";
+    freeBtn.title = activePrint ? "אפשר לשחרר את המדפסת רק אחרי שהמשימה הסתיימה ופינית את משטח ההדפסה" : "לאחר פינוי משטח ההדפסה, אפשר את המשימה הבאה";
+    freeBtn.disabled = !busy || activePrint;
+    freeBtn.addEventListener("click", () => markPrinterFree(freeBtn));
+    printerContainer.append(freeBtn);
+  }
+
+  if (jobs.length === 0) {
+    list.innerHTML = '<p class="empty-state">אין עדיין משימות הדפסה.</p>';
+  }
+
+  jobs.forEach((job) => {
+    const row = document.createElement("div");
+    row.className = "print-job-row";
+    const moving = JOB_MOVING_STATUSES.has(job.status);
+    const pct = Math.min(Math.max(Math.round(Number(job.progress) || 0), 0), 100);
+    const events = Array.isArray(job.events) ? job.events : [];
+    const timeline = events.map((event) => `
+      <li class="print-job-event print-job-event--${String(event.kind ?? "event").replace(/[^a-z_-]/gi, "")}">
+        <span class="print-job-event-dot" aria-hidden="true"></span>
+        <div>
+          <span>${escapeHtml(event.message || JOB_STATUS_LABELS[event.kind] || event.kind || "עדכון")}</span>
+          ${formatPrintEventTime(event.at) ? `<time datetime="${escapeHtml(event.at)}">${escapeHtml(formatPrintEventTime(event.at))}</time>` : ""}
+        </div>
+      </li>`).join("");
+    row.innerHTML = `
+      <div class="print-job-main">
+        <strong>${escapeHtml(job.productName || job.productId)}</strong>
+        <span class="ws-status-chip ws-status-${escapeHtml(job.status)}">${escapeHtml(JOB_STATUS_LABELS[job.status] ?? job.status)}</span>
+        <span class="stat-muted">${job.source === "self" ? "הדפסה עצמית" : "הזמנה"} ×${job.quantity}${job.status === "printing" ? ` · ${pct}%` : ""}</span>
+      </div>
+      ${moving ? `<div class="print-job-progress" role="progressbar" aria-label="התקדמות המשימה" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="print-job-progress-bar" style="width:${pct}%"></div></div>` : ""}
+      ${job.errorReason ? `<p class="store-edit-sync-notice">${escapeHtml(job.errorReason)}</p>` : ""}
+      <details class="print-job-timeline"${JOB_UNSETTLED_STATUSES.has(job.status) ? " open" : ""}>
+        <summary>ציר זמן · ${events.length} עדכונים</summary>
+        ${timeline ? `<ol>${timeline}</ol>` : '<p class="stat-muted">אין עדיין אירועים מתועדים.</p>'}
+      </details>
+    `;
+    if (job.status === "awaiting_approval") {
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "primary-button btn-sm";
+      approveBtn.type = "button";
+      approveBtn.textContent = "אשר ושלח למדפסת";
+      approveBtn.addEventListener("click", () => approvePrintJob(job.id, approveBtn));
+      row.append(approveBtn);
+    }
+    if (JOB_CANCELLABLE_STATUSES.has(job.status)) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "ghost-button btn-sm";
+      cancelBtn.type = "button";
+      cancelBtn.textContent = "ביטול";
+      cancelBtn.addEventListener("click", () => cancelPrintJob(job.id));
+      row.append(cancelBtn);
+    }
+    list.append(row);
+  });
+
+  ensureJobsPolling();
+}
+
 // ── Public entry point ────────────────────────────────────────
 
 export function render() {
   renderCatalog();
   renderOrders();
+  renderPrintJobs();
   renderItemStats();
   renderUsersAdmin();
   renderStoreEdit();
@@ -401,7 +649,7 @@ function renderCatalog() {
     renderProductBadges(card, product);
     renderProductFacts(card, product);
 
-    const orderBtn = card.querySelector("button");
+    const orderBtn = card.querySelector(".product-meta .primary-button");
     orderBtn.textContent = product.inventoryAvailable === false ? "בקשת חלופה" : isIdea ? "בקשת בדיקה" : "הזמנה";
     if (eligibility.canOrder) {
       orderBtn.addEventListener("click", () => openOrderDialog(product.id));
@@ -781,6 +1029,18 @@ function buildOrderCard(order) {
     promoteBtn.textContent = `קדם ל${STATUS_LABELS[next] ?? next} ←`;
     promoteBtn.addEventListener("click", () => setOrderStatus(order, next));
     actions.append(promoteBtn);
+  }
+
+  // One-click print: only when the order is ready to print and its product has an
+  // uploaded slice file for the bridge to send.
+  if (order.status === "waiting_print" && product?.printFileUrl) {
+    const sendPrintBtn = document.createElement("button");
+    sendPrintBtn.className   = "primary-button btn-sm";
+    sendPrintBtn.type        = "button";
+    sendPrintBtn.textContent = "🖨️ צור משימת הדפסה";
+    sendPrintBtn.title       = "יצירת משימה שממתינה לאישור ידני לפני שליחה למדפסת";
+    sendPrintBtn.addEventListener("click", () => startOrderPrint(order, sendPrintBtn));
+    actions.append(sendPrintBtn);
   }
 
   const statusSelect = document.createElement("select");
@@ -1542,11 +1802,6 @@ function renderStoreEdit() {
     // ── Body ─────────────────────────────────────────────
     const body = document.createElement("div");
     body.className = "store-edit-body";
-    const syncNotice = product.printSync?.status === "needs_material"
-      ? '<p class="store-edit-sync-notice">טיוטה מסנכרון 3MF — בחר פילמנט והשלם פרטים לפני פרסום.</p>'
-      : product.printSync?.status === "ready"
-        ? '<p class="store-edit-sync-notice">נתוני ההדפסה עודכנו מקובץ 3MF מקומי.</p>'
-        : '';
     const stockNotice = product.inventoryAvailable === false
       ? '<p class="store-edit-sync-notice">מוצג בקטלוג כ״לא זמין כרגע״ — הזמנה תדרוש בדיקה או חלופה.</p>'
       : '';
@@ -1559,7 +1814,6 @@ function renderStoreEdit() {
         <span>${formatCurrency(product.cost)}</span>
         <span class="stat-muted">${product.grams}g</span>
       </div>
-      ${syncNotice}
       ${readinessNotice}
       ${stockNotice}
       <div class="store-edit-live-stats">
@@ -1587,6 +1841,17 @@ function renderStoreEdit() {
     deleteBtn.addEventListener("click", () => deleteProduct(product.id));
 
     footer.append(editDetailsBtn, deleteBtn);
+
+    // Self-print (build stock) is offered only when a slice file is on record.
+    if (product.printFileUrl) {
+      const printBtn = document.createElement("button");
+      printBtn.className   = "primary-button btn-sm";
+      printBtn.type        = "button";
+      printBtn.textContent = "🖨️ צור משימת הדפסה";
+      printBtn.title       = "יצירת הדפסה עצמית שממתינה לאישור ידני לפני שליחה למדפסת";
+      printBtn.addEventListener("click", () => startProductPrint(product, printBtn));
+      footer.append(printBtn);
+    }
     body.append(footer);
     card.append(imageWrap, body);
     grid.append(card);
@@ -2008,7 +2273,6 @@ function renderProductFacts(card, product) {
   const facts = [];
   if (product.printHours) facts.push(`⏱️ כ־${product.printHours} שעות הדפסה`);
   if (product.grams) facts.push(`🧵 כ־${product.grams} גרם חומר`);
-  if (product.possibleColors?.length) facts.push(`🎨 ${product.possibleColors.join(", ")}`);
 
   if (facts.length === 0) { container.remove(); return; }
   facts.forEach((fact) => {
@@ -2391,6 +2655,7 @@ function renderFilaments() {
     row.innerHTML = `
       <td><span class="color-swatch" style="background:${escapeHtml(f.colorHex)}"></span></td>
       <td>${escapeHtml(f.name)}</td>
+      <td>${escapeHtml(f.manufacturer ?? '')}</td>
       <td>${escapeHtml(f.materialType ?? '')}</td>
       <td>${spoolPrice > 0 ? formatCurrency(spoolPrice) : "—"}</td>
       <td>${spoolGrams > 0 ? `${Math.round(spoolGrams)} גרם` : "—"}</td>
@@ -2456,16 +2721,17 @@ function openFilamentEditForm(f) {
   const form = document.querySelector("#filament-form");
   if (!form) return;
   form.elements["filamentId"].value  = f.id;
-  form.elements["name"].value        = f.name;
+  form.elements["manufacturer"].value = f.manufacturer ?? "";
   form.elements["materialType"].value = f.materialType ?? "PLA";
+  form.elements["colorName"].value   = f.colorName ?? "";
   form.elements["colorHex"].value    = f.colorHex;
   form.elements["spoolPrice"].value = f.spoolPrice ?? "";
   form.elements["spoolGrams"].value = f.spoolGrams ?? 1000;
   form.elements["remainingGrams"].value = f.remainingGrams ?? "";
   form.elements["note"].value        = f.note ?? "";
   form.elements["active"].checked    = f.active !== false;
-  const preview = document.querySelector("#filament-color-preview");
-  if (preview) preview.style.backgroundColor = f.colorHex;
+  const namePreview = document.querySelector("#filament-name-preview");
+  if (namePreview) namePreview.textContent = `שם החומר: ${composeFilamentName(f.manufacturer, f.materialType, f.colorName) || "—"}`;
   const cost = Number(f.spoolPrice) > 0 && Number(f.spoolGrams) > 0 ? Number(f.spoolPrice) / Number(f.spoolGrams) : null;
   const costLabel = document.querySelector("#filament-cost-per-gram");
   if (costLabel) costLabel.textContent = cost == null ? "עלות לגרם: —" : `עלות לגרם: ${formatCurrency(cost)}`;

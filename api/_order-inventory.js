@@ -1,3 +1,5 @@
+const { randomUUID } = require('crypto');
+
 function positive(value) {
   return Math.max(Number(value) || 0, 0);
 }
@@ -116,9 +118,25 @@ async function deductOrderInventory(sql, order, status) {
   await deductOutstandingWaste(sql, order, product);
 }
 
+// Single owner of order finalization: writes the self_print ledger entry for
+// internal orders and deducts filament inventory. The ledger insert and the
+// deduction are each independently idempotent (unique index on
+// owner_ledger(order_id, kind); the inventory_deducted claim-CTE), so a
+// duplicate call is safe. Both the orders PUT handler and the print-jobs bridge
+// report handler route completion through here so deduction lives in one place.
+async function finalizeOrder(sql, order, status) {
+  if (status === 'completed' && order?.internal) {
+    await sql`INSERT INTO owner_ledger (id, kind, description, amount, order_id)
+      VALUES (${randomUUID()}, 'self_print', ${`הדפסה עצמית ${order.id}`}, ${-Number(order.production_cost || 0)}, ${order.id})
+      ON CONFLICT (order_id, kind) WHERE order_id IS NOT NULL DO NOTHING`;
+  }
+  await deductOrderInventory(sql, order, status);
+}
+
 module.exports = {
   completedUsage,
   deductOrderInventory,
+  finalizeOrder,
   mergeUsage,
   outstandingWaste,
 };

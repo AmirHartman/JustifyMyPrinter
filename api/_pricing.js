@@ -27,6 +27,8 @@ function editableSettings(value = {}) {
     minOrderPrice: value.minOrderPrice == null ? DEFAULT_SETTINGS.minOrderPrice : Number(value.minOrderPrice),
     roundingMode: 'ceil',
     riskPercentByLevel: normalizedRiskPercents(value),
+    wearParts: Array.isArray(value.wearParts) ? value.wearParts : config.wearParts,
+    maintenanceTasks: Array.isArray(value.maintenanceTasks) ? value.maintenanceTasks : config.maintenanceTasks,
   };
 }
 
@@ -34,8 +36,8 @@ function mergedSettings(value = {}) {
   return { ...config, ...editableSettings(value) };
 }
 
-function wearPerHour(profileKey) {
-  return config.wearParts
+function wearPerHour(profileKey, wearParts = config.wearParts) {
+  return (Array.isArray(wearParts) ? wearParts : config.wearParts)
     .filter((part) => !part.amsOnly || profileKey === 'ams')
     .reduce((sum, part) => sum + Number(part.priceIls) / Number(part.lifetimeHours), 0);
 }
@@ -69,7 +71,7 @@ function calculateProductCost(product = {}, filaments = [], settingsValue = {}, 
   // like any other gram. It is priced with the first material's filament.
   materialCost += purgeGrams * quantity * pricePerGram(product.materials?.[0]?.filamentId);
   const electricityCost = totalHours * Number(profile.wattsAvg) / 1000 * Number(settings.electricityPricePerKwh);
-  const wearCost = totalHours * wearPerHour(profileKey);
+  const wearCost = totalHours * wearPerHour(profileKey, settings.wearParts);
   const productionCost = materialCost + electricityCost + wearCost;
   const riskLevel = ['low', 'medium', 'high'].includes(product.riskLevel) ? product.riskLevel : 'medium';
   const riskPercent = product.riskLevel

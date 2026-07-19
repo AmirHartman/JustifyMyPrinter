@@ -60,7 +60,14 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'אחוזי הסיכון חייבים להיות בין 0% ל־500%' });
           }
         }
-        value = editableSettings({ marginPercent, minOrderPrice, riskPercentByLevel });
+        // Preserve independently managed wear/maintenance arrays when the
+        // pricing form updates only margin, floor and risk percentages.
+        value = editableSettings({
+          ...(rows[0]?.value || {}),
+          marginPercent,
+          minOrderPrice,
+          riskPercentByLevel,
+        });
       }
       await sql`
         INSERT INTO settings (key, value)

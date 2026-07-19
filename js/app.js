@@ -6,7 +6,7 @@ import {
   addTip, resetTip, goToStep, getTipAmount, getOrderOptions,
 } from "./orders.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
-import { formatCurrency, calculateProductCost } from "./utils.js";
+import { formatCurrency, calculateProductCost, composeFilamentName } from "./utils.js";
 
 // ── DOM references ────────────────────────────────────────────
 const loginForm     = document.querySelector("#login-form");
@@ -203,7 +203,7 @@ document.querySelector("#reset-demo")?.addEventListener("click", async (event) =
 })();
 
 // ── Order dialog ──────────────────────────────────────────────
-document.querySelector(".close-button")?.addEventListener("click", () => orderDialog?.close());
+orderDialog?.querySelector(".close-button")?.addEventListener("click", () => orderDialog.close());
 document.querySelector("#cancel-order")?.addEventListener("click", () => orderDialog?.close());
 orderForm?.quantity?.addEventListener("input", updateReviewCosts);
 
@@ -395,29 +395,6 @@ customOrderForm?.addEventListener("submit", async (event) => {
 })();
 
 // ── Product form (admin) ──────────────────────────────────────
-document.querySelector("#sync-print-files-btn")?.addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  const original = button.textContent;
-  button.disabled = true;
-  button.textContent = "מסנכרן...";
-  try {
-    const result = await api("/api/print-sync", { method: "POST", body: "{}" });
-    await loadData();
-    render();
-    const draft = store.products.find((product) => product.printSync?.status === "needs_material");
-    if (draft && typeof window.openProductEditForm === "function") {
-      window.openProductEditForm(draft);
-      return;
-    }
-    alert(result.output || "הסנכרון הסתיים.");
-  } catch (err) {
-    alert(`הסנכרון נכשל: ${err.message}`);
-  } finally {
-    button.disabled = false;
-    button.textContent = original;
-  }
-});
-
 productForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data      = new FormData(productForm);
@@ -699,7 +676,6 @@ function openProductEditor() {
   document.querySelector("#product-catalog-list")?.setAttribute("hidden", "");
   document.querySelector("#product-editor")?.removeAttribute("hidden");
   document.querySelector("#add-product-btn")?.setAttribute("hidden", "");
-  document.querySelector("#sync-print-files-btn")?.setAttribute("hidden", "");
   document.querySelector("#product-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -709,7 +685,6 @@ function closeProductEditor(force = false) {
   document.querySelector("#product-editor")?.setAttribute("hidden", "");
   document.querySelector("#product-catalog-list")?.removeAttribute("hidden");
   document.querySelector("#add-product-btn")?.removeAttribute("hidden");
-  document.querySelector("#sync-print-files-btn")?.removeAttribute("hidden");
   return true;
 }
 
@@ -763,11 +738,8 @@ window.openProductEditForm = function openProductEditForm(product) {
   // Rebuild material rows
   const materialsContainer = document.querySelector("#product-materials-rows");
   materialsContainer.replaceChildren();
-  const syncedGrams = product.printSync?.materialGrams ?? [];
   if ((product.materials ?? []).length) {
     product.materials.forEach((m) => addMaterialRow(m.filamentId, m.grams));
-  } else {
-    syncedGrams.forEach((grams) => addMaterialRow("", grams));
   }
 
   // Rebuild image rows
@@ -779,13 +751,6 @@ window.openProductEditForm = function openProductEditForm(product) {
   const currentMainIndex = productImages.findIndex((image) => image.isMain || image.url === product.image);
   if (currentMainIndex > 0) productImages.unshift(...productImages.splice(currentMainIndex, 1));
   productImages.forEach((img) => addImageRow(img.url));
-
-  const importSummary = document.querySelector("#product-import-summary");
-  if (importSummary && product.printSync) {
-    const grams = syncedGrams.reduce((sum, value) => sum + Number(value || 0), 0);
-    importSummary.textContent = `נקלט מ־3MF מקומי: ${Number(product.printHours || 0).toFixed(2)} שעות, ${grams.toFixed(2)} גרם. בחר פילמנט והשלם את פרטי הפרסום.`;
-    importSummary.hidden = false;
-  }
 
   document.querySelector("#product-submit-btn").textContent  = "שמור שינויים";
   document.querySelector("#product-editor-title").textContent = `עריכת מוצר: ${product.name}`;
@@ -1195,6 +1160,7 @@ document.querySelector("#add-filament-btn")?.addEventListener("click", () => {
   form.elements["active"].checked = true;
   form.elements["materialType"].value = "PLA";
   form.hidden = false;
+  syncManufacturerSuggestions();
   updateFilamentPreview();
   setView("materials");
   activateSubTab("materials-filaments");
@@ -1209,10 +1175,14 @@ document.querySelector("#filament-form-cancel")?.addEventListener("click", () =>
 function updateFilamentPreview() {
   const form = document.querySelector("#filament-form");
   if (!form) return;
-  const swatch = document.querySelector("#filament-color-preview");
-  if (swatch) {
-    swatch.style.background = form.elements["colorHex"]?.value || "#000000";
-    swatch.style.border = "1px solid #777";
+  const namePreview = document.querySelector("#filament-name-preview");
+  if (namePreview) {
+    const name = composeFilamentName(
+      form.elements["manufacturer"]?.value,
+      form.elements["materialType"]?.value,
+      form.elements["colorName"]?.value,
+    );
+    namePreview.textContent = `שם החומר: ${name || "—"}`;
   }
   const spoolPrice = Number(form.elements["spoolPrice"]?.value);
   const spoolGrams = Number(form.elements["spoolGrams"]?.value);
@@ -1237,8 +1207,23 @@ function syncMaterialTypeSuggestions() {
   }));
 }
 
+function syncManufacturerSuggestions() {
+  const list = document.querySelector("#manufacturer-suggestions");
+  if (!list) return;
+  const names = new Set();
+  store.filaments.forEach((filament) => {
+    const name = String(filament.manufacturer ?? "").trim();
+    if (name) names.add(name);
+  });
+  list.replaceChildren(...Array.from(names).sort().map((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    return option;
+  }));
+}
+
 document.querySelector("#filament-form")?.addEventListener("input", (event) => {
-  if (event.target.matches("[name='colorHex'], [name='spoolPrice'], [name='spoolGrams']")) updateFilamentPreview();
+  if (event.target.matches("[name='colorHex'], [name='spoolPrice'], [name='spoolGrams'], [name='manufacturer'], [name='materialType'], [name='colorName']")) updateFilamentPreview();
 });
 
 document.querySelector("#filament-form")?.addEventListener("submit", async (event) => {
@@ -1249,8 +1234,9 @@ document.querySelector("#filament-form")?.addEventListener("submit", async (even
   const isEdit = Boolean(id);
 
   const payload = {
-    name:         String(data.get("name") ?? "").trim(),
+    manufacturer: String(data.get("manufacturer") ?? "").trim(),
     materialType: String(data.get("materialType") ?? "PLA").trim(),
+    colorName:    String(data.get("colorName") ?? "").trim(),
     colorHex:     String(data.get("colorHex") ?? "#000000").trim(),
     spoolPrice:   Number(data.get("spoolPrice")),
     spoolGrams:   Number(data.get("spoolGrams")),

@@ -53,14 +53,6 @@ function normalizeRow(row) {
     printFileName:      row.print_file_name ?? '',
     printFileChecksum:  row.print_file_checksum ?? '',
     printFileUploadedAt: row.print_file_uploaded_at ?? null,
-    printSync: row.print_sync_key ? {
-      status: row.print_sync_status ?? '',
-      filename: row.print_sync_filename ?? '',
-      checksum: row.print_sync_checksum ?? '',
-      materialGrams: row.print_sync_material_grams ?? [],
-      warnings: row.print_sync_warnings ?? [],
-      syncedAt: row.print_synced_at ?? null,
-    } : null,
   };
 }
 
@@ -148,10 +140,10 @@ function withCurrentPrice(row, context) {
   product.calculatedCost = breakdown.shopPrice;
   product.productionCost = breakdown.productionCost;
   const materials = product.materials || [];
-  product.inventoryAvailable = product.printSync?.status !== 'needs_material' && (materials.length === 0 || materials.every((material) => {
+  product.inventoryAvailable = materials.length === 0 || materials.every((material) => {
     const filament = context.filaments.find((item) => item.id === material.filamentId);
     return Boolean(filament?.active) && (filament.remainingGrams == null || filament.remainingGrams >= Number(material.grams || 0));
-  }));
+  });
   const filamentAvailable = (filament) => Boolean(filament?.active)
     && (filament.remainingGrams == null || filament.remainingGrams > 0);
   // Ordering requires picking a colour. A product with its own palette offers that
@@ -191,90 +183,6 @@ function withCurrentPrice(row, context) {
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   const id = String(req.query.id ?? '').trim();
-  const action = String(req.query.action ?? '').trim();
-
-  // Local 3MF synchronizer. The file never reaches the server: it sends only
-  // estimates and an opaque local sync key. Imported products stay inactive.
-  if (!id && action === 'sync' && req.method === 'POST') {
-    const user = await requireAdmin(req, res);
-    if (!user) return;
-    try {
-      const body = await parseBody(req);
-      const syncKey = String(body.syncKey ?? '').trim();
-      const name = String(body.name ?? '').trim();
-      const filename = String(body.filename ?? '').trim();
-      const checksum = String(body.checksum ?? '').trim();
-      const printHours = Math.max(Number(body.printHours) || 0, 0);
-      const materialGrams = (Array.isArray(body.materialGrams) ? body.materialGrams : [])
-        .map(roundGrams).filter((grams) => grams > 0);
-      const warnings = Array.isArray(body.warnings) ? body.warnings.map(String).slice(0, 20) : [];
-      const printProfile = ['regular', 'ams', 'complex'].includes(body.printProfile)
-        ? body.printProfile : materialGrams.length > 1 ? 'ams' : 'regular';
-      const purgeGrams = Math.max(roundGrams(body.purgeGrams), 0);
-      if (!syncKey || syncKey.length > 200) return res.status(400).json({ error: 'Missing or invalid sync key' });
-      if (!name || !filename || !printHours || !materialGrams.length) {
-        return res.status(400).json({ error: 'Name, filename, print time, and material estimates are required' });
-      }
-
-      const sql = getSql();
-      const existingRows = await sql`
-        SELECT id, materials FROM products WHERE print_sync_key = ${syncKey} LIMIT 1
-      `;
-      const existing = existingRows[0];
-      const totalGrams = Math.max(0.01, roundGrams(materialGrams.reduce((sum, grams) => sum + grams, 0)));
-      const preservedMaterials = Array.isArray(existing?.materials) && existing.materials.length === materialGrams.length
-        ? existing.materials.map((material, index) => ({ ...material, grams: materialGrams[index] }))
-        : [];
-      const syncStatus = preservedMaterials.length ? 'ready' : 'needs_material';
-      const materials = JSON.stringify(preservedMaterials);
-      const gramsJson = JSON.stringify(materialGrams);
-      const warningsJson = JSON.stringify(warnings);
-      let row;
-
-      if (existing) {
-        const rows = await sql`
-          UPDATE products SET
-            grams = ${totalGrams}, print_hours = ${printHours}, print_profile = ${printProfile}, purge_grams = ${purgeGrams},
-            materials = ${materials}::jsonb,
-            print_sync_filename = ${filename}, print_sync_checksum = ${checksum},
-            print_sync_material_grams = ${gramsJson}::jsonb,
-            print_sync_status = ${syncStatus}, print_sync_warnings = ${warningsJson}::jsonb,
-            print_synced_at = NOW(), updated_at = NOW()
-          WHERE id = ${existing.id}
-          RETURNING *
-        `;
-        row = rows[0];
-      } else {
-        const productId = randomUUID();
-        const rows = await sql`
-          INSERT INTO products (
-            id, name, cost, grams, description, image, active, print_hours, print_profile, purge_grams,
-            materials, print_sync_key, print_sync_filename, print_sync_checksum,
-            print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
-          ) VALUES (
-            ${productId}, ${name}, 0.01, ${totalGrams}, '', '', FALSE, ${printHours}, ${printProfile}, ${purgeGrams},
-            ${materials}::jsonb, ${syncKey}, ${filename}, ${checksum},
-            ${gramsJson}::jsonb, ${syncStatus}, ${warningsJson}::jsonb, NOW()
-          ) RETURNING *
-        `;
-        row = rows[0];
-      }
-
-      const context = await pricingContext(sql);
-      let product = withCurrentPrice(row, context);
-      if (syncStatus === 'ready') {
-        const saved = await sql`
-          UPDATE products SET cost = ${product.cost}, calculated_cost = ${product.calculatedCost},
-            production_cost = ${product.productionCost}, updated_at = NOW()
-          WHERE id = ${row.id} RETURNING *
-        `;
-        product = withCurrentPrice(saved[0], context);
-      }
-      return res.status(existing ? 200 : 201).json(product);
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
 
   // ── /api/products?id=:id — single-product operations ─────────
   if (id) {
@@ -319,9 +227,6 @@ module.exports = async (req, res) => {
         const printFileName      = body.printFileName      !== undefined ? String(body.printFileName).trim()                 : null;
         const printFileChecksum  = body.printFileChecksum  !== undefined ? String(body.printFileChecksum).trim()              : null;
         const printFileUploadedAt = body.printFileUploadedAt !== undefined ? String(body.printFileUploadedAt).trim()          : null;
-        const syncStatus         = body.materials !== undefined
-          ? (Array.isArray(body.materials) && body.materials.length ? 'ready' : 'needs_material')
-          : null;
 
         const rows = await sql`
           UPDATE products SET
@@ -357,7 +262,6 @@ module.exports = async (req, res) => {
             print_file_name     = COALESCE(${printFileName}, print_file_name),
             print_file_checksum = COALESCE(${printFileChecksum}, print_file_checksum),
             print_file_uploaded_at = COALESCE(${printFileUploadedAt}::timestamptz, print_file_uploaded_at),
-            print_sync_status = CASE WHEN ${body.materials !== undefined} AND print_sync_key IS NOT NULL THEN ${syncStatus} ELSE print_sync_status END,
             updated_at          = NOW()
           WHERE id = ${id}
           RETURNING
@@ -367,9 +271,7 @@ module.exports = async (req, res) => {
             purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
             possible_colors, required_colors, requires_admin_approval,
             allow_multiple, internal_print_notes,
-            print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at,
-            print_sync_key, print_sync_filename, print_sync_checksum,
-            print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
+            print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at
         `;
         if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
         const context = await pricingContext(sql);
@@ -410,9 +312,7 @@ module.exports = async (req, res) => {
                    purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes,
-                   print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at,
-                   print_sync_key, print_sync_filename, print_sync_checksum,
-                   print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
+                   print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at
             FROM products ORDER BY created_at ASC
           `
         : await sql`
@@ -422,15 +322,13 @@ module.exports = async (req, res) => {
                    purge_grams, risk_percent, risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
                    possible_colors, required_colors, requires_admin_approval,
                    allow_multiple, internal_print_notes,
-                   print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at,
-                   print_sync_key, print_sync_filename, print_sync_checksum,
-                   print_sync_material_grams, print_sync_status, print_sync_warnings, print_synced_at
+                   print_file_url, print_file_name, print_file_checksum, print_file_uploaded_at
             FROM products ORDER BY created_at ASC
           `;
       const context = await pricingContext(sql);
       const priced = rows.map((row) => withCurrentPrice(row, context));
       // Non-admins see only products the admin published: active and complete.
-      // Inactive products are drafts (3MF imports land here) and must stay hidden.
+      // Inactive products are drafts and must stay hidden from non-admins.
       return res.json(isAdmin
         ? priced
         : priced.filter((row) => row.active && row.missingRequirements.length === 0).map(publicProduct));
