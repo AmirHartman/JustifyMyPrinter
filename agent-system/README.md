@@ -40,6 +40,18 @@ whether to delegate, `context-packs.md` for worker inputs, `git-integration.md`
 for repository state, `verification-matrix.md` for evidence, and
 `learning-loop.md` for persistent knowledge.
 
+Every model or delegated agent that will edit tracked files works on a dedicated
+`agent/<task-id>-<slug>` branch in its own worktree. Create it before the first
+tracked-file edit unless the conversation is already in a dedicated worktree
+for exactly that task. Read-only investigation does not require a new branch.
+
+When the owner unambiguously says that work on the branch is finished, that
+instruction activates the approved branch-closing publish flow in
+`workflows/git-integration.md`. It authorizes the scoped commit, rebase and
+fast-forward integration, push to `origin/main`, and production verification as
+one requested operation, subject to the documented safety stops. Branch or
+worktree deletion remains a separate approval.
+
 Delegated units use `contracts/task-contract.schema.json`. Workers return a
 compact handoff conforming to `contracts/agent-handoff.schema.json`.
 

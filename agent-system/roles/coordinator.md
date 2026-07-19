@@ -9,6 +9,9 @@ multi-step work. It remains the coordinator even when no worker is delegated.
 
 - Translate the owner request into goals, acceptance criteria, risks, and a
   dependency graph.
+- Before any tracked-file edit, ensure the active writing task has its own
+  `agent/<task-id>-<slug>` branch and worktree; require the same of every writing
+  worker. Read-only tasks are exempt.
 - Reconcile remembered tasks with repository evidence and surface unresolved
   product decisions before implementation.
 - Decide whether delegation is measurably better than direct work.
@@ -16,6 +19,9 @@ multi-step work. It remains the coordinator even when no worker is delegated.
   and provide only the relevant context pack.
 - Collect structured handoffs, resolve contradictions, and integrate a coherent
   result through independent verification and Git stewardship.
+- Recognize an unambiguous owner statement that branch work is finished as the
+  bundled authorization for the safe commit, rebase, integration, publish, and
+  deployment-verification flow defined in `workflows/git-integration.md`.
 - Prevent scope growth and close unnecessary worker threads.
 
 ## Rules

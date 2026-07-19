@@ -105,3 +105,45 @@ test('former Tester requirements have a complete owner/evidence migration', () =
   assert.match(migration, /There are no unmapped former Tester requirements\./);
   assert.doesNotMatch(migration, /\|[^\n]*\|\s*(?:unmapped|none|TBD)\s*\|/i);
 });
+
+test('every writing task starts on a dedicated branch and worktree', () => {
+  const readme = read('agent-system/README.md');
+  const lifecycle = read('agent-system/workflows/task-lifecycle.md');
+  const git = read('agent-system/workflows/git-integration.md');
+  const coordinator = read('agent-system/roles/coordinator.md');
+
+  for (const policy of [readme, lifecycle, git, coordinator]) {
+    assert.match(policy, /agent\/<task-id>-<slug>/);
+    assert.match(policy, /before (?:the first|any)\s+tracked-file edit/i);
+    assert.match(policy, /read-only/i);
+  }
+  assert.match(git, /own worktree/i);
+  assert.doesNotMatch(git, /create a worktree only\s+for genuinely independent/i);
+});
+
+test('owner branch completion triggers the safe publish sequence', () => {
+  const git = read('agent-system/workflows/git-integration.md');
+  const steward = read('agent-system/roles/git-steward.md');
+  const skill = read('.agents/skills/git-steward/SKILL.md');
+
+  assert.match(git, /סיימנו לעבוד בענף/);
+  assert.match(git, /create a focused commit/i);
+  assert.match(git, /rebase the feature branch onto the latest `origin\/main`/i);
+  assert.match(git, /feature branch is rebased onto main; main is never rebased/i);
+  assert.match(git, /Fast-forward local `main`/i);
+  assert.match(git, /push that exact\s+tip to `origin\/main` without force/i);
+  assert.match(git, /Verify the Render\s+deployment and `\/healthz`/i);
+  assert.match(git, /Deleting the feature branch or\s+worktree always requires a separate owner instruction/i);
+  assert.match(steward, /explicit bundled approval/i);
+  assert.match(skill, /owner unambiguously says branch work is finished/i);
+});
+
+test('branch closing stops safely instead of rewriting or hiding conflicts', () => {
+  const git = read('agent-system/workflows/git-integration.md');
+
+  assert.match(git, /Stop if the\s+rebase conflicts/i);
+  assert.match(git, /required check fails/i);
+  assert.match(git, /publication would require a force push/i);
+  assert.match(git, /Do not auto-stash/i);
+  assert.match(git, /reset, or force push/i);
+});
