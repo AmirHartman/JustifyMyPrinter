@@ -17,6 +17,11 @@ function normalizedMaterials(value) {
   }));
 }
 
+function optionalTimestamp(value) {
+  if (value == null) return null;
+  return String(value).trim() || null;
+}
+
 // Full shape — admin only. Includes internal pricing mechanics and print notes.
 function normalizeRow(row) {
   return {
@@ -226,7 +231,7 @@ module.exports = async (req, res) => {
         const printFileUrl       = body.printFileUrl       !== undefined ? String(body.printFileUrl).trim()                  : null;
         const printFileName      = body.printFileName      !== undefined ? String(body.printFileName).trim()                 : null;
         const printFileChecksum  = body.printFileChecksum  !== undefined ? String(body.printFileChecksum).trim()              : null;
-        const printFileUploadedAt = body.printFileUploadedAt !== undefined ? String(body.printFileUploadedAt).trim()          : null;
+        const printFileUploadedAt = optionalTimestamp(body.printFileUploadedAt);
 
         const rows = await sql`
           UPDATE products SET
@@ -379,7 +384,7 @@ module.exports = async (req, res) => {
       const printFileUrl       = String(body.printFileUrl ?? '').trim();
       const printFileName      = String(body.printFileName ?? '').trim();
       const printFileChecksum  = String(body.printFileChecksum ?? '').trim();
-      const printFileUploadedAt = body.printFileUploadedAt ? String(body.printFileUploadedAt).trim() : null;
+      const printFileUploadedAt = optionalTimestamp(body.printFileUploadedAt);
 
       const rows = await sql`
         INSERT INTO products (

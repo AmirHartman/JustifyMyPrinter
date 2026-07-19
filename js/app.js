@@ -447,7 +447,7 @@ productForm?.addEventListener("submit", async (event) => {
     printFileUrl:       String(data.get("printFileUrl") ?? "").trim(),
     printFileName:      String(data.get("printFileName") ?? "").trim(),
     printFileChecksum:  String(data.get("printFileChecksum") ?? "").trim(),
-    printFileUploadedAt: String(data.get("printFileUploadedAt") ?? "").trim(),
+    printFileUploadedAt: String(data.get("printFileUploadedAt") ?? "").trim() || null,
     manualPriceEnabled: data.get("manualPriceEnabled") !== null,
     manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
     calculatedCost:     computedCostFromForm(),
