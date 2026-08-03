@@ -270,11 +270,13 @@ const customOrderDialog = document.querySelector("#custom-order-dialog");
 const customOrderForm   = document.querySelector("#custom-order-form");
 const customOrderError  = document.querySelector("#custom-order-error");
 
-document.querySelector("#custom-order-button")?.addEventListener("click", () => {
-  if (!store.currentUser) { window.location.href = "dashboard.html"; return; }
-  const eligible = store.currentUser.role === "admin" || store.currentUser.status === "active";
-  if (!eligible) { alert("רק חברים פעילים יכולים להזמין. מחכים לאישור המנהל."); return; }
-  openCustomOrderDialog();
+document.querySelectorAll("[data-open-custom-order]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!store.currentUser) { window.location.href = "dashboard.html"; return; }
+    const eligible = store.currentUser.role === "admin" || store.currentUser.status === "active";
+    if (!eligible) { alert("רק חברים פעילים יכולים להזמין. מחכים לאישור המנהל."); return; }
+    openCustomOrderDialog();
+  });
 });
 
 document.querySelectorAll("[data-close-custom-order]").forEach((btn) => {

@@ -2489,7 +2489,7 @@ function renderWsOrderList(container, orders, emptyMsg, { allowReorder = true } 
       <div class="ws-order-info">
         <span class="ws-order-product">${escapeHtml(title)}</span>
         <span class="ws-order-meta">כמות ${order.quantity} · ${escapeHtml(amountLabel)}</span>
-        ${supportAmount > 0 ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} פרגון — תודה! 💛</span>` : ""}
+        ${supportAmount > 0 ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} תמיכה בפרויקט — תודה! 💛</span>` : ""}
         ${orderColorNames(order).length ? `<span class="ws-order-meta">צבע: ${escapeHtml(orderColorNames(order).join(", "))}</span>` : ""}
         ${order.colorAlternativeStatus && order.colorAlternativeStatus !== "none"
           ? `<span class="ws-order-meta">חלופת צבע: ${escapeHtml(colorAlternativeLabel(order))}</span>` : ""}

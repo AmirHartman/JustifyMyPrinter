@@ -32,14 +32,44 @@
           <p class="eyebrow">קטלוג הדפסות</p>
           <h2 id="catalog-title">מה אפשר להדפיס?</h2>
           <p>
-            בחרו מוצר וכמות. המחיר מכסה את עלויות ההדפסה וכולל רווח מתון,
-            וכל דבר מעבר לזה הוא פשוט פרגון חמוד לפרויקט.
+            בחרו מוצר וכמות. המחיר החברי מכסה את ההדפסה ומשאיר חלק קטן
+            שעוזר לפרויקט לגדול; תמיכה נוספת היא תמיד לבחירתכם.
           </p>
         </div>
         <div class="catalog-note">
           <strong>יש רעיון שלא מופיע כאן?</strong>
           <span>תזמינו משהו קרוב או דברו איתי. חצי מהכיף הוא למצוא פתרונות מוזרים לדברים קטנים.</span>
-          <button class="ghost-button btn-sm" id="custom-order-button" type="button">בקשת הדפסה מיוחדת</button>
+          <button class="ghost-button btn-sm" id="custom-order-button" data-open-custom-order type="button">בקשת הדפסה מיוחדת</button>
+        </div>
+      </section>
+
+      <section class="catalog-inspiration" aria-labelledby="catalog-inspiration-title">
+        <div>
+          <p class="eyebrow">חפשו את הרעיון הבא שלכם</p>
+          <h2 id="catalog-inspiration-title">לא מצאתם בקטלוג? חפשו מודל ברשת</h2>
+          <p>פתחו מאגר, מצאו משהו שמעניין אתכם, העתיקו את כתובת עמוד המודל ושלחו לי לבדיקה.</p>
+        </div>
+        <div class="resource-grid resource-grid-compact" aria-label="מאגרים למציאת מודלים להדפסת תלת־ממד">
+          <a class="resource-card" href="https://www.printables.com/model" target="_blank" rel="noopener noreferrer" aria-label="פתיחת Printables בלשונית חדשה">
+            <strong>Printables</strong>
+            <span>חיפוש דגמים ↗</span>
+          </a>
+          <a class="resource-card" href="https://makerworld.com/en/3d-models?isPrintable=false" target="_blank" rel="noopener noreferrer" aria-label="פתיחת MakerWorld בלשונית חדשה">
+            <strong>MakerWorld</strong>
+            <span>חיפוש דגמים ↗</span>
+          </a>
+          <a class="resource-card" href="https://www.thingiverse.com/search?type=things" target="_blank" rel="noopener noreferrer" aria-label="פתיחת Thingiverse בלשונית חדשה">
+            <strong>Thingiverse</strong>
+            <span>חיפוש דגמים ↗</span>
+          </a>
+          <a class="resource-card" href="https://thangs.com/search/free?scope=thangs&amp;view=list" target="_blank" rel="noopener noreferrer" aria-label="פתיחת תוצאות חינמיות ב־Thangs בלשונית חדשה">
+            <strong>Thangs — Free</strong>
+            <span>חיפוש דגמים ↗</span>
+          </a>
+        </div>
+        <div class="catalog-inspiration-action">
+          <p>„חינם להורדה” לא תמיד מאפשר הדפסה בתשלום. אני אבדוק את הרישיון, הקובץ והמחיר לפני שמתחילים.</p>
+          <button class="primary-button" data-open-custom-order type="button">מצאתי משהו — שליחת קישור</button>
         </div>
       </section>
 
@@ -119,8 +149,8 @@
           </fieldset>
           <p id="order-availability-note" role="status"></p>
           <div class="cost-review">
-            <div class="cost-review-row"><span>עלות ליחידה</span><span id="review-unit-cost"></span></div>
-            <div class="cost-review-row cost-review-total"><span>עלות כוללת (מינימום)</span><span id="review-total-cost"></span></div>
+            <div class="cost-review-row"><span>מחיר ליחידה</span><span id="review-unit-cost"></span></div>
+            <div class="cost-review-row cost-review-total"><span>מחיר המוצר</span><span id="review-total-cost"></span></div>
             <small id="review-quantity-note" hidden>ההדפסה מתבצעת ברצף אחד, ולכן כמה יחידות יוצאות זולות יותר מהמחיר ליחידה כפול הכמות.</small>
           </div>
           <menu>
@@ -130,11 +160,11 @@
         </section>
 
         <section class="wizard-panel" data-panel="tip" hidden>
-          <h2 id="tip-title">האם תרצה לפרגן? 💛</h2>
+          <h2 id="tip-title">רוצה לעזור לפרויקט לגדול? 💛</h2>
           <p class="tip-pitch">
-            ההדפסה עולה לי בזמן, בחומרים ובבלאי על המדפסת. כל שקל מעבר לעלות
-            עוזר לי לשדרג ציוד, לקנות עוד גלילי פילמנט ולהמשיך לגדול עם הפרויקט
-            הקטן הזה — אבל זה לגמרי אופציונלי, ההחלטה כולה שלך.
+            מחיר המוצר כבר כולל את ההדפסה ואת החלק שמאפשר לפרויקט להתקדם.
+            אם בא לך להוסיף תמיכה, היא תעזור לקנות עוד חומרים וצבעים ולנסות דברים חדשים —
+            אבל היא לגמרי אופציונלית.
           </p>
           <div class="tip-buttons">
             <button class="tip-button" type="button" data-tip-add="1">+1 ₪</button>
@@ -143,8 +173,8 @@
             <button class="ghost-button btn-sm" type="button" id="tip-reset">איפוס</button>
           </div>
           <div class="cost-review">
-            <div class="cost-review-row"><span>עלות בסיס</span><span id="tip-base-cost"></span></div>
-            <div class="cost-review-row"><span>פרגון</span><span id="tip-extra-cost"></span></div>
+            <div class="cost-review-row"><span>מחיר המוצר</span><span id="tip-base-cost"></span></div>
+            <div class="cost-review-row"><span>תמיכה בפרויקט (לא חובה)</span><span id="tip-extra-cost"></span></div>
             <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="tip-total-cost"></span></div>
           </div>
           <menu>
@@ -159,8 +189,8 @@
             <div class="cost-review-row"><span>מוצר</span><span id="summary-product-name"></span></div>
             <div class="cost-review-row"><span>כמות</span><span id="summary-quantity"></span></div>
             <div class="cost-review-row" id="summary-color-row" hidden><span>צבע</span><span id="summary-color"></span></div>
-            <div class="cost-review-row"><span>עלות בסיס</span><span id="summary-base-cost"></span></div>
-            <div class="cost-review-row"><span>פרגון</span><span id="summary-tip-cost"></span></div>
+            <div class="cost-review-row"><span>מחיר המוצר</span><span id="summary-base-cost"></span></div>
+            <div class="cost-review-row"><span>תמיכה בפרויקט (לא חובה)</span><span id="summary-tip-cost"></span></div>
             <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="summary-total-cost"></span></div>
           </div>
           <menu>
@@ -183,10 +213,11 @@
       <form method="dialog" class="order-form" id="custom-order-form">
         <button class="icon-button close-button" type="button" data-close-custom-order aria-label="סגירה">×</button>
         <h2>בקשת הדפסה מיוחדת</h2>
-        <p>קישור למודל חיצוני או תיאור בקשה חופשית. אני אבדוק, אעריך מחיר, ותקבלו אותו לאישור לפני שמתחילים להדפיס.</p>
+        <p>קישור למודל חיצוני או תיאור בקשה חופשית. אני אבדוק רישיון, התאמה להדפסה ומחיר, ותקבלו הכל לאישור לפני שמתחילים.</p>
         <label>
-          קישור למודל (לא חובה)
-          <input name="externalModelLink" type="url" placeholder="https://www.thingiverse.com/thing:..." />
+          כתובת עמוד המודל (לא חובה)
+          <input name="externalModelLink" type="url" placeholder="https://www.printables.com/model/..." />
+          <small>הדביקו את כתובת העמוד שבו מצאתם את המודל, לא קישור ישיר להורדת הקובץ.</small>
         </label>
         <label>
           תיאור הבקשה

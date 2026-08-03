@@ -79,24 +79,24 @@ export function applyAuth() {
 
   const tipTitle = document.querySelector("#tip-title");
   if (tipTitle && store.currentUser) {
-    tipTitle.textContent = store.currentUser.gender === "female"
-      ? "האם תרצי לפרגן? 💛"
-      : "האם תרצה לפרגן? 💛";
+    tipTitle.textContent = "רוצה לעזור לפרויקט לגדול? 💛";
   }
 
   const hero  = document.querySelector("#landing-store-button-hero");
   const final = document.querySelector("#landing-store-button-final");
   const catalogHero = document.querySelector("#landing-catalog-button-hero");
   const catalogFinal = document.querySelector("#landing-catalog-button-final");
+  const ideaButton = document.querySelector("#landing-idea-button");
   if (store.currentUser) {
-    hero?.setAttribute("href", "catalog.html");
-    if (hero)  hero.textContent  = "חזרה לאזור האישי";
-    final?.setAttribute("href", "catalog.html");
-    if (final) final.textContent = "חזרה לאזור האישי";
+    hero?.setAttribute("href", "welcome.html");
+    if (hero)  hero.textContent  = "לאזור האישי";
+    final?.setAttribute("href", "welcome.html");
+    if (final) final.textContent = "לאזור האישי";
     catalogHero?.setAttribute("href", "catalog.html");
     if (catalogHero) catalogHero.textContent = "לצפייה בקטלוג";
     catalogFinal?.setAttribute("href", "catalog.html");
     if (catalogFinal) catalogFinal.textContent = "לצפייה בקטלוג";
+    ideaButton?.setAttribute("href", "catalog.html");
   } else {
     hero?.setAttribute("href", "dashboard.html");
     if (hero)  hero.textContent  = "כניסה / הרשמה";
@@ -106,6 +106,7 @@ export function applyAuth() {
     if (catalogHero) catalogHero.textContent = "כניסה לצפייה בקטלוג";
     catalogFinal?.setAttribute("href", "dashboard.html");
     if (catalogFinal) catalogFinal.textContent = "כניסה לצפייה בקטלוג";
+    ideaButton?.setAttribute("href", "dashboard.html");
   }
 }
 
@@ -122,11 +123,11 @@ export function applyMode() {
   if (store.appMode === "friend") {
     catalogTitle.textContent       = "מה אפשר להדפיס?";
     catalogDescription.textContent = store.currentUser?.gender === "female"
-      ? "בחרי מוצר וכמות. המחיר מכסה עלויות וכולל רווח מתון; פרגון הוא אופציונלי."
-      : "בחר מוצר וכמות. המחיר מכסה עלויות וכולל רווח מתון; פרגון הוא אופציונלי.";
+      ? "בחרי מוצר וכמות. המחיר החברי מכסה את ההדפסה ותומך בצמיחה; תמיכה נוספת היא לא חובה."
+      : "בחר מוצר וכמות. המחיר החברי מכסה את ההדפסה ותומך בצמיחה; תמיכה נוספת היא לא חובה.";
   } else {
     catalogTitle.textContent       = "קטלוג מוצרים";
-    catalogDescription.textContent = "בחר מוצר וכמות. המחיר מכסה עלויות וכולל רווח מתון; פרגון הוא אופציונלי.";
+    catalogDescription.textContent = "בחר מוצר וכמות. המחיר החברי מכסה את ההדפסה ותומך בצמיחה; תמיכה נוספת היא לא חובה.";
   }
 }
 
