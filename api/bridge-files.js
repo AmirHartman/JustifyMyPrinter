@@ -5,7 +5,7 @@
 // bridge alone opens the corresponding file on its own disk.
 const { getSql } = require('./_db');
 const { parseBody, requireAdmin } = require('./_middleware');
-const { canBridge } = require('./_bridge-auth');
+const bridgeAuth = require('./_bridge-auth');
 
 const CHECKSUM = /^[a-f0-9]{64}$/;
 const MAX_FILES_PER_SYNC = 5000;
@@ -69,11 +69,22 @@ function normalizeRow(row) {
   };
 }
 
+function bridgeContext(req, legacyBridgeId = '') {
+  // Production always has authenticateBridge(). This fallback only supports
+  // isolated legacy handler tests which inject canBridge() by itself.
+  if (typeof bridgeAuth.authenticateBridge === 'function') {
+    return bridgeAuth.authenticateBridge(req);
+  }
+  if (!bridgeAuth.canBridge?.(req)) return null;
+  const bridgeId = String(bridgeAuth.configuredBridgeId?.() || legacyBridgeId || 'bridge').trim().slice(0, 120);
+  return bridgeId ? { bridgeId } : null;
+}
+
 async function sync(req, res) {
-  if (!canBridge(req)) return res.status(403).json({ error: 'Forbidden' });
   const body = await parseBody(req);
-  const bridgeId = String(body.bridgeId || '').trim().slice(0, 120);
-  if (!bridgeId) return res.status(400).json({ error: 'bridgeId is required' });
+  const bridge = bridgeContext(req, body.bridgeId);
+  if (!bridge) return res.status(403).json({ error: 'Forbidden' });
+  const { bridgeId } = bridge;
   if (!Array.isArray(body.files) || body.files.length > MAX_FILES_PER_SYNC) {
     return res.status(400).json({ error: `files must be an array of at most ${MAX_FILES_PER_SYNC} items` });
   }
@@ -132,7 +143,7 @@ async function sync(req, res) {
     `;
     return res.json({ ok: true, bridgeId, files: files.length });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Bridge sync failed' });
   }
 }
 
@@ -151,6 +162,6 @@ module.exports = async (req, res) => {
     ]);
     return res.json({ files: files.map(normalizeRow), bridge: normalizeBridge(bridges[0]), bridges: bridges.map(normalizeBridge) });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Unable to load bridge inventory' });
   }
 };

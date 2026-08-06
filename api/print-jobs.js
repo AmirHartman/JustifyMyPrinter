@@ -1,7 +1,7 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
 const { normalizeOrderStatus, parseBody, requireAdmin } = require('./_middleware');
-const { canBridge } = require('./_bridge-auth');
+const bridgeAuth = require('./_bridge-auth');
 const { calculateProductCost } = require('./_pricing');
 const { finalizeOrder } = require('./_order-inventory');
 
@@ -9,9 +9,21 @@ const PRINTER_ID = 'p2s';
 
 // Statuses the bridge may report. The server owns awaiting_approval/queued/
 // claimed/cancelled (create, approve, claim-next, admin cancel).
-const REPORTABLE_STATUSES = ['uploading', 'printing', 'done', 'failed', 'cancelled'];
+const REPORTABLE_STATUSES = ['uploading', 'printing', 'done', 'failed', 'cancelled', 'attention_required'];
 // Jobs a live bridge is holding are requeued if they go silent past this window.
 const STALE_CLAIM_MINUTES = 10;
+const BRIDGE_QUEUE_LIMIT = 50;
+const FAILURE_CODES = new Set([
+  'file_missing',
+  'upload_failed',
+  'printer_rejected',
+  'printer_error',
+  'mqtt_disconnected',
+  'site_disconnected',
+  'bridge_shutdown',
+  'cancelled_before_start',
+  'unknown',
+]);
 
 // Human-readable timeline messages (Hebrew, shown in the admin transparency panel).
 const MSG = {
@@ -23,6 +35,19 @@ const MSG = {
   done:      'ההדפסה הסתיימה',
   failed:    'ההדפסה נכשלה',
   cancelled: 'המשימה בוטלה',
+  attention_required: 'מצב ההדפסה אינו ודאי ונדרשת בדיקה ידנית',
+};
+
+const FAILURE_MESSAGE = {
+  file_missing: 'קובץ ההדפסה אינו זמין בגשר',
+  upload_failed: 'העברת הקובץ למדפסת נכשלה',
+  printer_rejected: 'המדפסת דחתה את המשימה',
+  printer_error: 'המדפסת דיווחה על תקלה',
+  mqtt_disconnected: 'הקשר למדפסת נותק',
+  site_disconnected: 'הקשר לאתר נותק',
+  bridge_shutdown: 'הגשר נעצר לפני סיום הפעולה',
+  cancelled_before_start: 'ההדפסה בוטלה לפני תחילתה',
+  unknown: 'הגשר דיווח על תקלה לא מסווגת',
 };
 
 // One timeline entry, ready to append with `events = events || <this>::jsonb`.
@@ -59,7 +84,6 @@ function normalizeJob(row) {
     printFileName: row.print_file_name ?? '',
     printFileChecksum: row.print_file_checksum ?? '',
     bridgeId: row.bridge_id ?? null,
-    claimToken: row.claim_token ?? null,
     cancelRequestedAt: row.cancel_requested_at ?? null,
     items: Array.isArray(row.items) ? row.items : [],
     approvedAt: row.approved_at ?? null,
@@ -75,6 +99,105 @@ function normalizeJob(row) {
   };
 }
 
+function bridgeContext(req, legacyBridgeId = '') {
+  // Production always has authenticateBridge(). This compatibility path exists
+  // only for old isolated handler tests which inject canBridge() by itself.
+  if (typeof bridgeAuth.authenticateBridge === 'function') {
+    return bridgeAuth.authenticateBridge(req);
+  }
+  if (!bridgeAuth.canBridge?.(req)) return null;
+  const bridgeId = String(bridgeAuth.configuredBridgeId?.() || legacyBridgeId || 'bridge').trim().slice(0, 120);
+  return bridgeId ? { bridgeId } : null;
+}
+
+function bridgeFailure(res, status = 500) {
+  return res.status(status).json({ error: 'Bridge request failed' });
+}
+
+function bridgeFile(row) {
+  const checksum = String(row.print_file_checksum || '').trim().toLowerCase();
+  return {
+    source: checksum ? 'bridge_library' : 'legacy_cloudinary',
+    checksum,
+    name: String(row.print_file_name || '').trim(),
+  };
+}
+
+const MAX_BRIDGE_COLORS = 16;
+const MAX_COLOR_ID_LENGTH = 120;
+const MAX_COLOR_NAME_LENGTH = 160;
+const MAX_COLOR_HEX_LENGTH = 32;
+const MAX_PRODUCT_NAME_LENGTH = 255;
+
+function boundedString(value, maxLength) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function safeBridgeColor(value) {
+  if (typeof value === 'string') return boundedString(value, MAX_COLOR_ID_LENGTH) || null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const color = {};
+  const fields = [
+    ['filamentId', MAX_COLOR_ID_LENGTH],
+    ['id', MAX_COLOR_ID_LENGTH],
+    ['value', MAX_COLOR_ID_LENGTH],
+    ['name', MAX_COLOR_NAME_LENGTH],
+    ['colorHex', MAX_COLOR_HEX_LENGTH],
+  ];
+  for (const [field, maxLength] of fields) {
+    const normalized = boundedString(value[field], maxLength);
+    if (normalized) color[field] = normalized;
+  }
+  return Object.keys(color).length ? color : null;
+}
+
+function safeBridgeColors(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(safeBridgeColor).filter(Boolean).slice(0, MAX_BRIDGE_COLORS);
+}
+
+function safeBridgeItems(items, row) {
+  const fallback = {
+    productName: boundedString(row.product_name, MAX_PRODUCT_NAME_LENGTH),
+    quantity: Number(row.quantity) || 0,
+    colors: safeBridgeColors(row.selected_colors),
+  };
+  const normalized = (Array.isArray(items) ? items : []).map((item) => {
+    const snapshot = item.snapshot && typeof item.snapshot === 'object' ? item.snapshot : {};
+    return {
+      productName: boundedString(snapshot.name, MAX_PRODUCT_NAME_LENGTH)
+        || boundedString(item.productName, MAX_PRODUCT_NAME_LENGTH),
+      quantity: Number(item.quantity) || 0,
+      colors: safeBridgeColors(item.selectedColors),
+    };
+  }).filter((item) => item.productName || item.quantity > 0);
+  return normalized.length ? normalized : [fallback].filter((item) => item.productName || item.quantity > 0);
+}
+
+function normalizeBridgeJob(row, items, { includeClaimToken = false, claimable, blockedReason } = {}) {
+  const file = bridgeFile(row);
+  const job = {
+    id: row.id,
+    status: row.status,
+    printHours: numberOrNull(row.print_hours),
+    printFile: file,
+    items: safeBridgeItems(items, row),
+  };
+  if (includeClaimToken) {
+    job.claimToken = row.claim_token ?? null;
+    job.printFileChecksum = file.checksum;
+    job.printFileName = file.name;
+    if (file.source === 'legacy_cloudinary' && String(row.print_file_url || '').trim()) {
+      job.legacyDownloadUrl = String(row.print_file_url).trim();
+    }
+    return job;
+  }
+  job.createdAt = row.created_at ?? null;
+  job.claimable = Boolean(claimable);
+  job.blockedReason = blockedReason ?? null;
+  return job;
+}
+
 function validChecksum(value) {
   return /^[a-f0-9]{64}$/.test(String(value || '').trim().toLowerCase());
 }
@@ -82,14 +205,33 @@ function validChecksum(value) {
 async function jobItems(sql, jobId) {
   const rows = await sql`
     SELECT i.order_id, i.product_id, i.quantity, i.item_snapshot,
-           o.friend_name, o.selected_colors
+           o.friend_name, o.selected_colors, p.name AS product_name
     FROM print_job_items i LEFT JOIN orders o ON o.id = i.order_id
+    LEFT JOIN products p ON p.id = i.product_id
     WHERE i.print_job_id = ${jobId} ORDER BY i.created_at ASC
   `;
   return rows.map((row) => ({
     orderId: row.order_id ?? null, productId: row.product_id ?? null,
     quantity: Number(row.quantity) || 0, snapshot: row.item_snapshot ?? {},
     friendName: row.friend_name ?? null, selectedColors: row.selected_colors ?? [],
+    productName: row.product_name ?? null,
+  }));
+}
+
+async function bridgeJobItems(sql, jobId) {
+  // Do not even load customer names or order identifiers for a bridge DTO.
+  const rows = await sql`
+    SELECT i.quantity, i.item_snapshot, o.selected_colors, p.name AS product_name
+    FROM print_job_items i
+    LEFT JOIN orders o ON o.id = i.order_id
+    LEFT JOIN products p ON p.id = i.product_id
+    WHERE i.print_job_id = ${jobId} ORDER BY i.created_at ASC
+  `;
+  return rows.map((row) => ({
+    quantity: Number(row.quantity) || 0,
+    snapshot: row.item_snapshot ?? {},
+    selectedColors: row.selected_colors ?? [],
+    productName: row.product_name ?? null,
   }));
 }
 
@@ -396,19 +538,66 @@ async function propagateToOrder(sql, orderId, status) {
   }
 }
 
+function isPrinterIdle(state) {
+  return String(state || '').toLowerCase() === 'idle';
+}
+
+async function bridgeQueue(sql, bridgeId) {
+  // Advisory only: this SELECT must not reserve work, refresh a heartbeat,
+  // reap stale jobs, or otherwise mutate the scheduling state.
+  const rows = await sql`
+    SELECT pj.id, pj.source, pj.status, pj.quantity, pj.selected_colors,
+      pj.print_hours, pj.print_file_url, pj.print_file_name, pj.print_file_checksum,
+      pj.created_at, p.name AS product_name,
+      (SELECT state FROM printers WHERE id = ${PRINTER_ID}) AS printer_state,
+      CASE WHEN COALESCE(pj.print_file_checksum, '') = ''
+        THEN COALESCE(NULLIF(BTRIM(pj.print_file_url), ''), '') <> ''
+        ELSE EXISTS (
+        SELECT 1 FROM bridge_files bf
+        WHERE bf.bridge_id = ${bridgeId}
+          AND bf.checksum = pj.print_file_checksum
+          AND bf.available = TRUE
+      ) END AS file_available
+    FROM print_jobs pj
+    LEFT JOIN products p ON p.id = pj.product_id
+    WHERE pj.status = 'queued'
+    ORDER BY pj.created_at ASC
+    LIMIT ${BRIDGE_QUEUE_LIMIT}
+  `;
+  return Promise.all(rows.map(async (row) => {
+    const items = await bridgeJobItems(sql, row.id);
+    const fileAvailable = row.file_available === true || row.file_available === 't' || row.file_available === 1;
+    const printerIdle = isPrinterIdle(row.printer_state);
+    const blockedReason = !fileAvailable ? 'file_unavailable' : (!printerIdle ? 'printer_busy' : null);
+    return normalizeBridgeJob(row, items, { claimable: !blockedReason, blockedReason });
+  }));
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   const id = String(req.query.id ?? '').trim();
   const action = String(req.query.action ?? '');
 
+  // ── Bridge: safe, read-only advisory view of queued work ────────────────
+  if (action === 'bridge-queue') {
+    if (req.method !== 'GET') return res.status(405).end();
+    const bridge = bridgeContext(req);
+    if (!bridge) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      return res.json({ jobs: await bridgeQueue(getSql(), bridge.bridgeId) });
+    } catch (error) {
+      return bridgeFailure(res);
+    }
+  }
+
   // ── Bridge: claim the next approved job (secret-authenticated, no cookie) ──
   if (action === 'claim-next') {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!canBridge(req)) return res.status(403).json({ error: 'Forbidden' });
     try {
       const body = await parseBody(req);
-      const bridgeId = String(body.bridgeId ?? 'bridge').slice(0, 120);
-      if (!bridgeId) return res.status(400).json({ error: 'bridgeId is required' });
+      const bridge = bridgeContext(req, body.bridgeId);
+      if (!bridge) return res.status(403).json({ error: 'Forbidden' });
+      const { bridgeId } = bridge;
       const sql = getSql();
       // Heartbeat so the site can show the bridge online, regardless of work.
       await sql`UPDATE printers SET bridge_seen_at = NOW(), updated_at = NOW() WHERE id = ${PRINTER_ID}`;
@@ -454,16 +643,18 @@ module.exports = async (req, res) => {
         )
         SELECT * FROM claim
       `;
-      return res.json({ job: rows.length ? normalizeJob(await attachItems(sql, rows[0])) : null });
+      if (!rows.length) return res.json({ job: null });
+      const items = await bridgeJobItems(sql, rows[0].id);
+      return res.json({ job: normalizeBridgeJob(rows[0], items, { includeClaimToken: true }) });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return bridgeFailure(res);
     }
   }
 
   // ── Bridge: retain a claim while a long local transfer is in progress ──
   if (action === 'heartbeat') {
     if (req.method !== 'PUT') return res.status(405).end();
-    if (!canBridge(req)) return res.status(403).json({ error: 'Forbidden' });
+    if (!bridgeContext(req)) return res.status(403).json({ error: 'Forbidden' });
     if (!id) return res.status(400).json({ error: 'id is required' });
     try {
       const body = await parseBody(req);
@@ -477,24 +668,35 @@ module.exports = async (req, res) => {
       `;
       if (!rows.length) return res.status(409).json({ error: 'Claim is no longer active' });
       await sql`UPDATE printers SET bridge_seen_at = NOW(), updated_at = NOW() WHERE id = ${PRINTER_ID}`;
-      return res.json(normalizeJob(rows[0]));
+      return res.json({ id: rows[0].id, status: rows[0].status, progress: Number(rows[0].progress) || 0 });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return bridgeFailure(res);
     }
   }
 
   // ── Bridge: report status/progress for a claimed job ──
   if (action === 'report') {
     if (req.method !== 'PUT') return res.status(405).end();
-    if (!canBridge(req)) return res.status(403).json({ error: 'Forbidden' });
+    if (!bridgeContext(req)) return res.status(403).json({ error: 'Forbidden' });
     if (!id) return res.status(400).json({ error: 'id is required' });
     try {
       const body = await parseBody(req);
       const status = String(body.status ?? '').trim();
       if (!REPORTABLE_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-      const progress = Math.min(Math.max(Number(body.progress) || 0, 0), 100);
-      const errorReason = String(body.error ?? body.errorReason ?? '').slice(0, 500);
-      const message = String(body.message ?? MSG[status] ?? status).slice(0, 300);
+      const hasProgress = Object.prototype.hasOwnProperty.call(body, 'progress') && body.progress !== undefined;
+      const progress = hasProgress ? Number(body.progress) : null;
+      if (hasProgress && (!Number.isFinite(progress) || progress < 0 || progress > 100)) {
+        return res.status(400).json({ error: 'progress must be a number between 0 and 100' });
+      }
+      const failureCode = body.failureCode == null || body.failureCode === '' ? null : String(body.failureCode).trim();
+      if (failureCode && !FAILURE_CODES.has(failureCode)) return res.status(400).json({ error: 'Invalid failureCode' });
+      if (failureCode && !['failed', 'attention_required', 'cancelled'].includes(status)) {
+        return res.status(400).json({ error: 'failureCode is only valid for failures' });
+      }
+      // Legacy message/error input is ignored deliberately. User-visible text
+      // is server-generated and daemon exception details never enter the DB.
+      const errorReason = failureCode ? FAILURE_MESSAGE[failureCode] : '';
+      const message = failureCode ? FAILURE_MESSAGE[failureCode] : MSG[status];
       const claimToken = String(body.claimToken ?? '').trim();
       const sql = getSql();
       await sql`UPDATE printers SET bridge_seen_at = NOW() WHERE id = ${PRINTER_ID}`;
@@ -504,7 +706,7 @@ module.exports = async (req, res) => {
       const rows = await sql`
         UPDATE print_jobs SET
           status = ${status},
-          progress = ${progress},
+          progress = COALESCE(${progress}, progress),
           error_reason = ${errorReason},
           events = CASE WHEN status <> ${status} THEN events || ${evt(status, message)}::jsonb ELSE events END,
           started_at = CASE WHEN ${status} = 'printing' THEN COALESCE(started_at, NOW()) ELSE started_at END,
@@ -517,7 +719,8 @@ module.exports = async (req, res) => {
           AND (
             (${status} = 'uploading' AND status IN ('claimed', 'uploading'))
             OR (${status} = 'printing' AND status IN ('claimed', 'uploading', 'printing'))
-            OR (${status} IN ('done', 'failed') AND status IN ('claimed', 'uploading', 'printing'))
+            OR (${status} = 'attention_required' AND status IN ('uploading', 'printing'))
+            OR (${status} IN ('done', 'failed') AND status IN ('claimed', 'uploading', 'printing', 'attention_required'))
             OR (${status} = 'cancelled' AND status IN ('claimed', 'uploading') AND cancel_requested_at IS NOT NULL)
           )
         RETURNING *
@@ -537,9 +740,9 @@ module.exports = async (req, res) => {
           // idempotent order side effects failed in the following statement.
           await propagateToOrder(sql, existing[0].order_id, existing[0].status);
           if (existing[0].status === 'done') await completePlateItems(sql, existing[0].id);
-          return res.json(normalizeJob(await attachItems(sql, existing[0])));
+          return res.json({ id: existing[0].id, status: existing[0].status, progress: Number(existing[0].progress) || 0 });
         }
-        return res.status(409).json({ error: `Invalid print-job transition from ${existing[0].status} to ${status}` });
+        return res.status(409).json({ error: 'Invalid print-job transition' });
       }
       await propagateToOrder(sql, rows[0].order_id, status);
       if (status === 'printing') await markPlateItemsPrinting(sql, rows[0].id);
@@ -553,9 +756,9 @@ module.exports = async (req, res) => {
             WHERE id = ${rows[0].order_id} AND internal = TRUE AND status NOT IN ('completed', 'failed')`;
         }
       }
-      return res.json(normalizeJob(await attachItems(sql, rows[0])));
+      return res.json({ id: rows[0].id, status: rows[0].status, progress: Number(rows[0].progress) || 0 });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return bridgeFailure(res);
     }
   }
 
@@ -581,7 +784,7 @@ module.exports = async (req, res) => {
       }
       return res.json(normalizeJob(rows[0]));
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Unable to approve print job' });
     }
   }
 
@@ -627,7 +830,7 @@ module.exports = async (req, res) => {
       }
       return res.json(normalizeJob(job));
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Unable to cancel print job' });
     }
   }
 
@@ -642,7 +845,7 @@ module.exports = async (req, res) => {
       if (String(body.orderId ?? '').trim()) return createFromOrder(sql, admin, body, res);
       return createSelfPrint(sql, admin, body, res);
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Unable to create print job' });
     }
   }
 
@@ -666,7 +869,7 @@ module.exports = async (req, res) => {
       `;
       return res.json(await Promise.all(rows.map(async (row) => normalizeJob(await attachItems(sql, row)))));
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Unable to load print jobs' });
     }
   }
 
