@@ -47,3 +47,12 @@ repointed cart checkout test is not lost.
   failure. This satisfies task T3's acceptance for the cart checkout flow (see
   `testing/tasks.json`); T2 does not prove a repeated click cannot double-fire
   in a live browser.
+- `tests/bridge-platform.test.js` (added 2026-08-06, bridge-platform v1):
+  - T1 behavior tests cover bridge secret/identity authentication, a mocked
+    read-only and PII-minimized bridge queue, structured report rejection,
+    bounded temporary ZIP parsing, and configuration/management helpers.
+  - T2 source contracts cover queue bounds and DTO exclusions, daemon and
+    desktop capability boundaries, systemd hardening, Windows packaging, and
+    RTL/accessibility affordances. They do not prove PostgreSQL behavior,
+    Electron rendering, external daemon packaging, a live printer, or browser
+    workflows.

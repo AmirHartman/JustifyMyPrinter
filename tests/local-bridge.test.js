@@ -37,7 +37,7 @@ function withReplacements(replacements, load) {
 
 function loadFileLibrary(extract3mfEstimates) {
   const libraryPath = require.resolve(path.join(root, 'bridge/file-library.js'));
-  const estimatesPath = require.resolve(path.join(root, 'scripts/lib/three-mf-estimates.js'));
+  const estimatesPath = require.resolve(path.join(root, 'bridge/three-mf-lazy.js'));
   delete require.cache[libraryPath];
   return withReplacements(new Map([[estimatesPath, { extract3mfEstimates }]]), () => require(libraryPath));
 }
@@ -93,7 +93,7 @@ test('scanner preserves duplicate incoming plates in quarantine while keeping on
   const storageDir = await temporaryStorage();
   t.after(() => fs.rm(storageDir, { recursive: true, force: true }));
   const calls = [];
-  const { FileLibrary } = loadFileLibrary(async (_buffer, options) => { calls.push(options); return estimates(); });
+  const { FileLibrary } = loadFileLibrary(async (target) => { calls.push(target); return estimates(); });
   const library = new FileLibrary({ storageDir, stableWaitMs: 1, logger: { warn() {} } });
   await library.init();
   await Promise.all([
@@ -104,7 +104,8 @@ test('scanner preserves duplicate incoming plates in quarantine while keeping on
   const inventory = await library.scan();
   assert.equal(inventory.length, 1);
   assert.equal(inventory[0].checksum.length, 64);
-  assert.deepEqual(calls.map((options) => options.requirePlateGcode), [true, true, true]);
+  assert.equal(calls.length, 2, 'the bridge lazy extractor inspects both inputs, then cache size+mtime skips a redundant canonical re-read');
+  assert.ok(calls.every((target) => String(target).endsWith('.gcode.3mf')));
   assert.equal((await fs.readdir(path.join(storageDir, 'incoming'))).length, 0);
   assert.equal((await fs.readdir(path.join(storageDir, 'library'))).filter((name) => name.endsWith('.gcode.3mf')).length, 1);
   const quarantined = await fs.readdir(path.join(storageDir, 'quarantine'));
