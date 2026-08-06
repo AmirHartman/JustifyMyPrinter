@@ -4,6 +4,7 @@ export const STATUS_LABELS = {
   waiting_approval: "ממתין לאישור",
   waiting_print: "ממתין להדפסה",
   printing: "בהדפסה",
+  waiting_assembly: "ממתין להרכבה",
   ready_delivery: "מוכן למסירה",
   completed: "הסתיים",
   cancelled: "בוטל",

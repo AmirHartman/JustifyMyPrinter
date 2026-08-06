@@ -29,7 +29,7 @@ skipped integration, browser, or remote checks remain visible but non-failing.
 
 - Users: `pending`, `active`, `inactive`, `rejected`.
 - Orders: `new`, `waiting_approval`, `waiting_print`, `printing`,
-  `ready_delivery`, `completed`, `failed`, `cancelled`.
+  `waiting_assembly`, `ready_delivery`, `completed`, `failed`, `cancelled`.
 - Legacy order writes normalize `approved`, `ready`, `delivered`, and `rejected`.
 
 ## Core flows and invariants

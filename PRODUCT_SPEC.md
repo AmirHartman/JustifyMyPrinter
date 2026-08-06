@@ -137,9 +137,10 @@ Order statuses:
 2. waiting_approval
 3. waiting_print
 4. printing
-5. ready_delivery
-6. completed
-7. cancelled
+5. waiting_assembly (optional, when the print needs assembling)
+6. ready_delivery
+7. completed
+8. cancelled
 
 Payment is separate from status:
 - paid: true/false.

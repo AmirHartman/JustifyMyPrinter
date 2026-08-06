@@ -171,6 +171,7 @@ Order approval:
 | `waiting_approval` | Admin set a price; waiting for friend to approve    |
 | `waiting_print`    | Approved; queued for printing                       |
 | `printing`         | Currently on the printer                            |
+| `waiting_assembly` | Printed; parts still need assembling (optional step)|
 | `ready_delivery`   | Printed; ready for pickup/delivery                  |
 | `completed`        | Delivered and done                                  |
 | `failed`           | A print attempt failed; cumulative waste is recorded|

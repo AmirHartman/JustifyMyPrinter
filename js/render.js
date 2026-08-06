@@ -8,9 +8,12 @@ import { setView } from "./auth.js";
 
 // Canonical order, used to build status <select> options (STATUS_LABELS also
 // carries legacy keys as a display fallback, which must not appear as choices).
+// "failed" is deliberately absent: a failure is recorded by the print job that
+// actually failed, never chosen by hand. Existing failed orders still render
+// with their label and chip.
 const ORDER_STATUS_SEQUENCE = [
   "new", "waiting_approval", "waiting_print", "printing",
-  "ready_delivery", "completed", "failed", "cancelled",
+  "waiting_assembly", "ready_delivery", "completed", "cancelled",
 ];
 
 const ORDER_TYPE_LABELS = {
@@ -1075,6 +1078,10 @@ function renderCart() {
 
 const PAST_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const FORWARD_STATUS_SEQUENCE = ["new", "waiting_approval", "waiting_print", "printing", "ready_delivery", "completed"];
+// Assembly is an optional detour after printing — most prints ship as-is, so it
+// stays out of the default chain and is picked from the status <select>. Once an
+// order is there, the promote button still leads on to delivery.
+const FORWARD_STATUS_DETOURS = { waiting_assembly: "ready_delivery" };
 
 let orderSearchQuery = "";
 let orderStatusFilter = "all"; // all | unpaid | open | done
@@ -1093,6 +1100,7 @@ document.querySelectorAll("#orders-filter-chips .filter-chip").forEach((chip) =>
 });
 
 function nextOrderStatus(status) {
+  if (FORWARD_STATUS_DETOURS[status]) return FORWARD_STATUS_DETOURS[status];
   const idx = FORWARD_STATUS_SEQUENCE.indexOf(status);
   if (idx === -1 || idx === FORWARD_STATUS_SEQUENCE.length - 1) return null;
   return FORWARD_STATUS_SEQUENCE[idx + 1];
