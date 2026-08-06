@@ -3119,34 +3119,50 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
 }
 .global-tab:hover { color: var(--teal); }
 
-.global-tab.admin-only { display: none; }
-body[data-role="admin"] .global-tab.admin-only { display: flex; }
+.admin-only { display: none; }
+body[data-role="admin"] .admin-only { display: flex; }
 
 /* Active tab per page */
 body[data-page="welcome"] .global-tab[data-tab="welcome"],
 body[data-page="catalog"]  .global-tab[data-tab="catalog"],
 body[data-page="cart"]     .global-tab[data-tab="cart"],
-body[data-page="landing"]  .global-tab[data-tab="landing"],
-body[data-page="app"]      .global-tab[data-tab="admin"] {
+body[data-page="landing"]  .global-tab[data-tab="landing"] {
   color: var(--teal-dark);
   border-bottom-color: var(--teal);
   font-weight: 700;
 }
 
-/* Management is the owner's own destination, so it carries a restrained red
-   treatment instead of blending into the friend-facing tabs. */
-.global-tab[data-tab="admin"] {
-  color: var(--danger);
-  background: rgba(184, 62, 66, 0.07);
+.global-tabs-admin {
+  position: relative;
+  --admin-nav-text: #7a6062;
+  --admin-nav-text-active: #60494b;
+}
+
+.admin-nav-toggle {
+  display: none;
+}
+
+.admin-nav-menu {
+  display: flex;
+  align-items: stretch;
+}
+
+/* Management remains visually distinct from the friend-facing navigation. */
+.admin-nav-link,
+.admin-nav-toggle {
+  color: var(--admin-nav-text);
+  background: transparent;
   font-weight: 700;
 }
-.global-tab[data-tab="admin"]:hover {
-  color: #8e2d31;
-  background: rgba(184, 62, 66, 0.12);
+.admin-nav-link:hover,
+.admin-nav-link.is-active,
+.admin-nav-toggle:hover {
+  color: var(--admin-nav-text-active);
+  background: transparent;
 }
-body[data-page="app"] .global-tab[data-tab="admin"] {
-  color: #8e2d31;
-  border-bottom-color: var(--danger);
+.admin-nav-link.is-active {
+  color: var(--admin-nav-text-active);
+  border-bottom-color: rgba(96, 73, 75, 0.58);
 }
 
 .global-tab-cart {
@@ -3180,6 +3196,54 @@ body[data-page="app"] .global-tab[data-tab="admin"] {
   line-height: 1;
 }
 .cart-tab-count[hidden] { display: none; }
+
+@media (max-width: 1119px) {
+  .global-tabs {
+    padding-inline: 12px;
+    overflow: visible;
+  }
+
+  .admin-nav-toggle {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 10px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    font: inherit;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .admin-nav-menu {
+    position: absolute;
+    z-index: 210;
+    top: calc(100% - 1px);
+    inset-inline-end: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(440px, calc(100vw - 24px));
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    box-shadow: var(--shadow);
+  }
+  .admin-nav-menu[hidden] { display: none; }
+  .admin-nav-link {
+    min-width: 0;
+    justify-content: space-between;
+    padding: 11px 12px;
+    border-bottom: 0;
+    margin-bottom: 0;
+    border-radius: var(--radius-sm);
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-nav-menu { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 480px) {
   .global-tab { padding: 10px 12px; }

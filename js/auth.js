@@ -135,19 +135,33 @@ export function applyMode() {
   }
 }
 
-export function setView(viewName) {
+const ADMIN_VIEWS = ["overview", "orders", "products", "users", "finance", "materials", "feedback", "settings"];
+
+export function viewFromHash() {
+  const view = window.location.hash.slice(1);
+  return ADMIN_VIEWS.includes(view) ? view : "overview";
+}
+
+export function setView(viewName, { updateHash = true } = {}) {
   if (!document.querySelector(".view")) return;
 
   const friendViews = ["landing", "catalog"];
   const nextView =
     store.appMode === "friend"
       ? (friendViews.includes(viewName) ? viewName : "landing")
-      : (friendViews.includes(viewName) ? "overview" : viewName);
+      : (ADMIN_VIEWS.includes(viewName) ? viewName : "overview");
 
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.classList.toggle("is-active", tab.dataset.view === nextView);
+  document.querySelectorAll(".admin-nav-link").forEach((link) => {
+    const isActive = link.dataset.view === nextView;
+    link.classList.toggle("is-active", isActive);
+    if (isActive) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   });
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("is-active", view.id === `${nextView}-view`);
   });
+
+  if (updateHash && store.appMode === "admin" && window.location.hash !== `#${nextView}`) {
+    window.history.pushState(null, "", `#${nextView}`);
+  }
 }

@@ -26,7 +26,19 @@
         <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
       </div>
       <div class="global-tabs-group global-tabs-account">
-        <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+        <div class="global-tabs-admin admin-only">
+          <button class="admin-nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav-menu">כלי ניהול</button>
+          <div class="admin-nav-menu" id="admin-nav-menu" aria-label="כלי ניהול" hidden>
+            <a class="global-tab admin-nav-link" href="dashboard.html#overview" data-view="overview">סקירה</a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#orders" data-view="orders">הזמנות <span class="tab-badge" id="new-orders-badge" hidden></span></a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#products" data-view="products">מוצרים</a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#users" data-view="users">משתמשים <span class="tab-badge" id="pending-tab-badge" hidden></span></a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#finance" data-view="finance">כספים</a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#materials" data-view="materials">חומרים ותחזוקה <span class="tab-badge" id="low-filaments-badge" hidden></span><span class="tab-badge" id="maintenance-badge" hidden></span></a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#feedback" data-view="feedback">משוב <span class="tab-badge" id="feedback-tab-badge" hidden></span></a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#settings" data-view="settings">הגדרות</a>
+          </div>
+        </div>
         <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
         <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
       </div>
@@ -139,41 +151,13 @@
         </div>
         <div class="user-bar" aria-label="משתמש מחובר">
           <span id="current-user"></span>
+          <button class="ghost-button admin-only" id="reset-demo" type="button">רענן נתונים</button>
           <button class="ghost-button" id="logout-button" type="button">יציאה</button>
         </div>
       </div>
     </header>
 
     <main class="app-shell">
-      <nav class="tabs admin-tabs" aria-label="ניווט מנהל">
-        <button class="tab admin-tab" data-view="overview">סקירה</button>
-        <button class="tab admin-tab" data-view="orders">
-          הזמנות
-          <span class="tab-badge" id="new-orders-badge" hidden></span>
-        </button>
-        <button class="tab admin-tab" data-view="products">מוצרים</button>
-        <button class="tab admin-tab" data-view="users">
-          משתמשים
-          <span class="tab-badge" id="pending-tab-badge"></span>
-        </button>
-        <button class="tab admin-tab" data-view="finance">
-          כספים
-        </button>
-        <button class="tab admin-tab" data-view="materials">
-          חומרים ותחזוקה
-          <span class="tab-badge" id="low-filaments-badge" hidden></span>
-          <span class="tab-badge" id="maintenance-badge" hidden></span>
-        </button>
-        <button class="tab admin-tab" data-view="feedback">
-          משוב
-          <span class="tab-badge" id="feedback-tab-badge" hidden></span>
-        </button>
-        <button class="tab admin-tab" data-view="settings">
-          הגדרות
-        </button>
-        <button class="ghost-button tabs-refresh" id="reset-demo" type="button">רענן נתונים</button>
-      </nav>
-
       <!-- ── Overview: action queue ── -->
       <section class="view" id="overview-view" aria-labelledby="overview-title">
         <div class="section-heading">

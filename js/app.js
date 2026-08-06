@@ -6,7 +6,7 @@ import {
   goToStep, getOrderOptions, describeAddedLine,
 } from "./orders.js";
 import { addLine, addTip, resetTip, clearCart, checkoutPayload } from "./cart.js";
-import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
+import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView, viewFromHash } from "./auth.js";
 import { formatCurrency, calculateProductCost, composeFilamentName } from "./utils.js";
 
 // ── DOM references ────────────────────────────────────────────
@@ -143,10 +143,49 @@ document.querySelector("#logout-button")?.addEventListener("click", async () => 
   setView("landing");
 });
 
-// ── Admin tabs ────────────────────────────────────────────────
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => setView(tab.dataset.view));
-});
+// ── Global admin navigation ───────────────────────────────────
+(() => {
+  const menus = [...document.querySelectorAll(".admin-nav-menu")];
+  const compactNav = window.matchMedia("(max-width: 1119px)");
+
+  const setMenuOpen = (menu, open, { restoreFocus = false } = {}) => {
+    const toggle = document.querySelector(`.admin-nav-toggle[aria-controls="${menu.id}"]`);
+    const isOpen = !compactNav.matches || open;
+    menu.hidden = !isOpen;
+    toggle?.setAttribute("aria-expanded", isOpen && compactNav.matches ? "true" : "false");
+    if (restoreFocus) toggle?.focus();
+  };
+
+  const syncMenusForViewport = () => menus.forEach((menu) => setMenuOpen(menu, false));
+  syncMenusForViewport();
+  compactNav.addEventListener("change", syncMenusForViewport);
+
+  menus.forEach((menu) => {
+    const toggle = document.querySelector(`.admin-nav-toggle[aria-controls="${menu.id}"]`);
+    if (!toggle) return;
+
+    toggle.addEventListener("click", () => setMenuOpen(menu, menu.hidden));
+    menu.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => setMenuOpen(menu, false));
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!compactNav.matches) return;
+    menus.forEach((menu) => {
+      const toggle = document.querySelector(`.admin-nav-toggle[aria-controls="${menu.id}"]`);
+      if (!menu.hidden && !menu.contains(event.target) && !toggle?.contains(event.target)) {
+        setMenuOpen(menu, false);
+      }
+    });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !compactNav.matches) return;
+    menus.forEach((menu) => {
+      if (!menu.hidden) setMenuOpen(menu, false, { restoreFocus: true });
+    });
+  });
+})();
 
 // ── Sub-tabs (scoped to the enclosing view, so several views can each
 // ── have their own independent group of sub-tabs) ──────────────
@@ -1620,8 +1659,14 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
     document.body.dataset.entry = "app";
   }
 
-  setView(store.appMode === "admin" ? "overview" : "catalog");
+  setView(store.appMode === "admin" ? viewFromHash() : "catalog", { updateHash: false });
   render();
   syncPricingRiskFields();
   syncMaterialTypeSuggestions();
 })();
+
+window.addEventListener("hashchange", () => {
+  if (pageName === "app" && store.appMode === "admin") {
+    setView(viewFromHash(), { updateHash: false });
+  }
+});
