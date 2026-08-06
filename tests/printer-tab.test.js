@@ -65,8 +65,10 @@ test('the print queue renders waiting_print orders and is repainted on every ren
   );
 });
 
-// "Partially ready" is derived from the per-product statuses. A stored flag
-// would be a second source of truth that could drift from the status.
+// "Partially ready" is derived from the per-product statuses. A stored boolean
+// flag would be a second source of truth that could drift from the status. The
+// bridge's printed_quantity counter is different: it records partial plate
+// fulfilment and is intentionally allowed.
 test('printed state is derived from order status, not a stored flag', () => {
   const render = source('js/render.js');
   const init = source('api/init.js');
@@ -80,8 +82,8 @@ test('printed state is derived from order status, not a stored flag', () => {
   assert.match(render, /מוכן חלקית/, 'a partially ready group must say so in Hebrew');
   assert.doesNotMatch(
     init,
-    /orders ADD COLUMN IF NOT EXISTS printed/,
-    'no printed column may be added to orders',
+    /orders ADD COLUMN IF NOT EXISTS printed\s+BOOLEAN/,
+    'no naive printed boolean may be added to orders',
   );
 });
 
