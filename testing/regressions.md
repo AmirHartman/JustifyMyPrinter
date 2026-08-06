@@ -47,3 +47,9 @@ repointed cart checkout test is not lost.
   failure. This satisfies task T3's acceptance for the cart checkout flow (see
   `testing/tasks.json`); T2 does not prove a repeated click cannot double-fire
   in a live browser.
+- `tests/catalog-category-gate.test.js` (added 2026-08-06, category-first
+  catalog feature): T2 source-contract assertions lock the empty-hash picker,
+  `#c=all` and encoded category-id selection, active-category overlap filtering,
+  invalid-hash cleanup, zero-pickable fallback, picker/back markup order, and
+  catalog `hashchange` rerender. They do not execute the catalog in a browser
+  or prove URL, filtering, fallback, or rendering behavior at runtime.
