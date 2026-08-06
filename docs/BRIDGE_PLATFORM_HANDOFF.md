@@ -11,12 +11,15 @@ the verified implementation and the work that is intentionally still open.
 - Role: Coordinator / Git Steward handoff
 - Bridge branch: `agent/bridge-platform-integration-v1`
 - Bridge worktree: `/private/tmp/JMP-bridge-platform-integration-v1`
-- Current site baseline merged into this branch: `1073e4a`
+- Current site baseline merged into this branch: `71f2a70`
 - Integrated bridge tip before this handoff file: `03676ce`
 - Naive-site cleanup branch: `agent/site-naive-without-bridge-v1`
-- Naive-site cleanup commit: `6c87e7b`
-- Publication state: local commits only; no bridge push, deployment, database
-  migration, or hardware command was performed by this work.
+- Naive-site cleanup tip: `17a3bc9`
+- Local `main` tip after the naive-site fast-forward: `17a3bc9`
+- Remote `origin/main` at pause time: `71f2a70`
+- Publication state: local commits only for bridge work; local `main` was
+  fast-forwarded to the naive site, but no push, deployment, database migration,
+  or hardware command was performed by this work.
 
 The bridge branch contains patch-equivalent integrations of the original site,
 runtime/Pi, and Windows builder commits, followed by shared tests, localhost
@@ -72,9 +75,9 @@ The historical builder worktrees are not additional sources of truth.
 
 ## Verification at pause point
 
-- `node --test tests/local-bridge.test.js tests/bridge-platform.test.js tests/dashboard-partial-load.test.js tests/printer-tab.test.js`
-  — 24 passed, 0 failed.
-- `npm test` — 98 passed, 0 failed.
+- `node --test tests/local-bridge.test.js tests/bridge-platform.test.js tests/dashboard-partial-load.test.js tests/printer-tab.test.js tests/priced-ideas.test.mjs`
+  — 34 passed, 0 failed.
+- `npm test` — 108 passed, 0 failed.
 - `npm run build` — built 6 pages and static assets.
 - `npm run tester` — 14 passed, 0 failed, 4 expected skips.
 - `git diff --check` — passed.
@@ -119,15 +122,15 @@ copy real secret values into Git, logs, issue text, or this handoff.
 ## Branch separation and safe resumption
 
 The owner paused bridge development and wants the normal site to remain unaware
-of the bridge. Commit `6c87e7b` removes the printer tab, print-job buttons,
+of the bridge. The naive-site commits ending at `17a3bc9` remove the printer tab, print-job buttons,
 bridge polling/routes/schema bootstrap, bridge runtime files, and bridge tests
 from the naive-site branch while keeping manual order status progression.
 
-At the time of this checkpoint, the primary `main` worktree contained unrelated
-uncommitted pricing/idea work. Three of those files overlap the naive cleanup:
-`api/print-jobs.js`, `dashboard.html`, and `js/render.js`. For that reason,
-`6c87e7b` was not fast-forwarded into `main`. Preserve or commit that owner work
-before integrating the cleanup; do not stash, reset, or overwrite it.
+The pricing/idea work was first committed at `71f2a70`. The naive cleanup was
+rebased onto that commit, its conditional pricing source contract was adjusted,
+and local `main` was then fast-forwarded to `17a3bc9`. `origin/main` was not
+updated. The bridge branch separately merged `71f2a70`, so it retains both the
+new pricing behavior and all bridge capabilities.
 
 When resuming bridge work:
 

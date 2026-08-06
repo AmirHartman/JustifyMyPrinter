@@ -35,7 +35,10 @@ function loadHandler({ body, sql }) {
       requireAuth: async () => ({ id: 'admin-1', role: 'admin' }),
       requireAdmin: async () => ({ id: 'admin-1', role: 'admin' }),
     }],
+    // Only the price calculation is faked; the pure shape helpers stay real, so
+    // the fake cannot drift from the module's actual contract.
     [require.resolve(path.join(root, 'api/_pricing.js')), {
+      ...require(path.join(root, 'api/_pricing.js')),
       calculateProductCost: () => ({ productionCost: 5, shopPrice: 10 }),
     }],
   ]);

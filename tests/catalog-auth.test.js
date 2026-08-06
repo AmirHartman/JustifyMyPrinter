@@ -42,7 +42,10 @@ function loadHandler(relativeFile, { user, sql }) {
         return null;
       },
     }],
+    // Only the price calculation is faked; the pure shape helpers stay real, so
+    // the fake cannot drift from the module's actual contract.
     [pricingPath, {
+      ...require(pricingPath),
       calculateProductCost: () => ({ productionCost: 8, shopPrice: 12 }),
     }],
   ]);

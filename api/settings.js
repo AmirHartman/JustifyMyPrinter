@@ -41,12 +41,14 @@ module.exports = async (req, res) => {
       if (key === 'contact') {
         value = publicContact(body);
       } else {
+        const currentRows = await sql`SELECT value FROM settings WHERE key = ${key}`;
         const marginPercent = Number(body.marginPercent);
         const minOrderPrice = Number(body.minOrderPrice);
         const riskPercentByLevel = body.riskPercentByLevel || body.riskPercents || {
           low: body.lowRiskPercent,
           medium: body.mediumRiskPercent,
           high: body.highRiskPercent,
+          untested: body.untestedRiskPercent,
         };
         if (!Number.isFinite(marginPercent) || marginPercent < 0 || marginPercent > 5) {
           return res.status(400).json({ error: 'אחוז הרווח חייב להיות בין 0% ל־500%' });
@@ -60,10 +62,18 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'אחוזי הסיכון חייבים להיות בין 0% ל־500%' });
           }
         }
+        // The untested tier is validated only when sent, so a client that predates
+        // it keeps saving successfully and falls back to the configured default.
+        if (riskPercentByLevel.untested != null) {
+          const untested = Number(riskPercentByLevel.untested);
+          if (!Number.isFinite(untested) || untested < 0 || untested > 5) {
+            return res.status(400).json({ error: 'אחוזי הסיכון חייבים להיות בין 0% ל־500%' });
+          }
+        }
         // Preserve independently managed wear/maintenance arrays when the
         // pricing form updates only margin, floor and risk percentages.
         value = editableSettings({
-          ...(rows[0]?.value || {}),
+          ...(currentRows[0]?.value || {}),
           marginPercent,
           minOrderPrice,
           riskPercentByLevel,

@@ -21,10 +21,23 @@ export function composeFilamentName(manufacturer, materialType, colorName) {
 // Shown wherever a price is not knowable yet.
 export const NO_PRICE_YET = "ייקבע לאחר בדיקה";
 
-// An idea has never been printed, so it has no price yet — the admin quotes one
-// after reviewing. Mirrors api/orders.js, which stores no amount for such orders.
-export function isUnpriced(product) {
+export const UNTESTED_PRICE_NOTE =
+  "הדגם עדיין לא הודפס. המחיר מחושב לפי תוספת הסיכון של מודל שלא נוסה, והוא עשוי לרדת אחרי הדפסה ראשונה מוצלחת.";
+
+// Two independent facts, deliberately kept apart:
+//   isUntested  — has this model ever been printed? (drives badges and grid)
+//   isUnpriced  — is its price knowable yet?        (drives every price string)
+// An idea with print time and materials is priced; one without still waits for
+// a manual quote. priceStatus comes from the server (api/products.js); the
+// catalogKind fallback keeps a stale cached payload rendering sensibly.
+export function isUntested(product) {
   return product?.catalogKind === "idea";
+}
+
+export function isUnpriced(product) {
+  return product?.priceStatus
+    ? product.priceStatus === "pending"
+    : product?.catalogKind === "idea";
 }
 
 // Print time is mostly fixed per job, so several units cost less than the unit
@@ -45,6 +58,24 @@ export function escapeHtml(value) {
 // Printer/machine recovery is a flat surcharge on top of the print cost,
 // applied after the risk addition (not an hourly wear rate). Mirrors api/_pricing.js.
 const MACHINE_RECOVERY_PERCENT = 0.10;
+
+const RISK_LEVELS = ["low", "medium", "high"];
+
+// Mirrors effectiveRiskTier in api/_pricing.js: a model that has never been
+// printed is charged the untested tier, whatever level was picked for it.
+export function effectiveRiskTier(product) {
+  if (product?.catalogKind === "idea") return "untested";
+  return RISK_LEVELS.includes(product?.riskLevel) ? product.riskLevel : "medium";
+}
+
+// Mirrors hasPrintData in api/_pricing.js. Deliberately ignores `cost`, which
+// the server floors at minOrderPrice and therefore is never 0.
+export function hasPrintData(product) {
+  const materials = Array.isArray(product?.materials) ? product.materials : [];
+  return Number(product?.printHours) > 0
+    && materials.length > 0
+    && materials.every((material) => material?.filamentId && Number(material.grams) > 0);
+}
 
 export function calculateProductCost(product, filaments, pricingSettings, options = {}) {
   const quantity = Math.max(Number(options.quantity ?? product?.quantity) || 1, 1);
@@ -79,12 +110,14 @@ export function calculateProductCost(product, filaments, pricingSettings, option
   const productionCost = materialCost + electricityCost + wearCost;
   // Risk follows the configured level, as in api/_pricing.js. profile.riskPercent
   // is only a last-resort fallback for settings that predate riskPercentByLevel.
+  // An untested model is coerced through both branches, so a stored riskPercent
+  // cannot dodge the surcharge either.
   const riskByLevel = pricingSettings?.riskPercentByLevel ?? pricingSettings?.riskPercents ?? {};
-  const riskLevel = ['low', 'medium', 'high'].includes(product?.riskLevel) ? product.riskLevel : 'medium';
-  const riskPercent = product?.riskLevel != null && riskByLevel[riskLevel] != null
-    ? Number(riskByLevel[riskLevel])
+  const riskTier = effectiveRiskTier(product);
+  const riskPercent = (riskTier === 'untested' || product?.riskLevel != null) && riskByLevel[riskTier] != null
+    ? Number(riskByLevel[riskTier])
     : product?.riskPercent == null
-      ? Number(riskByLevel[riskLevel] ?? profile.riskPercent) || 0
+      ? Number(riskByLevel[riskTier] ?? profile.riskPercent) || 0
       : Math.max(Number(product.riskPercent) || 0, 0);
   const riskCost = productionCost * riskPercent;
   const costBeforeMachine = productionCost + riskCost;
@@ -101,7 +134,7 @@ export function calculateProductCost(product, filaments, pricingSettings, option
     ? null : productFloor >= minOrderPrice ? 'product' : 'order';
 
   return { materialCost, electricityCost, wearCost, hourlyWearCost: wearCost, machineCost,
-    productionCost, subtotal: productionCost, riskCost, riskPercent, costWithRisk,
+    productionCost, subtotal: productionCost, riskCost, riskPercent, riskTier, costWithRisk,
     marginPercent, marginAmount: shopPrice - costWithRisk, pricedCost, productFloor,
     minOrderPrice, floorApplied, shopPrice, finalCost: shopPrice, totalHours };
 }

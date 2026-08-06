@@ -1,5 +1,5 @@
 import { store, loadData, findProduct } from "./state.js";
-import { formatCurrency, escapeHtml, calculateProductCost, composeFilamentName, NO_PRICE_YET as UNPRICED_LABEL } from "./utils.js";
+import { formatCurrency, escapeHtml, calculateProductCost, composeFilamentName, isUnpriced, isUntested, UNTESTED_PRICE_NOTE, NO_PRICE_YET as UNPRICED_LABEL } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog, openCustomOrderDialog } from "./orders.js";
 import { cartCount, cartTotals, updateLine, removeLine } from "./cart.js";
@@ -944,18 +944,24 @@ function renderCatalog() {
     }
     card.querySelector("h3").textContent = product.name;
     card.querySelector("p").textContent  = product.description;
-    const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
-    card.querySelector(".cost").textContent = isIdea
+    // Two independent facts: whether the model was ever printed, and whether its
+    // price is known. An idea with print data is priced; one without is not.
+    const untested = isUntested(product);
+    card.querySelector(".cost").textContent = isUnpriced(product)
       ? "מחיר לאחר בדיקה"
-      : product.requiresAdminApproval
-        ? `מחיר משוער ${formatCurrency(product.cost)}`
-        : formatCurrency(product.cost);
+      : untested
+        ? `${formatCurrency(product.cost)} · טרם הודפס`
+        : product.requiresAdminApproval
+          ? `מחיר משוער ${formatCurrency(product.cost)}`
+          : formatCurrency(product.cost);
     renderStlLink(card, product);
     renderProductBadges(card, product);
     renderProductFacts(card, product);
 
     const orderBtn = card.querySelector(".product-meta .primary-button");
-    orderBtn.textContent = product.inventoryAvailable === false ? "בקשת חלופה" : isIdea ? "בקשת בדיקה" : "הוספה לעגלה";
+    orderBtn.textContent = product.inventoryAvailable === false
+      ? "בקשת חלופה"
+      : isUnpriced(product) ? "בקשת בדיקה" : "הוספה לעגלה";
     if (eligibility.canOrder) {
       orderBtn.addEventListener("click", () => openOrderDialog(product.id));
     } else {
@@ -973,11 +979,12 @@ function renderCatalog() {
     detailBtn.setAttribute("aria-label", `פרטים נוספים על ${product.name}`);
     detailBtn.addEventListener("click", () => openProductDetail(product, eligibility));
     card.querySelector(".product-meta")?.prepend(detailBtn);
-    (isIdea && ideasGrid ? ideasGrid : catalogGrid).append(card);
+    // Grid placement follows "was it ever printed", never the price.
+    (untested && ideasGrid ? ideasGrid : catalogGrid).append(card);
   });
 
-  const hasIdeas = visibleProducts.some((product) => product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval));
-  const hasPrinted = visibleProducts.some((product) => !(product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval)));
+  const hasIdeas = visibleProducts.some(isUntested);
+  const hasPrinted = visibleProducts.some((product) => !isUntested(product));
   const ideasSection = document.querySelector("#idea-products-section");
   const printedSection = document.querySelector("#printed-products-section");
   if (ideasSection) ideasSection.hidden = !hasIdeas;
@@ -1139,12 +1146,14 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
   if (!dialog) return;
   document.querySelector("#product-detail-title").textContent = product.name;
   document.querySelector("#product-detail-description").textContent = product.description || "אין תיאור נוסף למוצר.";
-  const isIdea = product.catalogKind === "idea" || (product.catalogKind == null && product.requiresAdminApproval);
-  document.querySelector("#product-detail-price").textContent = isIdea
+  const untested = isUntested(product);
+  document.querySelector("#product-detail-price").textContent = isUnpriced(product)
     ? "המחיר ייקבע לאחר בדיקה"
-    : product.requiresAdminApproval
-      ? `מחיר משוער ${formatCurrency(product.cost)} — ייקבע סופית לאחר בדיקה`
-      : formatCurrency(product.cost);
+    : untested
+      ? `${formatCurrency(product.cost)} — דגם שטרם הודפס`
+      : product.requiresAdminApproval
+        ? `מחיר משוער ${formatCurrency(product.cost)} — ייקבע סופית לאחר בדיקה`
+        : formatCurrency(product.cost);
 
   const facts = [];
   if (Number(product.printHours) > 0) facts.push(`זמן הדפסה משוער: כ־${product.printHours} שעות`);
@@ -1168,13 +1177,15 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
   const availability = document.querySelector("#product-detail-availability");
   availability.textContent = product.inventoryAvailable === false
     ? "לא זמין כרגע במלאי. אפשר לשלוח בקשה לחלופה; ההדפסה לא תתחיל ללא אישורך."
-      : isIdea || product.requiresAdminApproval ? "נדרשים בדיקה ואישור מחיר לפני תחילת ההדפסה." : "זמין להזמנה.";
+    : isUnpriced(product) ? "נדרשים בדיקה ואישור מחיר לפני תחילת ההדפסה."
+      : untested ? UNTESTED_PRICE_NOTE
+        : product.requiresAdminApproval ? "נדרש אישור מחיר לפני תחילת ההדפסה." : "זמין להזמנה.";
   const badges = document.querySelector("#product-detail-badges");
   badges.replaceChildren();
-  if (isIdea || product.requiresAdminApproval) {
+  if (untested || product.requiresAdminApproval) {
     const badge = document.createElement("span");
     badge.className = "product-badge product-badge-idea";
-    badge.textContent = isIdea ? "רעיון לבדיקה" : "דורש אישור מנהל";
+    badge.textContent = untested ? "טרם הודפס" : "דורש אישור מחיר";
     badges.append(badge);
   }
   if (product.inventoryAvailable === false) {
@@ -1282,6 +1293,7 @@ function buildCartLineRow(line) {
       <strong class="cart-line-name">${escapeHtml(name)}</strong>
       ${colors.length ? `<span class="cart-line-meta">צבע: ${escapeHtml(colors.join(", "))}</span>` : ""}
       ${line.unpriced ? `<span class="cart-line-meta">${escapeHtml(UNPRICED_LABEL)} — נדרשת בדיקה לפני ההדפסה</span>` : ""}
+      ${line.untested && !line.unpriced ? '<span class="cart-line-meta">דגם שטרם הודפס — מחיר לפי תוספת סיכון</span>' : ""}
       ${line.missing ? '<span class="cart-line-meta">המוצר ירד מהקטלוג ולא יישלח בהזמנה.</span>' : ""}
     </div>
     <div class="cart-line-controls"></div>
@@ -1346,6 +1358,8 @@ function renderCart() {
     ? formatCurrency(totals.tip) : formatCurrency(totals.total);
   const unpricedNote = document.querySelector("#cart-unpriced-note");
   if (unpricedNote) unpricedNote.hidden = !totals.hasUnpriced;
+  const untestedNote = document.querySelector("#cart-untested-note");
+  if (untestedNote) untestedNote.hidden = !totals.hasUntested;
 
   const checkout = document.querySelector("#checkout-button");
   // A cart of nothing but unavailable products has nothing to send.
@@ -1385,7 +1399,12 @@ document.querySelectorAll("#orders-filter-chips .filter-chip").forEach((chip) =>
   });
 });
 
-function nextOrderStatus(status) {
+function nextOrderStatus(order) {
+  const status = order?.status;
+  // A priced untested model stops at "new" for the admin's first-print review,
+  // but the friend has already accepted the catalog price. After the admin
+  // reviews it, there is no price-approval step to wait for.
+  if (status === "new" && !order.requiresUserPriceApproval) return "waiting_print";
   if (FORWARD_STATUS_DETOURS[status]) return FORWARD_STATUS_DETOURS[status];
   const idx = FORWARD_STATUS_SEQUENCE.indexOf(status);
   if (idx === -1 || idx === FORWARD_STATUS_SEQUENCE.length - 1) return null;
@@ -1464,7 +1483,7 @@ function buildOrderCard(order) {
 
   const actions = card.querySelector(".order-card-actions");
 
-  const next = nextOrderStatus(order.status);
+  const next = nextOrderStatus(order);
   if (next) {
     const promoteBtn = document.createElement("button");
     promoteBtn.className   = "primary-button btn-sm";
@@ -2569,7 +2588,7 @@ function renderActionQueue() {
       promoteBtn.className = "primary-button btn-sm";
       promoteBtn.type = "button";
       promoteBtn.textContent = "קדם";
-      promoteBtn.addEventListener("click", () => setOrderStatus(order, nextOrderStatus(order.status)));
+      promoteBtn.addEventListener("click", () => setOrderStatus(order, nextOrderStatus(order)));
       const detailsBtn = document.createElement("button");
       detailsBtn.className = "ghost-button btn-sm";
       detailsBtn.type = "button";
@@ -2811,12 +2830,17 @@ function renderProductBadges(card, product) {
   const container = card.querySelector(".product-badges");
   if (!container) return;
   container.replaceChildren();
-  if (product.requiresAdminApproval) {
+  // Two independent badges. A model that was never printed always says so, even
+  // when it already has a price and needs no approval.
+  const badges = [];
+  if (isUntested(product)) badges.push("טרם הודפס");
+  if (product.requiresAdminApproval) badges.push("דורש אישור מחיר לפני הדפסה");
+  badges.forEach((text) => {
     const badge = document.createElement("span");
     badge.className = "product-badge product-badge-idea";
-    badge.textContent = "רעיון — דורש אישור מחיר לפני הדפסה";
+    badge.textContent = text;
     container.append(badge);
-  }
+  });
 }
 
 function renderProductFacts(card, product) {
@@ -3336,10 +3360,11 @@ function renderPricingForm() {
 
   form.elements.marginPercent.value = (Number(s.marginPercent) || 0) * 100;
   form.elements.minOrderPrice.value = Number(s.minOrderPrice) || 0;
-  const risk = s.riskPercentByLevel ?? s.riskPercents ?? { low: 0.08, medium: 0.15, high: 0.25 };
+  const risk = s.riskPercentByLevel ?? s.riskPercents ?? { low: 0.08, medium: 0.15, high: 0.25, untested: 0.35 };
   if (form.elements.riskLowPercent) form.elements.riskLowPercent.value = Number(risk.low) * 100;
   if (form.elements.riskMediumPercent) form.elements.riskMediumPercent.value = Number(risk.medium) * 100;
   if (form.elements.riskHighPercent) form.elements.riskHighPercent.value = Number(risk.high) * 100;
+  if (form.elements.riskUntestedPercent) form.elements.riskUntestedPercent.value = Number(risk.untested ?? 0.35) * 100;
   const wear = (s.wearParts ?? []).filter((p) => !p.amsOnly).reduce((sum, p) => sum + Number(p.priceIls) / Number(p.lifetimeHours), 0);
   const target = document.querySelector("#pricing-readonly-breakdown");
   if (target) target.innerHTML = `<div class="cost-preview-row"><span>בלאי ותחזוקה</span><span>${formatCurrency(wear)}/שעה</span></div><div class="cost-preview-row"><span>עלות מדפסת</span><span>תוספת של 10% על עלות ההדפסה (לאחר סיכון)</span></div>`;

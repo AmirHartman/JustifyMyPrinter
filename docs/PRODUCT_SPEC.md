@@ -100,7 +100,12 @@ Entry behavior:
 
 ### Ideas / future prints
 - Inspirations and models not yet printed.
-- No final price. Require admin review before printing.
+- When print time and material data are available, show an estimated price that
+  includes the configured untested-model risk surcharge. Without that data,
+  show no price and require a manual quote.
+- The first print always enters admin review before the printer queue. A price
+  already shown in the catalog does not require separate friend approval unless
+  the product's explicit approval flag is enabled.
 - Future: friends may suggest ideas.
 
 Published products are visible only to authenticated users.
@@ -268,9 +273,14 @@ Pricing inputs:
 - manual admin override;
 - transparent price that covers production cost and includes a modest default
   margin; optional support is added above that price.
-- admin-editable margin percentages for low, medium, and high product risk,
-  plus minimum order price; products may also have
+- admin-editable percentages for low, medium, and high product risk, plus a
+  separate untested-model surcharge and minimum order price; products may also have
   an optional per-unit minimum. Existing order price snapshots never change.
+
+An untested model always uses the untested surcharge while its catalog kind is
+`idea`, regardless of the low/medium/high level selected for later use. Changing
+the catalog kind to `printed` applies the selected product risk level and may
+lower its calculated price.
 
 The admin calculation presents production cost before profit and the final
 price after profit in separate cards. Material cost is derived from spool price
@@ -282,6 +292,14 @@ two decimal places, and are stored without integer truncation.
 
 Known catalog product:
 - clear price upfront; can auto-approve.
+
+Untested catalog idea:
+- remains in the ideas area whether its price is known or pending;
+- with complete print data, has a visible estimated price and can be added to
+  the cart at that price;
+- without complete print data, remains visible with "price after review" and
+  receives a manual quote;
+- always stops for the admin before its first print can reach the printer queue.
 
 Special/external/custom order:
 - admin calculates price;

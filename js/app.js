@@ -18,7 +18,7 @@ const orderDialog   = document.querySelector("#order-dialog");
 const orderForm     = document.querySelector("#order-form");
 const productForm   = document.querySelector("#product-form");
 const orderDrawer   = document.querySelector("#order-drawer");
-const DEFAULT_RISK_PERCENT_BY_LEVEL = Object.freeze({ low: 0.08, medium: 0.15, high: 0.25 });
+const DEFAULT_RISK_PERCENT_BY_LEVEL = Object.freeze({ low: 0.08, medium: 0.15, high: 0.25, untested: 0.35 });
 let productFormDirty = false;
 
 function riskPercentFromForm() {
@@ -521,7 +521,9 @@ productForm?.addEventListener("submit", async (event) => {
     manualPrice:        data.get("manualPriceEnabled") !== null ? Number(data.get("manualPrice")) || null : null,
     calculatedCost:     computedCostFromForm(),
   };
-  if (payload.catalogKind === "idea") payload.requiresAdminApproval = true;
+  // No coercion here: an idea with print data is priced and orderable, and the
+  // approval checkbox stays whatever the admin set. The server still requires
+  // approval for a product that has no price to show (api/products.js).
   payload.grams = materials.reduce((sum, material) => sum + Number(material.grams || 0), 0) + payload.purgeGrams;
 
   // Resolve effective cost
@@ -670,6 +672,13 @@ function renderColorOptions(possibleColors = [], requiredColors = []) {
   }
 }
 
+// The risk select stays enabled — a disabled field drops out of FormData and
+// would silently rewrite risk_level — so the coercion is explained instead.
+function syncUntestedRiskHint() {
+  const note = document.querySelector("#product-risk-untested-note");
+  if (note) note.hidden = productForm?.elements["catalogKind"]?.value !== "idea";
+}
+
 function updateProductReadiness(serverMissing = null) {
   const target = document.querySelector("#product-readiness-details");
   if (!target || !productForm) return;
@@ -681,11 +690,12 @@ function updateProductReadiness(serverMissing = null) {
     [collectImageRows().length > 0, "לפחות תמונה אחת"],
     [collectCategoryRows().length > 0, "קטגוריה פעילה"],
   ];
+  // No price check: the computed cost is floored at the minimum order price and
+  // is therefore never zero, so it can never fail. Mirrors api/products.js.
   if (kind === "printed") {
     localChecks.push(
       [Number(productForm.elements["printHours"]?.value) > 0, "זמן הדפסה"],
       [materials.length > 0 && materials.every((item) => item.filamentId && item.grams > 0), "חומר ומשקל חיובי"],
-      [Boolean(computedCostFromForm()) || (productForm.elements["manualPriceEnabled"]?.checked && Number(productForm.elements["manualPrice"]?.value) > 0), "מחיר תקין"],
     );
   }
   const missing = localChecks.filter(([ready]) => !ready).map(([, label]) => label);
@@ -700,7 +710,14 @@ function updateProductReadiness(serverMissing = null) {
       if (label && !missing.includes(label)) missing.push(label);
     });
   }
-  const readyLabel = kind === "idea" ? "הרעיון מוכן להצגה ויופיע כפריט הדורש בדיקה ואישור מחיר." : "המוצר מוכן לפרסום אוטומטי.";
+  const ideaPriced = kind === "idea"
+    && Number(productForm.elements["printHours"]?.value) > 0
+    && materials.length > 0 && materials.every((item) => item.filamentId && item.grams > 0);
+  const readyLabel = kind !== "idea"
+    ? "המוצר מוכן לפרסום אוטומטי."
+    : ideaPriced
+      ? "הרעיון מוכן להצגה, עם מחיר לפי תעריף \"לא נוסה\"."
+      : "הרעיון מוכן להצגה. בלי זמן הדפסה וחומרים הוא יוצג כ\"מחיר ייקבע לאחר בדיקה\".";
   target.innerHTML = missing.length
     ? `<p>הפריט יישמר כמוסתר עד להשלמת:</p><ul>${missing.map((item) => `<li>${item}</li>`).join("")}</ul>`
     : `<p>${readyLabel}</p>`;
@@ -723,6 +740,8 @@ function computedCostFromForm() {
     additionalCopyHours: null,
     riskLevel: document.querySelector("#product-form [name='riskLevel']")?.value ?? "medium",
     riskPercent: riskPercentFromForm(),
+    // An untested idea prices at its own tier, so the preview must see the kind.
+    catalogKind: document.querySelector("#product-form [name='catalogKind']")?.value ?? "printed",
     minUnitPrice: document.querySelector("#product-form [name='minUnitPrice']")?.value === "" ? null : Number(document.querySelector("#product-form [name='minUnitPrice']")?.value),
   };
   if (!store.pricingSettings) return null;
@@ -745,6 +764,7 @@ function resetProductForm() {
   if (printFileStatus) printFileStatus.textContent = "";
   renderBridgeFileOptions();
   renderCategoryCheckboxes([]);
+  syncUntestedRiskHint();
   renderColorOptions([], []);
   productFormDirty = false;
   updateProductReadiness();
@@ -806,6 +826,7 @@ window.openProductEditForm = function openProductEditForm(product) {
   renderBridgeFileOptions(product.printFileChecksum ?? "");
   document.querySelector("#edit-product-id").value = product.id;
   document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
+  syncUntestedRiskHint();
   renderCategoryCheckboxes(product.categoryIds ?? []);
   renderColorOptions(product.possibleColors ?? [], product.requiredColors ?? []);
 
@@ -1131,6 +1152,7 @@ function updateCostPreview() {
     additionalCopyHours: null,
     riskLevel: productForm?.elements["riskLevel"]?.value ?? "medium",
     riskPercent: riskPercentFromForm(),
+    catalogKind: productForm?.elements["catalogKind"]?.value ?? "printed",
     minUnitPrice: productForm?.elements["minUnitPrice"]?.value === "" ? null : Number(productForm?.elements["minUnitPrice"]?.value),
   };
 
@@ -1181,8 +1203,11 @@ productForm?.addEventListener("change", (e) => {
     const possible = document.querySelector(`#product-possible-colors input[value="${CSS.escape(e.target.value)}"]`);
     if (possible) possible.checked = true;
   }
-  if (e.target.matches("[name='catalogKind']") && e.target.value === "idea") {
-    productForm.elements["requiresAdminApproval"].checked = true;
+  // Switching kind changes which risk tier prices the product, so the preview
+  // and the explanation both have to follow it.
+  if (e.target.matches("[name='catalogKind']")) {
+    syncUntestedRiskHint();
+    updateCostPreview();
   }
   if (e.target.matches("[name='printProfile'], [name='riskLevel']")) updateCostPreview();
   else updateProductReadiness();
@@ -1479,11 +1504,13 @@ document.querySelector("#pricing-form")?.addEventListener("submit", async (event
       low: Number(data.get("riskLowPercent")) / 100,
       medium: Number(data.get("riskMediumPercent")) / 100,
       high: Number(data.get("riskHighPercent")) / 100,
+      untested: Number(data.get("riskUntestedPercent")) / 100,
     },
     riskPercents: {
       low: Number(data.get("riskLowPercent")) / 100,
       medium: Number(data.get("riskMediumPercent")) / 100,
       high: Number(data.get("riskHighPercent")) / 100,
+      untested: Number(data.get("riskUntestedPercent")) / 100,
     },
   };
 
@@ -1512,6 +1539,9 @@ function syncPricingRiskFields() {
   form.elements["riskLowPercent"].value = Number(values.low ?? DEFAULT_RISK_PERCENT_BY_LEVEL.low) * 100;
   form.elements["riskMediumPercent"].value = Number(values.medium ?? DEFAULT_RISK_PERCENT_BY_LEVEL.medium) * 100;
   form.elements["riskHighPercent"].value = Number(values.high ?? DEFAULT_RISK_PERCENT_BY_LEVEL.high) * 100;
+  if (form.elements["riskUntestedPercent"]) {
+    form.elements["riskUntestedPercent"].value = Number(values.untested ?? DEFAULT_RISK_PERCENT_BY_LEVEL.untested) * 100;
+  }
 }
 
 async function submitManagedForm(form, request, errorLabel) {

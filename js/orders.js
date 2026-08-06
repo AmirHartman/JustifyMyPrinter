@@ -1,5 +1,5 @@
 import { store, findProduct } from "./state.js";
-import { formatCurrency, isUnpriced, linePrice, NO_PRICE_YET } from "./utils.js";
+import { formatCurrency, isUnpriced, isUntested, linePrice, NO_PRICE_YET, UNTESTED_PRICE_NOTE } from "./utils.js";
 
 const orderDialog = document.querySelector("#order-dialog");
 const orderForm   = document.querySelector("#order-form");
@@ -92,9 +92,10 @@ export function openOrderDialog(productId, previousOptions = {}) {
   const availability = document.querySelector("#order-availability-note");
   if (availability) availability.textContent = product.inventoryAvailable === false
     ? "המוצר אינו זמין בצבעים הרגילים כרגע. אפשר לשלוח בקשה, והמנהל יציע חלופה לפני תחילת ההדפסה."
-    : product.requiresAdminApproval || product.catalogKind === "idea"
-      ? "ההזמנה דורשת בדיקה ואישור מחיר לפני ההדפסה."
-      : "";
+    : isUnpriced(product) ? "ההזמנה דורשת בדיקה ואישור מחיר לפני ההדפסה."
+      : isUntested(product) ? UNTESTED_PRICE_NOTE
+        : product.requiresAdminApproval ? "ההזמנה דורשת אישור מחיר לפני ההדפסה."
+          : "";
 
   updateReviewCosts();
   goToStep("review");
