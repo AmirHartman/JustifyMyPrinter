@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // The pricing kernel exists twice — CommonJS on the server, an ES module in the
@@ -197,13 +197,17 @@ test('pricing settings PUT loads stored settings before preserving them through 
 // The coercion lives inside calculateProductCost, so it is a no-op at any call
 // site that builds its own product object without the catalog kind.
 test('every pricing call site passes the catalog kind through', () => {
+  const printJobsPath = path.join(root, 'api/print-jobs.js');
   const sources = {
     'api/orders.js': readFileSync(path.join(root, 'api/orders.js'), 'utf8'),
-    'api/print-jobs.js': readFileSync(path.join(root, 'api/print-jobs.js'), 'utf8'),
     'js/app.js': readFileSync(path.join(root, 'js/app.js'), 'utf8'),
   };
   assert.match(sources['api/orders.js'], /catalogKind: product\.catalog_kind/);
-  assert.match(sources['api/print-jobs.js'], /catalogKind: product\.catalog_kind/);
+  // The naive main site intentionally has no print-job endpoint. Branches that
+  // include printer automation must pass the kind through there as well.
+  if (existsSync(printJobsPath)) {
+    assert.match(readFileSync(printJobsPath, 'utf8'), /catalogKind: product\.catalog_kind/);
+  }
   // computedCostFromForm and updateCostPreview both feed the admin preview.
   assert.equal((sources['js/app.js'].match(/catalogKind:\s*(document\.querySelector\("#product-form \[name='catalogKind'\]"\)|productForm\?\.elements\["catalogKind"\])/g) || []).length, 2);
 });
