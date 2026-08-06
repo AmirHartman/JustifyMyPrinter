@@ -18,6 +18,7 @@ execution.
 | R8 | Orders | `failed_attempts` incremented on every save | Prior-status transition source contract plus negative fixture | T2 | fixed | 2026-07-15 |
 | R9 | Migration | Init re-derived valid manager risk choices | Idempotent migration source contract plus negative fixture | T2 | fixed | 2026-07-15 |
 | R10 | Catalog authorization | Anonymous page and API access remained possible after catalog visibility became account-only | Mocked allowed/forbidden handler tests, negative-sensitive source contract, and optional isolated HTTP smoke | T1 + T2; optional T3 | fixed | 2026-07-16 |
+| R11 | Admin dashboard loading | One rejected admin endpoint collapsed `loadData()` and left the dashboard blank despite healthy products or users | Mocked ESM state-module API failures plus dashboard warning source contract | T1 + T2; T3 API and T4 browser pending | covered — independent Tester rerun pending | 2026-08-06 |
 
 ## Non-regression coverage additions
 
