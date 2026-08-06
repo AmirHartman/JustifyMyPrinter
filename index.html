@@ -15,7 +15,12 @@
         <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
       </div>
       <div class="global-tabs-group global-tabs-account">
-        <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+        <div class="global-tabs-admin admin-only">
+          <button class="admin-nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav-menu">כלי ניהול</button>
+          <div class="admin-nav-menu" id="admin-nav-menu" aria-label="כלי ניהול" hidden>
+            <a class="global-tab admin-nav-link" href="dashboard.html#overview" data-view="overview">סקירה</a><a class="global-tab admin-nav-link" href="dashboard.html#orders" data-view="orders">הזמנות</a><a class="global-tab admin-nav-link" href="dashboard.html#products" data-view="products">מוצרים</a><a class="global-tab admin-nav-link" href="dashboard.html#users" data-view="users">משתמשים</a><a class="global-tab admin-nav-link" href="dashboard.html#finance" data-view="finance">כספים</a><a class="global-tab admin-nav-link" href="dashboard.html#materials" data-view="materials">חומרים ותחזוקה</a><a class="global-tab admin-nav-link" href="dashboard.html#feedback" data-view="feedback">משוב</a><a class="global-tab admin-nav-link" href="dashboard.html#settings" data-view="settings">הגדרות</a>
+          </div>
+        </div>
         <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
         <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
       </div>
