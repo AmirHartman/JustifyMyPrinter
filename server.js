@@ -90,7 +90,8 @@ app.use((req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => console.log(`JustifyMyPrinter running on port ${PORT}`));
+const HOST = process.env.HOST || '127.0.0.1';
+const server = app.listen(PORT, HOST, () => console.log(`JustifyMyPrinter running at http://${HOST}:${PORT}`));
 
 // Without this handler a bind failure (most commonly EADDRINUSE from a previous
 // `npm run dev` still holding the port) makes the process hang silently instead
