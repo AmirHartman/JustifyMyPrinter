@@ -95,7 +95,10 @@ app.use((req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => console.log(`JustifyMyPrinter running on port ${PORT}`));
+// Render needs the conventional all-interface bind, while local previews can
+// opt into a loopback-only listener with HOST=127.0.0.1.
+const HOST = process.env.HOST || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => console.log(`JustifyMyPrinter running on ${HOST}:${PORT}`));
 
 // Without this handler a bind failure (most commonly EADDRINUSE from a previous
 // `npm run dev` still holding the port) makes the process hang silently instead
