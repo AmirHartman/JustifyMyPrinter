@@ -10,21 +10,14 @@
   <body data-auth="signed-out" data-entry="landing" data-role="friend" data-mode="friend" data-page="landing">
     <a class="skip-link" href="#main-content">דילוג לתוכן המרכזי</a>
     <nav class="global-tabs">
-      <div class="landing-nav-inner">
-        <a class="landing-brand" href="index.html" aria-label="מדפסת חברים — דף הבית">
-          <span class="landing-brand-mark" aria-hidden="true">מ</span>
-          <span>
-            <strong>מדפסת חברים</strong>
-            <small>הדפסות תלת־ממד בגובה העיניים</small>
-          </span>
-        </a>
-        <div class="global-tabs-list">
-          <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
-          <a class="global-tab" href="index.html" data-tab="landing">איך זה עובד</a>
-          <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
-          <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
-          <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
-        </div>
+      <div class="global-tabs-group global-tabs-primary">
+        <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
+        <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+      </div>
+      <div class="global-tabs-group global-tabs-account">
+        <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+        <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+        <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
       </div>
     </nav>
     <main class="public-landing" id="main-content">
@@ -330,7 +323,7 @@
 
       <section class="landing-final-panel">
         <div>
-          <span>ההדפסה הבאה מתחילה ברעיון</span>
+          <p class="eyebrow">ההדפסה הבאה מתחילה ברעיון</p>
           <h2>בואו נמצא את הדבר הבא שכדאי להדפיס.</h2>
           <p>אפשר להתחיל בקטלוג, או לחפש רעיון חדש באחד המאגרים ולשלוח לי קישור.</p>
         </div>

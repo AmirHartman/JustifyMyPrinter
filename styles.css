@@ -3086,6 +3086,9 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
   top: 0;
   z-index: 200;
   display: flex;
+  width: 100%;
+  max-width: 100vw;
+  justify-content: space-between;
   gap: 0;
   background: var(--surface);
   border-bottom: 2px solid var(--line);
@@ -3094,6 +3097,12 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
   scrollbar-width: none;
 }
 .global-tabs::-webkit-scrollbar { display: none; }
+
+.global-tabs-group {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
 
 .global-tab {
   display: flex;
@@ -3124,24 +3133,20 @@ body[data-page="app"]      .global-tab[data-tab="admin"] {
   font-weight: 700;
 }
 
-/* The cart, and the owner's back office next to it, belong at the opposite end
-   of the bar from the browsing tabs. The auto margin sits on whichever of the
-   two comes first, since the admin tab is absent for everyone but the owner. */
-.global-tab[data-tab="cart"] { margin-inline-start: auto; }
-body[data-role="admin"] .global-tab[data-tab="admin"] { margin-inline-start: auto; }
-body[data-role="admin"] .global-tab[data-tab="cart"] { margin-inline-start: 0; }
-
-/* Management is the owner's own destination, not another friend-facing page,
-   so it carries its own colour instead of blending into the row — including
-   while it is the active tab. Placed after the active-tab rule to win. */
+/* Management is the owner's own destination, so it carries a restrained red
+   treatment instead of blending into the friend-facing tabs. */
 .global-tab[data-tab="admin"] {
-  color: var(--plum);
+  color: var(--danger);
+  background: rgba(184, 62, 66, 0.07);
   font-weight: 700;
 }
-.global-tab[data-tab="admin"]:hover { color: var(--plum-dark); }
+.global-tab[data-tab="admin"]:hover {
+  color: #8e2d31;
+  background: rgba(184, 62, 66, 0.12);
+}
 body[data-page="app"] .global-tab[data-tab="admin"] {
-  color: var(--plum-dark);
-  border-bottom-color: var(--plum);
+  color: #8e2d31;
+  border-bottom-color: var(--danger);
 }
 
 .global-tab-cart {
@@ -4491,119 +4496,6 @@ body[data-page="landing"] .skip-link:focus {
   translate: 0;
 }
 
-body[data-page="landing"] .global-tabs {
-  padding: 0;
-  color: var(--landing-ink);
-  background: rgba(247, 245, 239, 0.9);
-  border-bottom: 1px solid rgba(16, 43, 44, 0.09);
-  box-shadow: 0 8px 30px rgba(16, 43, 44, 0.045);
-  backdrop-filter: blur(18px);
-}
-
-body[data-page="landing"] .landing-nav-inner {
-  width: min(1240px, calc(100% - 40px));
-  min-height: 74px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-body[data-page="landing"] .landing-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 11px;
-  color: var(--landing-ink);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-body[data-page="landing"] .landing-brand-mark {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  color: #fff;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.16), transparent 45%),
-    var(--landing-deep);
-  border-radius: 12px 12px 4px 12px;
-  box-shadow: 0 8px 20px rgba(11, 55, 55, 0.18);
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 900;
-}
-
-body[data-page="landing"] .landing-brand > span:last-child {
-  display: grid;
-  line-height: 1.15;
-}
-
-body[data-page="landing"] .landing-brand strong {
-  font-family: var(--font-display);
-  font-size: 1.12rem;
-}
-
-body[data-page="landing"] .landing-brand small {
-  margin-top: 3px;
-  color: #697978;
-  font-size: 0.68rem;
-  font-weight: 600;
-}
-
-/* Same right-to-left DOM order as the app pages. The brand already holds the
-   right edge here, so this group stays at the left of the nav and the auto
-   margin inside it has no free space to act on. */
-body[data-page="landing"] .global-tabs-list {
-  display: flex;
-  align-items: stretch;
-  align-self: stretch;
-}
-
-body[data-page="landing"] .global-tab {
-  position: relative;
-  padding: 0 16px;
-  border: 0;
-  margin: 0;
-  color: #536564;
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-body[data-page="landing"] .global-tab::after {
-  position: absolute;
-  inset-inline: 16px;
-  inset-block-end: 13px;
-  height: 3px;
-  content: "";
-  scale: 0 1;
-  background: var(--landing-coral);
-  border-radius: 999px;
-  transition: scale 180ms ease;
-}
-
-body[data-page="landing"] .global-tab:hover,
-body[data-page="landing"] .global-tab:focus-visible,
-body[data-page="landing"] .global-tab[data-tab="landing"] {
-  color: var(--landing-ink);
-}
-
-body[data-page="landing"] .global-tab:hover::after,
-body[data-page="landing"] .global-tab:focus-visible::after,
-body[data-page="landing"] .global-tab[data-tab="landing"]::after {
-  scale: 1 1;
-}
-
-/* The landing nav restyles every tab, so the management colour has to be
-   restated here or it would be flattened back to the shared grey. */
-body[data-page="landing"] .global-tab[data-tab="admin"] { color: var(--plum); }
-body[data-page="landing"] .global-tab[data-tab="admin"]:hover,
-body[data-page="landing"] .global-tab[data-tab="admin"]:focus-visible {
-  color: var(--plum-dark);
-}
-body[data-page="landing"] .global-tab[data-tab="admin"]::after { background: var(--plum); }
-
 body[data-page="landing"] .public-landing {
   width: min(1240px, calc(100% - 40px));
   padding: 28px 0 80px;
@@ -4883,15 +4775,21 @@ body[data-page="landing"] .hero-note {
 }
 
 body[data-page="landing"] .hero-note span {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 30px;
   width: 30px;
-  min-height: 30px;
+  height: 30px;
+  min-height: 0;
   margin: 0;
   padding: 0;
-  justify-content: center;
   color: var(--landing-deep);
   background: var(--landing-mint);
   border-radius: 8px;
   font-size: 0.68rem;
+  line-height: 1;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
 }
 
 body[data-page="landing"] .hero-note-top {
@@ -5006,6 +4904,20 @@ body[data-page="landing"] .landing-intro .dark-panel {
     var(--landing-ink) !important;
 }
 
+body[data-page="landing"] .landing-intro .dark-panel > span {
+  color: #fff8e8;
+  background: rgba(240, 201, 138, 0.18);
+  border: 1px solid rgba(240, 201, 138, 0.3);
+}
+
+body[data-page="landing"] .landing-intro .dark-panel h2 {
+  color: #fff8e8;
+}
+
+body[data-page="landing"] .landing-intro .dark-panel p {
+  color: #d5e2df;
+}
+
 body[data-page="landing"] .landing-intro .dark-panel::after {
   position: absolute;
   width: 180px;
@@ -5047,15 +4959,24 @@ body[data-page="landing"] .landing-heading {
 }
 
 body[data-page="landing"] .landing-heading .eyebrow,
-body[data-page="landing"] .value-panel .eyebrow {
-  margin-bottom: 14px;
+body[data-page="landing"] .value-panel .eyebrow,
+body[data-page="landing"] .landing-final-panel .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 40px;
+  margin-bottom: 16px;
+  padding: 8px 14px;
   color: var(--landing-teal);
-  background: transparent;
-  border: 0;
-  padding: 0;
-  min-height: 0;
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
+  background: rgba(8, 123, 116, 0.08);
+  border: 1px solid rgba(8, 123, 116, 0.16);
+  border-radius: 999px;
+  box-shadow: 0 7px 18px rgba(8, 123, 116, 0.07);
+  font-size: clamp(1rem, 1.3vw, 1.15rem);
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 body[data-page="landing"] .landing-heading h2,
@@ -5153,6 +5074,9 @@ body[data-page="landing"] .order-section .section-number {
 
 body[data-page="landing"] .order-section .eyebrow {
   color: var(--landing-sand);
+  background: rgba(240, 201, 138, 0.1);
+  border-color: rgba(240, 201, 138, 0.24);
+  box-shadow: none;
 }
 
 body[data-page="landing"] .order-section h2,
@@ -5509,13 +5433,21 @@ body[data-page="landing"] .future-orbit-two {
 }
 
 body[data-page="landing"] .future-panel .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
   margin-bottom: 18px;
-  padding: 7px 12px;
-  min-height: auto;
+  padding: 8px 14px;
+  min-height: 40px;
   color: var(--landing-sand);
   background: rgba(240, 201, 138, 0.1);
   border: 1px solid rgba(240, 201, 138, 0.2);
   border-radius: 999px;
+  font-size: clamp(1rem, 1.3vw, 1.15rem);
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 body[data-page="landing"] .future-panel h2 {
@@ -5548,15 +5480,6 @@ body[data-page="landing"] .landing-final-panel {
 
 body[data-page="landing"] .landing-final-panel > div:first-child {
   max-width: 690px;
-}
-
-body[data-page="landing"] .landing-final-panel > div:first-child > span {
-  padding: 0;
-  min-height: 0;
-  color: var(--landing-teal);
-  background: transparent;
-  font-size: 0.74rem;
-  letter-spacing: 0.07em;
 }
 
 body[data-page="landing"] .landing-final-panel h2 {
@@ -5615,14 +5538,6 @@ body[data-page="landing"] button:focus-visible {
 }
 
 @media (max-width: 880px) {
-  body[data-page="landing"] .landing-nav-inner {
-    min-height: 68px;
-  }
-
-  body[data-page="landing"] .landing-brand small {
-    display: none;
-  }
-
   body[data-page="landing"] .landing-hero-v2 {
     grid-template-columns: 1fr;
     min-height: auto;
@@ -5671,38 +5586,6 @@ body[data-page="landing"] button:focus-visible {
 }
 
 @media (max-width: 680px) {
-  body[data-page="landing"] .global-tabs {
-    position: static;
-  }
-
-  body[data-page="landing"] .landing-nav-inner {
-    width: min(100% - 24px, 1240px);
-    display: grid;
-    gap: 4px;
-    padding: 12px 0 0;
-  }
-
-  body[data-page="landing"] .landing-brand {
-    justify-content: center;
-  }
-
-  body[data-page="landing"] .global-tabs-list {
-    width: 100%;
-    min-width: 0;
-    overflow-x: auto;
-    justify-content: center;
-  }
-
-  body[data-page="landing"] .global-tab {
-    min-height: 46px;
-    padding-inline: 12px;
-    font-size: 0.78rem;
-  }
-
-  body[data-page="landing"] .global-tab::after {
-    inset-block-end: 5px;
-  }
-
   body[data-page="landing"] .public-landing {
     width: min(100% - 20px, 1240px);
     padding-top: 10px;
