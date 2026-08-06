@@ -31,6 +31,7 @@
           <div class="admin-nav-menu" id="admin-nav-menu" aria-label="כלי ניהול" hidden>
             <a class="global-tab admin-nav-link" href="dashboard.html#overview" data-view="overview">סקירה</a>
             <a class="global-tab admin-nav-link" href="dashboard.html#orders" data-view="orders">הזמנות <span class="tab-badge" id="new-orders-badge" hidden></span></a>
+            <a class="global-tab admin-nav-link" href="dashboard.html#printer" data-view="printer">מדפסת <span class="tab-badge" id="print-jobs-badge" hidden></span></a>
             <a class="global-tab admin-nav-link" href="dashboard.html#products" data-view="products">מוצרים</a>
             <a class="global-tab admin-nav-link" href="dashboard.html#users" data-view="users">משתמשים <span class="tab-badge" id="pending-tab-badge" hidden></span></a>
             <a class="global-tab admin-nav-link" href="dashboard.html#finance" data-view="finance">כספים</a>
@@ -175,16 +176,29 @@
         <div class="section-heading">
           <div>
             <h2 id="orders-title">הזמנות</h2>
-            <p>קידום סטטוס, סימון תשלום ומעקב אחרי מה שעדיין פתוח.</p>
+            <p>הזמנות פתוחות לפי חבר — כסף, סטטוס ומה כבר הודפס.</p>
           </div>
         </div>
         <div class="orders-filter-bar">
           <input type="search" id="orders-search" placeholder="חיפוש לפי שם חבר או מוצר…" aria-label="חיפוש הזמנות" />
           <div class="filter-chips" id="orders-filter-chips">
-            <button type="button" class="filter-chip is-active" data-filter="all">הכל</button>
+            <button type="button" class="filter-chip" data-filter="all">הכל</button>
             <button type="button" class="filter-chip" data-filter="unpaid">לא שולם</button>
-            <button type="button" class="filter-chip" data-filter="open">פתוחות</button>
+            <button type="button" class="filter-chip is-active" data-filter="open">פתוחות</button>
             <button type="button" class="filter-chip" data-filter="done">הושלמו</button>
+          </div>
+        </div>
+
+        <div class="orders-groups" id="orders-groups"></div>
+        <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
+      </section>
+
+      <!-- ── Printer: printer state, job timeline and the print queue ── -->
+      <section class="view" id="printer-view" aria-labelledby="printer-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="printer-title">מדפסת</h2>
+            <p>מצב המדפסת, משימות ההדפסה וההזמנות שממתינות לתורן.</p>
           </div>
         </div>
         <section class="print-jobs-panel" id="print-jobs-panel" hidden>
@@ -199,8 +213,15 @@
           <div id="print-jobs-list"></div>
         </section>
 
-        <div class="orders-groups" id="orders-groups"></div>
-        <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
+        <section class="print-queue-panel" id="print-queue-panel" hidden>
+          <div class="section-heading section-heading--sub">
+            <div>
+              <h3>הזמנות שממתינות להדפסה</h3>
+              <p class="form-hint">כל הזמנה בסטטוס "ממתין להדפסה". יצירת משימה דורשת קובץ הדפסה פרוס למוצר.</p>
+            </div>
+          </div>
+          <div id="print-queue-list"></div>
+        </section>
       </section>
 
       <!-- ── Products ── -->

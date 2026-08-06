@@ -179,6 +179,12 @@ Order approval:
 
 > Implemented. Legacy order status values are normalized at API boundaries.
 
+An order is stored as one row per product, so a friend's order can be
+**partially ready**: the admin marks individual products as printed and the
+group shows "X of Y printed". A product counts as printed once its status is
+`waiting_assembly`, `ready_delivery`, or `completed`; there is no separate
+printed flag.
+
 Payment is separate from status:
 - `paid: true/false` (manual, no online payment in MVP).
 
@@ -339,8 +345,18 @@ Quick actions:
   bridge may claim it, cancel before printing begins, and mark the printer idle
   after the owner clears the bed.
 
-Admin management pages: orders, products, users, categories, income/expenses,
-transparency/goals, future: filament/colors/inventory, future: WhatsApp templates.
+Admin management pages: orders, printer, products, users, categories,
+income/expenses, transparency/goals, future: filament/colors/inventory, future:
+WhatsApp templates.
+
+The orders page and the printer page are deliberately separate jobs:
+- **Orders** — open orders only by default, grouped by friend. Each group shows
+  the money (cost, profit, debt, total), a readiness chip (not printed /
+  partially ready / all printed), bulk mark-as-paid and a WhatsApp payment
+  summary, over the individual product cards.
+- **Printer** — printer and bridge state, the print-job timeline with manual
+  approval and cancellation, and the queue of orders waiting to print with a
+  one-click "create print job" per order.
 
 ## 10. Personal area
 

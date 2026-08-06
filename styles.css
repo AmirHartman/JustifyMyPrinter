@@ -3458,6 +3458,77 @@ body[data-page="landing"]  .global-tab[data-tab="landing"] {
   margin-top: 10px;
 }
 
+/* ── Orders: one group per customer ───────────────────────── */
+.customer-order-group-header {
+  gap: 10px;
+  justify-content: flex-start;
+  text-align: start;
+}
+.customer-order-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.order-readiness-chip {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.order-readiness-none    { background: #f0efe9; color: #5b5750; }
+.order-readiness-partial { background: #fdf0d5; color: #8a5b00; }
+.order-readiness-all     { background: #dff3e6; color: #1f6b3f; }
+
+.customer-order-group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-weight: 700;
+}
+.customer-order-group-summary .customer-order-figures { flex-wrap: wrap; white-space: normal; }
+.customer-order-group-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .customer-order-group-header { flex-wrap: wrap; }
+  .customer-order-group-name { flex: 1 1 100%; }
+  .customer-order-group-summary { padding: 8px 10px; }
+  .customer-order-group-summary .customer-order-figures { gap: 8px; }
+}
+
+/* ── Printer tab: orders waiting for a print job ───────────── */
+.print-queue-panel { margin-top: 18px; }
+.print-queue-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.print-queue-row:first-child { border-top: 0; }
+.print-queue-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 /* ── Order card ────────────────────────────────────────────── */
 .order-card {
   border: 1px solid var(--line);

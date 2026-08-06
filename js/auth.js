@@ -135,7 +135,7 @@ export function applyMode() {
   }
 }
 
-const ADMIN_VIEWS = ["overview", "orders", "products", "users", "finance", "materials", "feedback", "settings"];
+const ADMIN_VIEWS = ["overview", "orders", "printer", "products", "users", "finance", "materials", "feedback", "settings"];
 
 export function viewFromHash() {
   const view = window.location.hash.slice(1);

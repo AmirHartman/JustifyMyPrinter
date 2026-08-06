@@ -403,7 +403,7 @@ async function refreshPrintJobs({ forceRender = false } = {}) {
     store.printer = printer;
     lastJobsSignature = signature;
     if (settled) { await loadData(); render(); }
-    else renderPrintJobs();
+    else { renderPrintJobs(); renderPrintQueue(); }
   } catch {
     // Transient poll failure: keep the last known state and try again next tick.
   }
@@ -511,6 +511,71 @@ function renderPrintJobs() {
   ensureJobsPolling();
 }
 
+// The other half of the printer tab: orders that are ready to print but have no
+// job yet. Sending one from here is the same server action as the order card's
+// button, so the admin never has to cross back to the orders tab to feed the
+// printer.
+function renderPrintQueue() {
+  const panel = document.querySelector("#print-queue-panel");
+  const list  = document.querySelector("#print-queue-list");
+  if (!panel || !list) return;
+  panel.hidden = store.appMode !== "admin";
+  list.replaceChildren();
+
+  const waiting = store.orders.filter((order) => order.status === "waiting_print");
+  if (waiting.length === 0) {
+    list.innerHTML = '<p class="empty-state is-visible">אין הזמנות שממתינות להדפסה.</p>';
+    return;
+  }
+
+  // An order that already has a live job must not be sent twice — the server
+  // rejects it anyway (print_jobs_active_order_idx), so the button explains why.
+  const liveJobOrderIds = new Set((store.printJobs ?? [])
+    .filter((job) => JOB_UNSETTLED_STATUSES.has(job.status) && job.orderId)
+    .map((job) => job.orderId));
+
+  waiting.forEach((order) => {
+    const product = findProduct(order.productId);
+    const name    = product?.name || order.requestDescription || "הבקשה שלך";
+    const colors  = orderColorNames(order);
+
+    const row = document.createElement("div");
+    row.className = "print-queue-row";
+    row.innerHTML = `
+      <div class="print-queue-main">
+        <strong>${escapeHtml(name)} ×${order.quantity}</strong>
+        <span class="stat-muted">${escapeHtml(order.friendName)}</span>
+        ${colors.length ? `<span class="stat-muted">${escapeHtml(colors.join(", "))}</span>` : ""}
+      </div>
+    `;
+
+    const sendBtn = document.createElement("button");
+    sendBtn.className   = "primary-button btn-sm";
+    sendBtn.type        = "button";
+    sendBtn.textContent = "🖨️ צור משימת הדפסה";
+    if (liveJobOrderIds.has(order.id)) {
+      sendBtn.disabled = true;
+      sendBtn.title    = "כבר קיימת משימת הדפסה פעילה להזמנה הזו";
+    } else if (!product?.printFileUrl) {
+      sendBtn.disabled = true;
+      sendBtn.title    = "אין קובץ הדפסה פרוס למוצר — יש להעלות אותו בעריכת המוצר";
+    } else {
+      sendBtn.title = "יצירת משימה שממתינה לאישור ידני לפני שליחה למדפסת";
+      sendBtn.addEventListener("click", () => startOrderPrint(order, sendBtn));
+    }
+    row.append(sendBtn);
+
+    const detailsBtn = document.createElement("button");
+    detailsBtn.className   = "ghost-button btn-sm";
+    detailsBtn.type        = "button";
+    detailsBtn.textContent = "פרטים";
+    detailsBtn.addEventListener("click", () => openOrderDrawer(order));
+    row.append(detailsBtn);
+
+    list.append(row);
+  });
+}
+
 // ── Public entry point ────────────────────────────────────────
 
 function renderDataLoadWarning() {
@@ -530,6 +595,7 @@ export function render() {
   renderCartBadge();
   renderOrders();
   renderPrintJobs();
+  renderPrintQueue();
   renderItemStats();
   renderUsersAdmin();
   renderStoreEdit();
@@ -571,6 +637,7 @@ function maintenanceAttentionCount(insights) {
 function computeAdminNotifications() {
   return [
     { key: "orders",      label: "הזמנות חדשות",      view: "orders",   count: store.orders.filter((o) => o.status === "new").length },
+    { key: "printJobs",   label: "משימות שממתינות לאישור", view: "printer", count: (store.printJobs ?? []).filter((j) => j.status === "awaiting_approval").length },
     { key: "users",       label: "הרשמות ממתינות",    view: "users",    sub: "pending-users",       count: store.users.filter((u) => u.status === "pending").length },
     { key: "feedback",    label: "משוב חדש",           view: "feedback", count: (store.feedback || []).filter((f) => f.status !== "resolved").length },
     { key: "filaments",   label: "חומר עומד להיגמר",   view: "materials", sub: "materials-filaments",   count: store.filaments.filter(isFilamentLow).length },
@@ -581,6 +648,7 @@ function computeAdminNotifications() {
 // A category can drive several badge elements (e.g. tab + matching sub-tab).
 const NOTIF_BADGE_IDS = {
   orders:      ["new-orders-badge"],
+  printJobs:   ["print-jobs-badge"],
   users:       ["pending-tab-badge", "pending-sub-badge"],
   feedback:    ["feedback-tab-badge"],
   filaments:   ["low-filaments-badge"],
@@ -1293,8 +1361,16 @@ const FORWARD_STATUS_SEQUENCE = ["new", "waiting_approval", "waiting_print", "pr
 // order is there, the promote button still leads on to delivery.
 const FORWARD_STATUS_DETOURS = { waiting_assembly: "ready_delivery" };
 
+// An order line counts as printed once the physical part exists — whether it is
+// still waiting for assembly, ready to hand over, or already delivered. This is
+// derived from the status rather than stored, so there is no second source of
+// truth that could drift from it.
+const PRINTED_STATUSES = new Set(["waiting_assembly", "ready_delivery", "completed"]);
+
 let orderSearchQuery = "";
-let orderStatusFilter = "all"; // all | unpaid | open | done
+// The tab is an open-work queue, so it opens on the open orders. "הכל"/"הושלמו"
+// stay available as chips so nothing becomes unreachable.
+let orderStatusFilter = "open"; // all | unpaid | open | done
 
 document.querySelector("#orders-search")?.addEventListener("input", (e) => {
   orderSearchQuery = e.target.value.trim().toLowerCase();
@@ -1462,6 +1538,19 @@ function buildOrderCard(order) {
     }
   });
   actions.append(paidLabel);
+
+  // Per-product print marker: this is what makes a customer's order "partially
+  // ready". It only moves the status, so the existing status <select> stays the
+  // way to reach the finer states (e.g. assembly) and nothing is stored twice.
+  if (!PAST_STATUSES.has(order.status)) {
+    const printedLabel = document.createElement("label");
+    printedLabel.className = "paid-toggle printed-toggle";
+    printedLabel.innerHTML = `<input type="checkbox" ${PRINTED_STATUSES.has(order.status) ? "checked" : ""} /> הודפס`;
+    printedLabel.querySelector("input").addEventListener("change", (event) => {
+      setOrderStatus(order, event.target.checked ? "ready_delivery" : "waiting_print");
+    });
+    actions.append(printedLabel);
+  }
 
   const detailsBtn = document.createElement("button");
   detailsBtn.className   = "ghost-button btn-sm";
@@ -1660,6 +1749,113 @@ function openOrderDrawer(order, opts = {}) {
   if (typeof dialog.showModal === "function") dialog.showModal();
 }
 
+// Every status/payment change re-renders the whole list, so which groups the
+// admin collapsed must live outside the DOM to survive it. Mirrors the
+// expandedCustomers pattern in the users table.
+const collapsedOrderGroups = new Set();
+
+// Orders are stored one row per product, so a customer's order is the set of
+// their rows. user_id is authoritative; legacy rows without a matching user
+// fall back to the name they were placed under.
+function orderGroupKey(order) {
+  const user = findOrderUser(order);
+  return user ? `user:${user.id}` : `name:${order.friendName ?? ""}`;
+}
+
+// "Partially ready" in one place: how many of a customer's product lines
+// already exist physically. Cancelled and failed lines are not owed to anyone,
+// so they neither count as printed nor as still missing.
+function groupReadiness(orders) {
+  const owed    = orders.filter((o) => o.status !== "cancelled" && o.status !== "failed");
+  const printed = owed.filter((o) => PRINTED_STATUSES.has(o.status)).length;
+  if (owed.length === 0) return null;
+  if (printed === 0) return { state: "none", label: "טרם הודפס" };
+  if (printed === owed.length) return { state: "all", label: "הכל הודפס" };
+  return { state: "partial", label: `מוכן חלקית · ${printed} מתוך ${owed.length} הודפסו` };
+}
+
+// One customer's open work: what they owe money for, what already came off the
+// printer, and the individual product cards underneath.
+function buildCustomerOrderGroup(key, user, orders) {
+  const displayName = user?.fullName || user?.name || orders[0]?.friendName || "ללא שם";
+  const priced   = orders.filter((o) => o.status !== "cancelled");
+  const total    = sumOrderAmounts(priced);
+  const debt     = sumOrderAmounts(priced.filter((o) => !o.paid));
+  let sumCost = 0, sumProfit = 0;
+  priced.forEach((order) => {
+    const { cost, profit } = orderCostBreakdown(order);
+    if (cost != null)   sumCost   += cost;
+    if (profit != null) sumProfit += profit;
+  });
+
+  const readiness = groupReadiness(orders);
+  const collapsed = collapsedOrderGroups.has(key);
+
+  const group = document.createElement("section");
+  group.className = "order-status-group customer-order-group";
+
+  const header = document.createElement("button");
+  header.type = "button";
+  header.className = "order-status-group-header customer-order-group-header";
+  header.setAttribute("aria-expanded", String(!collapsed));
+  header.innerHTML = `
+    <span class="customer-order-group-name">${escapeHtml(displayName)}</span>
+    ${readiness ? `<span class="order-readiness-chip order-readiness-${readiness.state}">${escapeHtml(readiness.label)}</span>` : ""}
+    <span class="order-status-group-count">${orders.length}</span>
+  `;
+
+  const summary = document.createElement("div");
+  summary.className = "customer-order-group-summary";
+  summary.innerHTML = `
+    <div class="customer-order-figures">
+      <span>עלות ${figureLabel(sumCost)}</span>
+      <span>רווח ${figureLabel(sumProfit)}</span>
+      ${debt > 0 ? `<span class="stat-negative">חוב ${formatCurrency(debt)}</span>` : ""}
+      <span class="customer-order-total">סה"כ ${figureLabel(total)}</span>
+    </div>
+  `;
+
+  // Money actions need a real user row (phone number, bulk mark-paid), so they
+  // are only offered for groups that resolved to one.
+  if (user && debt > 0) {
+    const groupActions = document.createElement("div");
+    groupActions.className = "customer-order-group-actions";
+
+    const paidBtn = document.createElement("button");
+    paidBtn.className   = "ghost-button btn-sm";
+    paidBtn.type        = "button";
+    paidBtn.textContent = "סמן הכל כשולם";
+    paidBtn.addEventListener("click", () => markUserOrdersPaid(user));
+    groupActions.append(paidBtn);
+
+    groupActions.append(createWhatsAppLink({
+      phone: user.phone,
+      message: whatsappTemplates.paymentSummary({ name: displayName, amount: debt.toFixed(2) }),
+      label: "סיכום לתשלום",
+      className: "btn-sm",
+    }));
+    summary.append(groupActions);
+  }
+
+  const list = document.createElement("div");
+  list.className = "order-status-group-list";
+  list.hidden = collapsed;
+  header.classList.toggle("is-collapsed", collapsed);
+  header.addEventListener("click", () => {
+    const nowCollapsed = !list.hidden;
+    list.hidden = nowCollapsed;
+    header.classList.toggle("is-collapsed", nowCollapsed);
+    header.setAttribute("aria-expanded", String(!nowCollapsed));
+    if (nowCollapsed) collapsedOrderGroups.add(key);
+    else collapsedOrderGroups.delete(key);
+  });
+
+  orders.forEach((order) => list.append(buildOrderCard(order)));
+
+  group.append(header, summary, list);
+  return group;
+}
+
 function renderOrders() {
   const groupsContainer = document.querySelector("#orders-groups");
   if (!groupsContainer) return;
@@ -1670,36 +1866,25 @@ function renderOrders() {
   groupsContainer.replaceChildren();
   document.querySelector("#orders-empty")?.classList.toggle("is-visible", filtered.length === 0);
 
-  ORDER_STATUS_SEQUENCE.forEach((status) => {
-    const ordersInGroup = filtered.filter((o) => o.status === status);
-    if (ordersInGroup.length === 0) return;
-
-    const group = document.createElement("section");
-    group.className = "order-status-group";
-    const isCollapsedByDefault = PAST_STATUSES.has(status);
-
-    const header = document.createElement("button");
-    header.type = "button";
-    header.className = "order-status-group-header";
-    header.innerHTML = `
-      <span>${escapeHtml(STATUS_LABELS[status] ?? status)}</span>
-      <span class="order-status-group-count">${ordersInGroup.length}</span>
-    `;
-
-    const list = document.createElement("div");
-    list.className = "order-status-group-list";
-    list.hidden = isCollapsedByDefault;
-    header.classList.toggle("is-collapsed", isCollapsedByDefault);
-    header.addEventListener("click", () => {
-      list.hidden = !list.hidden;
-      header.classList.toggle("is-collapsed", list.hidden);
-    });
-
-    ordersInGroup.forEach((order) => list.append(buildOrderCard(order)));
-
-    group.append(header, list);
-    groupsContainer.append(group);
+  const groups = new Map(); // key -> orders[], insertion order is irrelevant (sorted below)
+  filtered.forEach((order) => {
+    const key = orderGroupKey(order);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(order);
   });
+
+  const newestAt = (orders) => Math.max(...orders.map((o) => new Date(o.createdAt).getTime() || 0));
+
+  [...groups.entries()]
+    .sort(([, a], [, b]) => newestAt(b) - newestAt(a))
+    .forEach(([key, orders]) => {
+      // Within a customer, walk the lines along the production pipeline so the
+      // work that still needs doing sits above what is already printed.
+      orders.sort((a, b) =>
+        (ORDER_STATUS_SEQUENCE.indexOf(a.status) - ORDER_STATUS_SEQUENCE.indexOf(b.status)) ||
+        (new Date(a.createdAt) - new Date(b.createdAt)));
+      groupsContainer.append(buildCustomerOrderGroup(key, findOrderUser(orders[0]), orders));
+    });
 }
 
 // ── Items stats table (admin view) ───────────────────────────
