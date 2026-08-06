@@ -182,10 +182,13 @@ async function scanGcode(zip, entry, result) {
   result.purgeGrams += filamentLengthToGrams(purgeLengthMm, state.densities, state.diameters);
 }
 
-async function extract3mfEstimates(buffer) {
+async function extract3mfEstimates(buffer, { requirePlateGcode = false } = {}) {
   const zip = openArchive(buffer);
   const entries = archiveEntries(zip);
   const gcodeEntries = entries.filter((name) => /\.gcode$/i.test(name));
+  if (requirePlateGcode && !entries.includes('Metadata/plate_1.gcode')) {
+    throw new Error('This is not a sliced Bambu plate: Metadata/plate_1.gcode is missing');
+  }
   const result = {
     printHours: null, materialGrams: [], sources: [], productName: '',
     printProfile: 'regular', printProfileName: '', purgeGrams: 0,

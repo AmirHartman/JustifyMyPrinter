@@ -255,12 +255,9 @@
               <section class="product-materials-section" aria-labelledby="product-print-data-title">
                 <h4 id="product-print-data-title">1. נתונים הכרחיים להדפסה</h4>
                 <div class="product-import-summary" id="product-import-summary" hidden></div>
-                <p class="form-hint">אפשר להעלות קובץ הדפסה (slice) או להזין ידנית זמן, פרופיל, חומרים ומשקלים.</p>
-                <div>
-                  <button class="ghost-button btn-sm" type="button" id="upload-print-file-btn">⬆ העלה קובץ הדפסה (slice)</button>
-                  <input id="print-file-input" type="file" accept=".3mf,.gcode" hidden />
-                </div>
-                <p id="print-file-status" class="form-hint"></p>
+                <p class="form-hint">קובצי slice נשמרים במחשב הגשר בלבד. בחרו קובץ שנסרק מהתיקייה המקומית; תמונות ממשיכות לעלות כרגיל.</p>
+                <label>קובץ הדפסה מקומי<select id="bridge-file-select" name="bridgeFileSelection"><option value="">— בחירת קובץ שנסרק מהגשר —</option></select></label>
+                <p id="print-file-status" class="form-hint" role="status" aria-live="polite"></p>
                 <input name="printFileUrl" type="hidden" />
                 <input name="printFileName" type="hidden" />
                 <input name="printFileChecksum" type="hidden" />
@@ -766,6 +763,35 @@
           </div>
         </div>
       </div>
+    </dialog>
+
+    <dialog id="print-approval-dialog" class="print-approval-dialog" aria-labelledby="print-approval-title">
+      <form method="dialog" class="order-form" id="print-approval-form">
+        <button class="icon-button close-button" type="button" data-close-print-dialog aria-label="סגירה">×</button>
+        <h2 id="print-approval-title">אישור פלטת הדפסה</h2>
+        <div id="print-approval-summary"></div>
+        <p id="print-approval-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="ghost-button" type="button" data-close-print-dialog>חזרה</button>
+          <button class="primary-button" type="submit" id="print-approval-submit">אשר והכנס לתור</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="custom-plate-dialog" class="print-approval-dialog" aria-labelledby="custom-plate-title">
+      <form class="order-form" id="custom-plate-form">
+        <button class="icon-button close-button" type="button" data-close-custom-plate aria-label="סגירה">×</button>
+        <h2 id="custom-plate-title">תכנון פלטה מותאמת</h2>
+        <p class="form-hint">בחרו את פריטי ההזמנה שסידרתם ידנית ב־slicer. האתר אינו בודק שהמודלים נכנסים פיזית על הפלטה.</p>
+        <p id="custom-plate-suggestion" class="custom-plate-suggestion" role="status" hidden></p>
+        <div id="custom-plate-items"></div>
+        <label>קובץ פלטה מסונכרן<select id="custom-plate-file" required><option value="">— בחירת קובץ מהגשר —</option></select></label>
+        <p id="custom-plate-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="ghost-button" type="button" data-close-custom-plate>חזרה</button>
+          <button class="primary-button" type="submit" id="custom-plate-next">המשך לאישור</button>
+        </div>
+      </form>
     </dialog>
 
     <script type="module" src="js/app.js"></script>

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
 
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(process.env.JMP_TEST_ROOT || path.join(__dirname, '..'));
 
 function responseRecorder() {
   return {
@@ -64,7 +64,7 @@ test('creating a print job requires an admin session', async () => {
 });
 
 test('bridge actions reject requests without the bridge secret before any db access', async () => {
-  for (const [method, action] of [['POST', 'claim-next'], ['PUT', 'report']]) {
+  for (const [method, action] of [['POST', 'claim-next'], ['PUT', 'heartbeat'], ['PUT', 'report']]) {
     const handler = loadHandler({ bridge: false, sql: () => { throw new Error('db must not be reached'); } });
     const res = responseRecorder();
     await handler({ method, query: { action, id: 'job-1' }, headers: {}, body: {} }, res);
@@ -80,7 +80,7 @@ test('claim-next atomically returns a single job, or null when the queue is empt
       if (/SKIP LOCKED/.test(q)) return Promise.resolve([{
         id: 'job-1', order_id: null, source: 'self', product_id: 'p1', quantity: 1,
         selected_colors: [], status: 'claimed', progress: 0, error_reason: '',
-        print_file_url: 'https://res.cloudinary.com/x.3mf', created_at: 'now', updated_at: 'now',
+        claim_token: 'claim-1', print_file_url: 'https://res.cloudinary.com/x.3mf', created_at: 'now', updated_at: 'now',
       }]);
       return Promise.resolve([]); // reaper
     },
@@ -90,6 +90,7 @@ test('claim-next atomically returns a single job, or null when the queue is empt
   assert.equal(res1.statusCode, 200);
   assert.equal(res1.body.job.id, 'job-1');
   assert.equal(res1.body.job.status, 'claimed');
+  assert.equal(res1.body.job.claimToken, 'claim-1');
 
   const empty = loadHandler({ bridge: true, sql: () => Promise.resolve([]) });
   const res2 = responseRecorder();
@@ -98,13 +99,15 @@ test('claim-next atomically returns a single job, or null when the queue is empt
   assert.equal(res2.body.job, null);
 });
 
-test('self-print done deducts inventory exactly once and a duplicate done report is a no-op', async () => {
+test('self-print terminal side effects are safe to retry after a duplicate done report', async () => {
   let finalizeCalls = 0;
+  let inventoryApplications = 0;
+  let inventoryFinalized = false;
   let jobTerminal = false;
   const doneJob = {
     id: 'job-1', order_id: 'order-1', source: 'self', product_id: 'p1', quantity: 1,
     selected_colors: [], status: 'done', progress: 100, error_reason: '',
-    print_file_url: '', created_at: 'now', updated_at: 'now',
+    claim_token: 'claim-1', print_file_url: '', created_at: 'now', updated_at: 'now',
   };
   const sql = (strings) => {
     const q = strings.join(' ');
@@ -120,17 +123,25 @@ test('self-print done deducts inventory exactly once and a duplicate done report
     }]);
     return Promise.resolve([]);
   };
-  const handler = loadHandler({ bridge: true, sql, finalize: async () => { finalizeCalls += 1; } });
+  const handler = loadHandler({ bridge: true, sql, finalize: async () => {
+    finalizeCalls += 1;
+    if (!inventoryFinalized) {
+      inventoryFinalized = true;
+      inventoryApplications += 1;
+    }
+  } });
 
   const res1 = responseRecorder();
-  await handler({ method: 'PUT', query: { action: 'report', id: 'job-1' }, headers: {}, body: { status: 'done', progress: 100 } }, res1);
+  await handler({ method: 'PUT', query: { action: 'report', id: 'job-1' }, headers: {}, body: { status: 'done', progress: 100, claimToken: 'claim-1' } }, res1);
   assert.equal(res1.statusCode, 200);
   assert.equal(finalizeCalls, 1);
+  assert.equal(inventoryApplications, 1);
 
   const res2 = responseRecorder();
-  await handler({ method: 'PUT', query: { action: 'report', id: 'job-1' }, headers: {}, body: { status: 'done', progress: 100 } }, res2);
+  await handler({ method: 'PUT', query: { action: 'report', id: 'job-1' }, headers: {}, body: { status: 'done', progress: 100, claimToken: 'claim-1' } }, res2);
   assert.equal(res2.statusCode, 200);
-  assert.equal(finalizeCalls, 1, 'duplicate done must not deduct again');
+  assert.equal(finalizeCalls, 2, 'duplicate reports may safely replay terminal side effects');
+  assert.equal(inventoryApplications, 1, 'the idempotent inventory helper must not deduct twice');
 });
 
 test('customer-order done advances the order to ready_delivery without deducting inventory', async () => {
@@ -139,7 +150,7 @@ test('customer-order done advances the order to ready_delivery without deducting
   const doneJob = {
     id: 'job-2', order_id: 'order-2', source: 'order', product_id: 'p1', quantity: 1,
     selected_colors: [], status: 'done', progress: 100, error_reason: '',
-    print_file_url: '', created_at: 'now', updated_at: 'now',
+    claim_token: 'claim-2', print_file_url: '', created_at: 'now', updated_at: 'now',
   };
   const sql = (strings) => {
     const q = strings.join(' ');
@@ -153,7 +164,7 @@ test('customer-order done advances the order to ready_delivery without deducting
   };
   const handler = loadHandler({ bridge: true, sql, finalize: async () => { finalizeCalls += 1; } });
   const res = responseRecorder();
-  await handler({ method: 'PUT', query: { action: 'report', id: 'job-2' }, headers: {}, body: { status: 'done' } }, res);
+  await handler({ method: 'PUT', query: { action: 'report', id: 'job-2' }, headers: {}, body: { status: 'done', claimToken: 'claim-2' } }, res);
 
   assert.equal(res.statusCode, 200);
   assert.equal(finalizeCalls, 0, 'customer order must not deduct on print done');

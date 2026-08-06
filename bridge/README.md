@@ -14,7 +14,8 @@ bed and clicks **סמן מדפסת כפנויה**.
 
 - Node.js 20 or newer on a laptop, mini-PC, or Raspberry Pi that stays on the
   same LAN as the printer.
-- A sliced `.gcode.3mf` file already uploaded to the product in the site.
+- A sliced `.gcode.3mf` file exported from Bambu Studio. The bridge owns its
+  bytes locally; the website receives only a checksum and derived estimates.
 - The same strong `BRIDGE_SECRET` configured in both the bridge environment and
   the server environment. For production, add it to the Render service's
   environment variables and redeploy/restart the service.
@@ -49,6 +50,7 @@ Edit `bridge/.env`:
 SITE_URL=https://your-app.onrender.com
 BRIDGE_SECRET=use-the-same-long-random-value-as-render
 BRIDGE_ID=home-p2s-bridge
+STORAGE_DIR=/Users/you/JustifyMyPrinter-print-library
 SIMULATE=false
 PRINTER_IP=192.168.1.50
 PRINTER_SERIAL=your-printer-serial
@@ -64,6 +66,40 @@ node --env-file=.env index.js
 Leave the process running while jobs should be available. `BRIDGE_ID` and
 `POLL_INTERVAL_MS` are optional. `PRINTER_PLATE_GCODE` defaults to
 `Metadata/plate_1.gcode`, and `PRINTER_USE_AMS` defaults to `true`.
+
+## Local file library
+
+The process creates three directories under `STORAGE_DIR`: `incoming/`,
+`library/`, and `quarantine/`. Drop only sliced Bambu `.gcode.3mf` files into
+`incoming/`. The bridge waits for a stable file, enforces a 100MiB default
+limit (override with `MAX_FILE_BYTES`), verifies sliced metadata including
+`Metadata/plate_1.gcode`, extracts estimates, hashes it with SHA-256, and
+atomically moves it to `library/<checksum>.gcode.3mf`. Duplicate and invalid
+files move to `quarantine/` with a nearby explanation, so the bridge does not
+delete print inputs automatically. Nothing is deleted automatically from
+`library/`.
+
+The bridge scans and syncs its complete inventory before it claims a plate, and
+periodically afterward. If you remove a library file manually, the following
+sync marks it unavailable and the server will not assign a checksum-based job
+to this bridge. Legacy jobs that have only an old Cloudinary URL still download
+directly to the bridge as a compatibility fallback.
+
+## Service installation
+
+For a Mac pilot, copy `com.justifymyprinter.bridge.plist` to
+`~/Library/LaunchAgents/`, replace every absolute-path placeholder and the
+Node path (`command -v node`), then run `launchctl bootstrap gui/$(id -u)
+~/Library/LaunchAgents/com.justifymyprinter.bridge.plist`. Use `launchctl
+bootout` to stop it. For a Pi/Mini-PC, copy `jmp-print-bridge.service` to
+`/etc/systemd/system/`, replace its placeholders, then run `sudo systemctl
+daemon-reload`, `sudo systemctl enable --now jmp-print-bridge`, and inspect it
+with `journalctl -u jmp-print-bridge -f`.
+
+Both templates start only this outbound polling process. They do not expose a
+network listener or a route from Render into the home LAN. Stop it gracefully
+with SIGTERM/SIGINT; it completes only the current API request and does not
+delete print files.
 
 ## Safe simulation first
 

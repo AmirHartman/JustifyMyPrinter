@@ -21,6 +21,8 @@ export const store = {
   feedback:       [],        // admin only: bug reports & improvement suggestions
   printJobs:      [],        // admin only: live one-click print jobs (bridge state)
   printer:        null,      // admin only: P2S state + bridge heartbeat
+  bridgeFiles:    [],        // admin only: metadata for files stored on the local bridge
+  bridge:         null,      // admin only: last local bridge inventory/health state
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -29,7 +31,7 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback, printJobs, printer] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback, printJobs, printer, bridgeFilesResponse] = await Promise.all([
     api("/api/products"),
     api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
@@ -46,6 +48,7 @@ export async function loadData() {
     isAdmin      ? api("/api/feedback")                : Promise.resolve([]),
     isAdmin      ? api("/api/print-jobs")              : Promise.resolve([]),
     isAdmin      ? api("/api/printer")                 : Promise.resolve(null),
+    isAdmin      ? api("/api/bridge-files")            : Promise.resolve({ files: [], bridge: null }),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -63,6 +66,8 @@ export async function loadData() {
   store.feedback         = feedback;
   store.printJobs        = printJobs;
   store.printer          = printer;
+  store.bridgeFiles      = bridgeFilesResponse?.files ?? [];
+  store.bridge           = bridgeFilesResponse?.bridge ?? null;
 }
 
 export function findProduct(productId) {

@@ -67,6 +67,7 @@ function normalizeRow(row, colorNames = null) {
     requestDescription: row.request_description ?? '',
     externalModelLink: row.external_model_link ?? '',
     quantity: Number(row.quantity),
+    printedQuantity: Number(row.printed_quantity) || 0,
     selectedColors,
     selectedColorNames: selectedColors.map((value) => {
       const id = colorValue(value);
@@ -119,7 +120,7 @@ function normalizeRow(row, colorNames = null) {
 
 const SELECT_COLUMNS = `
   id, product_id, user_id, friend_name, order_type, request_description,
-  external_model_link, quantity, selected_colors, product_snapshot,
+  external_model_link, quantity, printed_quantity, selected_colors, product_snapshot,
   proposed_alternative_color, color_alternative_status, color_alternative_proposed_at,
   color_alternative_responded_at, user_notes, admin_notes,
   base_cost, support_amount, final_amount, price, estimated_material_weight,

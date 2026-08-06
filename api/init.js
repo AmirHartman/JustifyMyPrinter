@@ -162,6 +162,10 @@ module.exports = async (req, res) => {
     // exactly as it always did.
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cart_id TEXT`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cart_position INTEGER NOT NULL DEFAULT 0`;
+    // A checkout line may be fulfilled by more than one physical plate. Keep
+    // completed units separate from cart grouping and from the order status.
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS printed_quantity INTEGER NOT NULL DEFAULT 0`;
+    await sql`UPDATE orders SET printed_quantity = GREATEST(COALESCE(printed_quantity, 0), 0)`;
     await sql`UPDATE orders SET color_alternative_status = 'none'
       WHERE color_alternative_status IS NULL OR color_alternative_status NOT IN ('none', 'needed', 'pending', 'approved', 'rejected')`;
     await sql`UPDATE orders SET paid_at = created_at WHERE paid = TRUE AND paid_at IS NULL`;
@@ -212,6 +216,36 @@ module.exports = async (req, res) => {
       WHERE risk_level IS NULL OR risk_level NOT IN ('low', 'medium', 'high')`;
     await sql`UPDATE products SET catalog_kind = 'printed' WHERE catalog_kind NOT IN ('printed', 'idea') OR catalog_kind IS NULL`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS products_print_sync_key_unique ON products (print_sync_key) WHERE print_sync_key IS NOT NULL`;
+
+    // ── Local bridge file inventory ───────────────────────────
+    // File bytes remain on the owner's bridge. The server stores only the
+    // derived metadata needed to select a sliced plate by checksum.
+    await sql`
+      CREATE TABLE IF NOT EXISTS bridges (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'offline',
+        disk_free_bytes BIGINT,
+        disk_total_bytes BIGINT,
+        last_seen_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS bridge_files (
+        bridge_id TEXT NOT NULL,
+        checksum TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        byte_size BIGINT NOT NULL DEFAULT 0,
+        print_hours NUMERIC(10,3),
+        material_grams JSONB NOT NULL DEFAULT '[]',
+        print_profile TEXT NOT NULL DEFAULT 'regular',
+        purge_grams NUMERIC(10,2) NOT NULL DEFAULT 0,
+        available BOOLEAN NOT NULL DEFAULT TRUE,
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (bridge_id, checksum)
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS bridge_files_checksum_available_idx ON bridge_files(checksum) WHERE available = TRUE`;
 
     // ── Categories table (dynamic, admin-managed) ─────────────
     await sql`
@@ -325,16 +359,38 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'`;
     await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`;
     await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS approved_by TEXT`;
+    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS bridge_id TEXT`;
+    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS claim_token TEXT`;
+    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS upload_started_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS completion_applied_at TIMESTAMPTZ`;
+    // Pre-token in-flight work cannot be safely controlled by an upgraded
+    // bridge. Leave it visible for manual review rather than accepting an
+    // unauthenticated lifecycle report or reprinting it automatically.
+    await sql`UPDATE print_jobs SET status = 'attention_required', updated_at = NOW()
+      WHERE status IN ('claimed', 'uploading', 'printing') AND claim_token IS NULL`;
     await sql`CREATE INDEX IF NOT EXISTS print_jobs_status_created_idx ON print_jobs(status, created_at)`;
     await sql`CREATE INDEX IF NOT EXISTS print_jobs_order_id_idx ON print_jobs(order_id)`;
-    // At most one live job per order (double-print guard). Includes the new
-    // awaiting_approval state, so a job pending approval already reserves the order.
+    // A plate can fulfil a portion of an order, so several queued plates are
+    // allowed. Allocation safety now lives in print_job_items / printed_quantity.
     await sql`DROP INDEX IF EXISTS print_jobs_active_order_idx`;
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_active_order_idx ON print_jobs(order_id)
-      WHERE order_id IS NOT NULL AND status IN ('awaiting_approval', 'queued', 'claimed', 'uploading', 'printing')`;
     // Global guard: at most one job may occupy the single printer at a time.
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_single_active_idx ON print_jobs((1))
       WHERE status IN ('claimed', 'uploading', 'printing')`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS print_job_items (
+        id TEXT PRIMARY KEY,
+        print_job_id TEXT NOT NULL,
+        order_id TEXT,
+        product_id TEXT,
+        quantity INTEGER NOT NULL CHECK (quantity > 0),
+        item_snapshot JSONB NOT NULL DEFAULT '{}',
+        completion_applied_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS print_job_items_job_idx ON print_job_items(print_job_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS print_job_items_order_idx ON print_job_items(order_id)`;
 
     // ── Printer state (single physical Bambu P2S) ─────────────
     // Operational state the owner controls: the printer goes busy when the bridge
@@ -472,7 +528,7 @@ module.exports = async (req, res) => {
 
     res.json({
       ok: true,
-      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories', 'feedback', 'print_jobs', 'printers'],
+      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories', 'feedback', 'bridges', 'bridge_files', 'print_jobs', 'print_job_items', 'printers'],
       demoDataSeeded: seedDemoData,
       demoUsersSeeded: demoUsers.length > 0,
       adminBootstrap: canBootstrapAdmin ? (adminCreated ? 'created' : 'already-exists') : 'skipped',

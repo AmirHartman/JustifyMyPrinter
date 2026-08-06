@@ -73,44 +73,238 @@ const JOB_STATUS_LABELS = {
   claimed:   "נתפס ע״י הגשר",
   uploading: "מעלה קובץ",
   printing:  "מדפיס",
+  attention_required: "נדרשת בדיקה",
   done:      "הושלם",
   failed:    "נכשל",
   cancelled: "בוטל",
 };
-const JOB_UNSETTLED_STATUSES = new Set(["awaiting_approval", "queued", "claimed", "uploading", "printing"]);
+const JOB_UNSETTLED_STATUSES = new Set(["awaiting_approval", "queued", "claimed", "uploading", "printing", "attention_required"]);
 const JOB_MOVING_STATUSES = new Set(["claimed", "uploading", "printing"]);
 const JOB_CANCELLABLE_STATUSES = new Set(["awaiting_approval", "queued", "claimed", "uploading"]);
 let jobsPollTimer = null;
 let lastJobsSignature = "";
 
-// Send a catalog product to the printer as a self-print (builds stock). The
-// server creates the internal order, records cost and leaves the job awaiting
-// manual approval. On success the whole view reloads, so the button (which is
-// re-rendered) is only restored on failure.
-async function startProductPrint(product, button) {
-  const original = button.textContent;
-  button.disabled = true;
-  button.textContent = "שולח…";
+let printDialogIntent = null;
+let printDialogOpener = null;
+
+function bridgeFile(checksum) {
+  return (store.bridgeFiles ?? []).find((file) => localFileChecksum(file) === checksum) ?? null;
+}
+
+function bridgeOffline() {
+  const reportedOnline = store.bridge?.online ?? store.printer?.bridgeOnline;
+  return reportedOnline !== true;
+}
+
+function localFileName(fileOrJob) { return fileOrJob?.filename ?? fileOrJob?.fileName ?? fileOrJob?.printFileName ?? ""; }
+function localFileChecksum(fileOrJob) { return fileOrJob?.checksum ?? fileOrJob?.fileChecksum ?? fileOrJob?.printFileChecksum ?? ""; }
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length);
+  return `${(bytes / (1024 ** index)).toFixed(index > 1 ? 1 : 0)} ${units[index - 1]}`;
+}
+
+function dialogClose(selector, fallbackFocus) {
+  const dialog = document.querySelector(selector);
+  if (dialog?.open) dialog.close();
+  (fallbackFocus ?? printDialogOpener)?.focus?.();
+}
+
+function showPrintApproval(intent, opener) {
+  const dialog = document.querySelector("#print-approval-dialog");
+  const summary = document.querySelector("#print-approval-summary");
+  const error = document.querySelector("#print-approval-error");
+  if (!dialog || !summary) return;
+  printDialogIntent = intent;
+  printDialogOpener = opener;
+  error.textContent = "";
+  const file = intent.fileChecksum ? bridgeFile(intent.fileChecksum) : null;
+  const unavailable = Boolean(intent.fileChecksum) && (!file || file.available === false);
+  const items = intent.items ?? [];
+  summary.innerHTML = `
+    <div class="print-summary">
+      <div class="print-summary-card"><strong>קובץ הפלטה</strong><br>${escapeHtml(localFileName(file) || intent.fileName || "קובץ ישן")}</div>
+      <div class="print-summary-card"><strong>תוכן הפלטה</strong><br>${items.map((item) => `${escapeHtml(item.name)} ×${item.quantity}`).join("<br>")}</div>
+      <div class="print-summary-card">כל קובץ מייצג פלטה פיזית אחת. המערכת אינה מאשרת שהמודלים נכנסים פיזית על הפלטה.</div>
+      <div class="print-summary-card">ב־AMS יש לוודא ידנית שהסלילים בחריצים תואמים למיפוי שבקובץ.</div>
+      ${bridgeOffline() ? '<div class="print-summary-card print-summary-warning">הגשר אינו מחובר כרגע. הפלטה תיכנס לתור ותתחיל רק לאחר שהגשר יחזור ויסנכרן.</div>' : ""}
+      ${store.printer?.state === "busy" ? '<div class="print-summary-card print-summary-warning">המדפסת עסוקה כרגע; הפלטה תישאר בתור עד שתפנו את המשטח ותסמנו את המדפסת כפנויה.</div>' : ""}
+      ${unavailable ? '<div class="print-summary-card print-summary-block">הקובץ לא זמין בגשר ולכן אי אפשר להכניס את הפלטה לתור.</div>' : ""}
+    </div>`;
+  const submit = document.querySelector("#print-approval-submit");
+  submit.disabled = unavailable;
+  dialog.showModal();
+  dialog.querySelector("[data-close-print-dialog]")?.focus();
+}
+
+function openProductPrint(product, button) {
+  const checksum = localFileChecksum(product);
+  const file = bridgeFile(checksum);
+  if (!checksum && product.printFileUrl) {
+    startLegacyProductPrint(product, button);
+    return;
+  }
+  if (!checksum || !file) {
+    alert("יש לשייך למוצר קובץ פלטה מקומי שנסרק מהגשר לפני שליחה להדפסה.");
+    return;
+  }
+  showPrintApproval({ productId: product.id, fileChecksum: localFileChecksum(file), fileName: localFileName(file), items: [{ name: product.name, quantity: 1 }] }, button);
+}
+
+function openOrderPrint(order, button) {
+  const product = findProduct(order.productId);
+  if (Number(order.quantity) > 1 || suggestedPlateOrders(order).length > 1) {
+    openCustomPlatePlanner(order, button);
+    return;
+  }
+  const checksum = localFileChecksum(product);
+  const file = bridgeFile(checksum);
+  if (!checksum && product?.printFileUrl) {
+    startLegacyOrderPrint(order, button);
+    return;
+  }
+  if (!file) {
+    alert("יש לשייך למוצר קובץ פלטה מקומי זמין לפני שליחה להדפסה.");
+    return;
+  }
+  showPrintApproval({ fileChecksum: localFileChecksum(file), fileName: localFileName(file), items: [{ orderId: order.id, quantity: 1, name: product?.name ?? order.requestDescription ?? "הזמנה" }] }, button);
+}
+
+function availableBridgeFiles() { return (store.bridgeFiles ?? []).filter((file) => file.available !== false); }
+
+function activeAllocatedQuantity(orderId) {
+  return (store.printJobs ?? [])
+    .filter((job) => JOB_UNSETTLED_STATUSES.has(job.status))
+    .flatMap((job) => job.items ?? [])
+    .filter((item) => (item.orderId ?? item.order_id) === orderId)
+    .reduce((total, item) => total + Number(item.quantity ?? 0), 0);
+}
+
+function remainingOrderQuantity(order) {
+  return Math.max(0, Number(order.quantity ?? 1) - Number(order.printedQuantity ?? order.printed_quantity ?? 0) - activeAllocatedQuantity(order.id));
+}
+
+function orderColorSignature(order) {
+  return orderColorNames(order).map((value) => String(value).trim()).filter(Boolean).sort().join("\u0000");
+}
+
+// Cart fields are optional for legacy orders. Only items from the same checkout
+// with the exact same selected colour set are suggested automatically; all
+// other waiting items remain available for deliberate manual selection.
+function suggestedPlateOrders(initialOrder) {
+  const cartId = initialOrder?.cartId ?? initialOrder?.cart_id;
+  const colorSignature = orderColorSignature(initialOrder ?? {});
+  if (!cartId || !colorSignature) return initialOrder ? [initialOrder] : [];
+  return store.orders.filter((order) =>
+    (order.cartId ?? order.cart_id) === cartId
+      && order.status === "waiting_print"
+      && remainingOrderQuantity(order) > 0
+      && orderColorSignature(order) === colorSignature);
+}
+
+function openCustomPlatePlanner(initialOrder, opener) {
+  const dialog = document.querySelector("#custom-plate-dialog");
+  const container = document.querySelector("#custom-plate-items");
+  const fileSelect = document.querySelector("#custom-plate-file");
+  const suggestion = document.querySelector("#custom-plate-suggestion");
+  const error = document.querySelector("#custom-plate-error");
+  if (!dialog || !container || !fileSelect) return;
+  printDialogOpener = opener;
+  error.textContent = "";
+  container.replaceChildren();
+  const suggested = suggestedPlateOrders(initialOrder);
+  const suggestedIds = new Set(suggested.map((order) => order.id));
+  if (suggestion) {
+    const compatibleCount = suggested.filter((order) => order.id !== initialOrder?.id).length;
+    const remaining = remainingOrderQuantity(initialOrder);
+    const messages = [];
+    if (remaining > 1) messages.push(`להזמנה שנבחרה יש ${remaining} עותקים שנותרו להדפסה`);
+    if (compatibleCount) messages.push(`נמצאו עוד ${compatibleCount} פריטים מאותו checkout ובאותה קבוצת צבעים`);
+    suggestion.textContent = messages.length
+      ? `הצעה לפלטה אחת: ${messages.join("; ")}. הפריטים המתאימים סומנו מראש — יש לבצע slice ידני ולאשר את הכמויות.`
+      : "לא נמצאה הצעת קיבוץ בטוחה מאותו checkout. אפשר לבחור פריטים ידנית לאחר שבדקתם צבעים והתאמה פיזית.";
+    suggestion.hidden = false;
+  }
+  store.orders.filter((order) => order.status === "waiting_print" && remainingOrderQuantity(order) > 0).forEach((order) => {
+    const product = findProduct(order.productId);
+    const remaining = remainingOrderQuantity(order);
+    const isSuggested = suggestedIds.has(order.id);
+    const row = document.createElement("div");
+    row.className = `custom-plate-order${isSuggested ? " is-suggested" : ""}`;
+    row.innerHTML = `<label><input type="checkbox" value="${escapeHtml(order.id)}" ${isSuggested ? "checked" : ""} /> <span><strong>${escapeHtml(product?.name ?? order.requestDescription ?? "הזמנה")}</strong>${isSuggested ? '<span class="custom-plate-badge">מוצע לפלטה</span>' : ""}<br><span class="bridge-file-meta">${escapeHtml(order.friendName ?? "")} · ממתין להדפסה · נותרו ${remaining} יח׳</span></span></label><label>כמות <input type="number" min="1" max="${remaining}" value="${order.id === initialOrder?.id ? remaining : 1}" ${isSuggested ? "" : "disabled"} /></label>`;
+    const checkbox = row.querySelector("input[type='checkbox']");
+    const quantity = row.querySelector("input[type='number']");
+    checkbox.addEventListener("change", () => { quantity.disabled = !checkbox.checked; });
+    container.append(row);
+  });
+  fileSelect.replaceChildren(new Option("— בחירת קובץ מהגשר —", ""));
+  availableBridgeFiles().forEach((file) => fileSelect.append(new Option(localFileName(file), localFileChecksum(file))));
+  dialog.showModal();
+  dialog.querySelector("input[type='checkbox']:checked")?.focus();
+}
+
+document.querySelectorAll("[data-close-print-dialog]").forEach((button) => button.addEventListener("click", () => dialogClose("#print-approval-dialog")));
+document.querySelectorAll("[data-close-custom-plate]").forEach((button) => button.addEventListener("click", () => dialogClose("#custom-plate-dialog")));
+document.querySelector("#print-approval-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submit = document.querySelector("#print-approval-submit");
+  const error = document.querySelector("#print-approval-error");
+  if (!printDialogIntent || submit.disabled) return;
+  submit.disabled = true;
+  const original = submit.textContent;
+  submit.textContent = "מכניס לתור…";
+  error.textContent = "";
   try {
-    await api("/api/print-jobs", { method: "POST", body: JSON.stringify({ productId: product.id }) });
+    const payload = printDialogIntent.productId
+      ? { productId: printDialogIntent.productId, fileChecksum: printDialogIntent.fileChecksum }
+      : { fileChecksum: printDialogIntent.fileChecksum, items: printDialogIntent.items.map(({ orderId, quantity }) => ({ orderId, quantity })) };
+    await api("/api/print-jobs?action=create-approved", { method: "POST", body: JSON.stringify(payload) });
+    dialogClose("#print-approval-dialog");
     await loadData();
     render();
   } catch (err) {
-    alert(`שליחת ההדפסה נכשלה: ${err.message}`);
-    button.disabled = false;
-    button.textContent = original;
+    error.textContent = `לא ניתן להכניס לתור: ${err.message}`;
+    submit.disabled = false;
+    submit.textContent = original;
   }
+});
+document.querySelector("#custom-plate-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const dialog = document.querySelector("#custom-plate-dialog");
+  const error = document.querySelector("#custom-plate-error");
+  const checksum = document.querySelector("#custom-plate-file")?.value;
+  const selected = Array.from(dialog.querySelectorAll(".custom-plate-order")).flatMap((row) => {
+    const checked = row.querySelector("input[type='checkbox']")?.checked;
+    const orderId = row.querySelector("input[type='checkbox']")?.value;
+    const quantity = Number(row.querySelector("input[type='number']")?.value);
+    return checked && orderId && quantity > 0 ? [{ orderId, quantity }] : [];
+  });
+  if (!checksum || !selected.length) { error.textContent = "בחרו לפחות פריט אחד וקובץ פלטה זמין."; return; }
+  const items = selected.map((item) => {
+    const order = store.orders.find((candidate) => candidate.id === item.orderId);
+    return { ...item, name: findProduct(order?.productId)?.name ?? order?.requestDescription ?? "הזמנה" };
+  });
+  dialogClose("#custom-plate-dialog", null);
+  showPrintApproval({ fileChecksum: checksum, fileName: localFileName(bridgeFile(checksum)), items }, printDialogOpener);
+});
+
+async function startLegacyProductPrint(product, button) {
+  await startLegacyPrint({ productId: product.id }, button);
 }
 
-// Create a pending print job for an existing customer order. Material is only
-// deducted later, when the order is marked completed; a separate admin action
-// approves the job before the bridge may claim it.
-async function startOrderPrint(order, button) {
+async function startLegacyOrderPrint(order, button) {
+  await startLegacyPrint({ orderId: order.id }, button);
+}
+
+async function startLegacyPrint(payload, button) {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = "שולח…";
   try {
-    await api("/api/print-jobs", { method: "POST", body: JSON.stringify({ orderId: order.id }) });
+    await api("/api/print-jobs", { method: "POST", body: JSON.stringify(payload) });
     await loadData();
     render();
   } catch (err) {
@@ -167,7 +361,7 @@ function formatPrintEventTime(value) {
   return date.toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
 }
 
-function printStateSignature(jobs, printer) {
+function printStateSignature(jobs, printer, bridge) {
   const jobsPart = jobs.map((job) => {
     const events = (job.events ?? []).map((event) => `${event.at}:${event.kind}:${event.message}`).join(",");
     return `${job.id}:${job.status}:${Math.round(Number(job.progress) || 0)}:${events}`;
@@ -175,7 +369,8 @@ function printStateSignature(jobs, printer) {
   const printerPart = printer
     ? `${printer.state}:${printer.bridgeOnline}:${printer.currentJobId ?? ""}:${printer.currentJob?.status ?? ""}:${Math.round(Number(printer.currentJob?.progress) || 0)}`
     : "none";
-  return `${jobsPart}#${printerPart}`;
+  const bridgePart = bridge ? `${bridge.online}:${bridge.lastScanAt ?? bridge.lastSeenAt ?? ""}:${bridge.diskFreeBytes ?? ""}:${bridge.error ?? ""}` : "missing";
+  return `${jobsPart}#${printerPart}#${bridgePart}`;
 }
 
 // Poll throughout admin mode so bridge online/offline state remains truthful
@@ -197,8 +392,10 @@ async function refreshPrintJobs({ forceRender = false } = {}) {
     return;
   }
   try {
-    const [jobs, printer] = await Promise.all([api("/api/print-jobs"), api("/api/printer")]);
-    const signature = printStateSignature(jobs, printer);
+    const [jobs, printer, bridgeFilesResponse] = await Promise.all([api("/api/print-jobs"), api("/api/printer"), api("/api/bridge-files")]);
+    store.bridgeFiles = bridgeFilesResponse?.files ?? store.bridgeFiles;
+    store.bridge = bridgeFilesResponse?.bridge ?? null;
+    const signature = printStateSignature(jobs, printer, store.bridge);
     if (!forceRender && signature === lastJobsSignature) return;
     const previous = new Map((store.printJobs ?? []).map((job) => [job.id, job.status]));
     const settled = jobs.some((job) => ["done", "failed"].includes(job.status) && JOB_UNSETTLED_STATUSES.has(previous.get(job.id)));
@@ -236,10 +433,11 @@ function renderPrintJobs() {
           <span class="printer-state printer-state--${busy ? "busy" : "idle"}">${busy ? "בעבודה" : "פנויה"}</span>
           <strong>${escapeHtml(printer.name || "Bambu Lab P2S")}</strong>
         </div>
-        <span class="bridge-state bridge-state--${printer.bridgeOnline ? "online" : "offline"}">
-          <span aria-hidden="true"></span> הגשר ${printer.bridgeOnline ? "מחובר" : "לא מחובר"}
+        <span class="bridge-state bridge-state--${bridgeOffline() ? "offline" : "online"}">
+          <span aria-hidden="true"></span> הגשר ${bridgeOffline() ? "לא מחובר" : "מחובר"}
         </span>
       </div>
+      ${store.bridge ? `<p class="bridge-diagnostics">סריקה אחרונה: ${escapeHtml(formatPrintEventTime(store.bridge.lastScanAt || store.bridge.lastSeenAt) || "לא ידוע")}${store.bridge.diskFreeBytes != null ? ` · מקום פנוי: ${escapeHtml(formatBytes(store.bridge.diskFreeBytes))}` : ""}${store.bridge.error ? ` · שגיאה: ${escapeHtml(store.bridge.error)}` : ""}</p>` : '<p class="bridge-diagnostics">אין עדיין דיווח מהגשר המקומי.</p>'}
       ${currentJob ? `
         <div class="printer-current-job">
           <span>משימה נוכחית: <strong>${escapeHtml(currentJob.productName || currentJob.id)}</strong></span>
@@ -279,10 +477,11 @@ function renderPrintJobs() {
       </li>`).join("");
     row.innerHTML = `
       <div class="print-job-main">
-        <strong>${escapeHtml(job.productName || job.productId)}</strong>
+        <strong>${escapeHtml(job.productName || job.productId || "פלטה מותאמת")}</strong>
         <span class="ws-status-chip ws-status-${escapeHtml(job.status)}">${escapeHtml(JOB_STATUS_LABELS[job.status] ?? job.status)}</span>
         <span class="stat-muted">${job.source === "self" ? "הדפסה עצמית" : "הזמנה"} ×${job.quantity}${job.status === "printing" ? ` · ${pct}%` : ""}</span>
       </div>
+      ${localFileName(job) || localFileChecksum(job) ? `<span class="print-job-file">קובץ מקומי: ${escapeHtml(localFileName(job) || localFileChecksum(job))}${job.fileAvailable === false ? " · לא זמין כרגע" : ""}</span>` : ""}
       ${moving ? `<div class="print-job-progress" role="progressbar" aria-label="התקדמות המשימה" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="print-job-progress-bar" style="width:${pct}%"></div></div>` : ""}
       ${job.errorReason ? `<p class="store-edit-sync-notice">${escapeHtml(job.errorReason)}</p>` : ""}
       <details class="print-job-timeline"${JOB_UNSETTLED_STATUSES.has(job.status) ? " open" : ""}>
@@ -1188,15 +1387,17 @@ function buildOrderCard(order) {
     actions.append(promoteBtn);
   }
 
-  // One-click print: only when the order is ready to print and its product has an
-  // uploaded slice file for the bridge to send.
-  if (order.status === "waiting_print" && product?.printFileUrl) {
+  // A default sliced file represents exactly one physical plate. Multi-copy
+  // orders always go through the manual custom-plate planner.
+  if (order.status === "waiting_print" && (Number(order.quantity) > 1 || localFileChecksum(product) || product?.printFileUrl)) {
+    const hasCompatibleCartItems = suggestedPlateOrders(order).length > 1;
+    const needsCustomPlate = Number(order.quantity) > 1 || hasCompatibleCartItems;
     const sendPrintBtn = document.createElement("button");
     sendPrintBtn.className   = "primary-button btn-sm";
     sendPrintBtn.type        = "button";
-    sendPrintBtn.textContent = "🖨️ צור משימת הדפסה";
-    sendPrintBtn.title       = "יצירת משימה שממתינה לאישור ידני לפני שליחה למדפסת";
-    sendPrintBtn.addEventListener("click", () => startOrderPrint(order, sendPrintBtn));
+    sendPrintBtn.textContent = needsCustomPlate ? "🧩 תכנן פלטה מותאמת" : "🖨️ שלח למדפסת";
+    sendPrintBtn.title       = needsCustomPlate ? "נמצאו עותקים או פריטים תואמי צבע מאותו checkout; יש לסדר אותם ידנית על פלטה" : "סיכום ואישור לפני הכנסת הפלטה לתור";
+    sendPrintBtn.addEventListener("click", () => openOrderPrint(order, sendPrintBtn));
     actions.append(sendPrintBtn);
   }
 
@@ -1999,14 +2200,14 @@ function renderStoreEdit() {
 
     footer.append(editDetailsBtn, deleteBtn);
 
-    // Self-print (build stock) is offered only when a slice file is on record.
-    if (product.printFileUrl) {
+    // Self-print is offered only when a local bridge file is on record.
+    if (localFileChecksum(product) || product.printFileUrl) {
       const printBtn = document.createElement("button");
       printBtn.className   = "primary-button btn-sm";
       printBtn.type        = "button";
-      printBtn.textContent = "🖨️ צור משימת הדפסה";
-      printBtn.title       = "יצירת הדפסה עצמית שממתינה לאישור ידני לפני שליחה למדפסת";
-      printBtn.addEventListener("click", () => startProductPrint(product, printBtn));
+      printBtn.textContent = "🖨️ שלח למדפסת";
+      printBtn.title       = "סיכום ואישור לפני הכנסת הפלטה לתור";
+      printBtn.addEventListener("click", () => openProductPrint(product, printBtn));
       footer.append(printBtn);
     }
     body.append(footer);

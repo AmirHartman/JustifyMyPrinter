@@ -230,6 +230,22 @@ recorded whole on a single row of the cart, never split across rows.
 External-link and custom requests are not part of the cart; they are still sent
 one at a time from their own dialog.
 
+### Local print bridge and plates
+
+Sliced `.gcode.3mf` print files live only on the owner's local bridge computer.
+The server records a SHA-256 checksum and derived slicing metadata, never the
+file bytes or a local path. One file is one physical print plate. A plate may
+link one or more order quantities, but the owner manually slices and confirms
+that the models physically fit; v1 does not arrange models or infer AMS slots.
+For cart checkouts, the admin receives an optional grouping suggestion only for
+lines with the same `cart_id` and the exact same selected-color set. The owner
+still chooses the items and quantities and confirms the manually sliced plate.
+The bridge is outbound-only, scans a local incoming folder before claiming
+work, and reports lifecycle events using a machine secret plus a per-claim
+token. A completed plate increments each linked order's printed quantity once;
+an order becomes `ready_delivery` only after every requested unit is printed.
+The existing manual bed-clear gate remains in place between plates.
+
 Admin can group a friend's orders for a WhatsApp payment summary and mark
 multiple orders as paid together.
 

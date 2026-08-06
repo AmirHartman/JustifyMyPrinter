@@ -704,6 +704,7 @@ function resetProductForm() {
   document.querySelector("#product-import-summary")?.setAttribute("hidden", "");
   const printFileStatus = document.querySelector("#print-file-status");
   if (printFileStatus) printFileStatus.textContent = "";
+  renderBridgeFileOptions();
   renderCategoryCheckboxes([]);
   renderColorOptions([], []);
   productFormDirty = false;
@@ -760,9 +761,10 @@ window.openProductEditForm = function openProductEditForm(product) {
   const printFileStatusEl = document.querySelector("#print-file-status");
   if (printFileStatusEl) {
     printFileStatusEl.textContent = product.printFileName
-      ? `קובץ מצורף: ${product.printFileName} — העלאת קובץ חדש תחליף אותו.`
+      ? `קובץ משויך: ${product.printFileName}${product.printFileChecksum ? " (מקומי בגשר)" : ""}.`
       : "";
   }
+  renderBridgeFileOptions(product.printFileChecksum ?? "");
   document.querySelector("#edit-product-id").value = product.id;
   document.querySelector("#product-requires-approval").checked = Boolean(product.requiresAdminApproval);
   renderCategoryCheckboxes(product.categoryIds ?? []);
@@ -803,6 +805,58 @@ window.openProductEditForm = function openProductEditForm(product) {
 document.querySelector("#product-editor-back")?.addEventListener("click", () => closeProductEditor());
 document.querySelector("#product-editor-cancel")?.addEventListener("click", () => {
   if (closeProductEditor()) resetProductForm();
+});
+
+function bridgeFileLabel(file) {
+  const filename = file.filename ?? file.fileName ?? file.printFileName ?? "קובץ ללא שם";
+  const hours = Number(file.printHours || 0).toFixed(2);
+  const grams = Array.isArray(file.materialGrams)
+    ? file.materialGrams.reduce((sum, value) => sum + Number(value || 0), 0)
+    : Number(file.materialGrams || 0);
+  return `${filename} · ${hours} שעות · ${grams.toFixed(2)} גרם${file.available === false ? " (לא זמין כרגע)" : ""}`;
+}
+
+function renderBridgeFileOptions(selectedChecksum = "") {
+  const select = document.querySelector("#bridge-file-select");
+  if (!select) return;
+  const current = selectedChecksum || select.value;
+  select.replaceChildren(new Option("— בחירת קובץ שנסרק מהגשר —", ""));
+  (store.bridgeFiles ?? []).forEach((file) => {
+    const checksum = file.checksum ?? file.fileChecksum ?? file.printFileChecksum ?? "";
+    if (!checksum) return;
+    const option = new Option(bridgeFileLabel(file), checksum);
+    option.disabled = file.available === false;
+    option.selected = checksum === current;
+    select.append(option);
+  });
+}
+
+function applyBridgeFileToProduct(checksum) {
+  const file = (store.bridgeFiles ?? []).find((candidate) => (candidate.checksum ?? candidate.fileChecksum ?? candidate.printFileChecksum) === checksum);
+  const status = document.querySelector("#print-file-status");
+  if (!file || !productForm) {
+    if (status) status.textContent = "בחרו קובץ שזוהה בגשר, או השאירו ריק לטיוטה.";
+    return;
+  }
+  productForm.elements["printHours"].value = Number(file.printHours ?? 0);
+  productForm.elements["printProfile"].value = file.printProfile ?? "regular";
+  productForm.elements["purgeGrams"].value = Number(file.purgeGrams ?? 0);
+  productForm.elements["printFileUrl"].value = "";
+  productForm.elements["printFileName"].value = file.filename ?? file.fileName ?? file.printFileName ?? "";
+  productForm.elements["printFileChecksum"].value = file.checksum ?? file.fileChecksum ?? file.printFileChecksum ?? "";
+  productForm.elements["printFileUploadedAt"].value = file.lastSeenAt ?? new Date().toISOString();
+  const weights = Array.isArray(file.materialGrams) ? file.materialGrams : [file.materialGrams];
+  document.querySelector("#product-materials-rows")?.replaceChildren();
+  weights.filter((grams) => Number(grams) > 0).forEach((grams) => addMaterialRow("", grams));
+  const updatedAt = file.lastSeenAt ? new Date(file.lastSeenAt).toLocaleString("he-IL") : "לא ידוע";
+  if (status) status.textContent = `נבחר: ${file.filename ?? file.fileName ?? file.printFileName ?? "קובץ מקומי"}. הנתונים הטכניים עודכנו; יש לבחור פילמנט ידנית. נסרק לאחרונה: ${updatedAt}.`;
+  productFormDirty = true;
+  updateCostPreview();
+  updateProductReadiness();
+}
+
+document.querySelector("#bridge-file-select")?.addEventListener("change", (event) => {
+  applyBridgeFileToProduct(event.currentTarget.value);
 });
 
 window.addEventListener("beforeunload", (event) => {
@@ -1021,94 +1075,6 @@ imageFileInput?.addEventListener("change", async () => {
   } finally {
     uploadImageBtn.disabled = false;
     uploadImageBtn.textContent = originalText;
-  }
-});
-
-// ── Direct upload of a print-ready slice file (e.g. .gcode.3mf) ──────
-// Same signed-upload pattern as images, but raw resource type + a server-side
-// extraction step (POST /api/print-files) after the Cloudinary upload finishes.
-const MAX_PRINT_FILE_BYTES = 50 * 1024 * 1024;
-
-async function uploadPrintFile(file) {
-  const sig = await api("/api/uploads?type=print");
-  const form = new FormData();
-  form.append("file", file);
-  form.append("api_key", sig.apiKey);
-  form.append("timestamp", sig.timestamp);
-  form.append("folder", sig.folder);
-  form.append("signature", sig.signature);
-
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    let message;
-    try { message = (await res.json()).error?.message; } catch { message = res.statusText; }
-    throw new Error(message || "העלאת קובץ ההדפסה נכשלה");
-  }
-  const data = await res.json();
-  const extraction = await api("/api/print-files", {
-    method: "POST",
-    body: JSON.stringify({ url: data.secure_url, filename: file.name }),
-  });
-  return extraction;
-}
-
-const uploadPrintFileBtn = document.querySelector("#upload-print-file-btn");
-const printFileInput     = document.querySelector("#print-file-input");
-uploadPrintFileBtn?.addEventListener("click", () => printFileInput?.click());
-printFileInput?.addEventListener("change", async () => {
-  const file = printFileInput.files?.[0];
-  printFileInput.value = ""; // allow re-selecting the same file later
-  if (!file) return;
-  if (file.size > MAX_PRINT_FILE_BYTES) {
-    alert("הקובץ גדול מדי (מקסימום 50MB).");
-    return;
-  }
-
-  const originalText = uploadPrintFileBtn.textContent;
-  uploadPrintFileBtn.disabled = true;
-  uploadPrintFileBtn.textContent = "מעלה…";
-  try {
-    const result = await uploadPrintFile(file);
-
-    productForm.elements["printHours"].value   = result.printHours ?? 0;
-    productForm.elements["printProfile"].value = result.printProfile ?? "regular";
-    productForm.elements["purgeGrams"].value   = result.purgeGrams ?? 0;
-    // A fresh upload is an explicit new intent — replace the material rows
-    // with the newly extracted weights (the admin still picks a filament per row).
-    const materialsContainer = document.querySelector("#product-materials-rows");
-    materialsContainer?.replaceChildren();
-    (result.materialGrams ?? []).forEach((grams) => addMaterialRow("", grams));
-
-    productForm.elements["printFileUrl"].value        = result.url ?? "";
-    productForm.elements["printFileName"].value       = result.filename ?? file.name;
-    productForm.elements["printFileChecksum"].value   = result.checksum ?? "";
-    productForm.elements["printFileUploadedAt"].value = new Date().toISOString();
-
-    const printFileStatus = document.querySelector("#print-file-status");
-    if (printFileStatus) {
-      printFileStatus.textContent = `קובץ מצורף: ${productForm.elements["printFileName"].value} — העלאת קובץ חדש תחליף אותו.`;
-    }
-
-    const importSummary = document.querySelector("#product-import-summary");
-    if (importSummary) {
-      const grams = (result.materialGrams ?? []).reduce((sum, value) => sum + Number(value || 0), 0);
-      const warnings = (result.warnings ?? []).length ? ` אזהרות: ${result.warnings.join("; ")}` : "";
-      const purge = Number(result.purgeGrams || 0);
-      const purgeSummary = purge > 0 ? ` ועוד ${purge.toFixed(2)} גרם purge` : "";
-      importSummary.textContent = `נקלט מקובץ שהועלה: ${Number(result.printHours || 0).toFixed(2)} שעות, ${grams.toFixed(2)} גרם${purgeSummary}.${warnings}`;
-      importSummary.hidden = false;
-    }
-
-    updateCostPreview();
-    updateProductReadiness();
-  } catch (err) {
-    alert(`העלאת קובץ ההדפסה נכשלה: ${err.message}`);
-  } finally {
-    uploadPrintFileBtn.disabled = false;
-    uploadPrintFileBtn.textContent = originalText;
   }
 });
 

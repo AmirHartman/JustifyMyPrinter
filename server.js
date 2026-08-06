@@ -9,7 +9,9 @@ const app = express();
 // Parse JSON bodies. The _middleware.js parseBody() fast-path checks
 // req.body first, so express.json() here makes all handlers work without
 // any changes to the existing API files.
-app.use(express.json());
+// Bridge inventory sync can contain several thousand metadata-only records;
+// keep the limit bounded while allowing it to pass the default 100kb parser cap.
+app.use(express.json({ limit: '2mb' }));
 
 // ── API routes ────────────────────────────────────────────────────────────────
 // Each handler exports a single (req, res) function, the same signature
@@ -35,6 +37,7 @@ app.all('/api/feedback',      require('./api/feedback'));
 app.all('/api/maintenance',   require('./api/maintenance'));
 app.all('/api/maintenance-items', require('./api/maintenance-items'));
 app.all('/api/print-files',   require('./api/print-files'));
+app.all('/api/bridge-files',  require('./api/bridge-files'));
 app.all('/api/print-jobs',    require('./api/print-jobs'));
 app.all('/api/printer',       require('./api/printer'));
 app.all('/api/uploads',       require('./api/uploads'));

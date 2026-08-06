@@ -10,6 +10,7 @@
   },
   "engines": { "node": ">=20" },
   "dependencies": {
+    "adm-zip": "0.5.16",
     "basic-ftp": "^5.0.5",
     "mqtt": "^5.10.1"
   }
