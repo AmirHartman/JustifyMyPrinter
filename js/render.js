@@ -513,7 +513,18 @@ function renderPrintJobs() {
 
 // ── Public entry point ────────────────────────────────────────
 
+function renderDataLoadWarning() {
+  const warning = document.querySelector("#data-load-warning");
+  if (!warning) return;
+  const failures = Array.isArray(store.dataLoadFailures) ? store.dataLoadFailures : [];
+  warning.hidden = failures.length === 0;
+  warning.textContent = failures.length
+    ? `חלק מהמידע לא נטען כרגע: ${failures.join(", ")}. הנתונים הזמינים מוצגים כרגיל.`
+    : "";
+}
+
 export function render() {
+  renderDataLoadWarning();
   renderCatalog();
   renderCart();
   renderCartBadge();

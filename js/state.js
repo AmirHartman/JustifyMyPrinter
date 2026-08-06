@@ -23,6 +23,7 @@ export const store = {
   printer:        null,      // admin only: P2S state + bridge heartbeat
   bridgeFiles:    [],        // admin only: metadata for files stored on the local bridge
   bridge:         null,      // admin only: last local bridge inventory/health state
+  dataLoadFailures: [],      // labels for independently failed dashboard data sources
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -31,24 +32,35 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
+  const failures = [];
+  const safe = async (label, request, fallback) => {
+    try {
+      return await request;
+    } catch (error) {
+      failures.push(label);
+      console.warn(`Failed to load ${label}:`, error);
+      return fallback;
+    }
+  };
+
   const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback, printJobs, printer, bridgeFilesResponse] = await Promise.all([
-    api("/api/products"),
-    api("/api/categories"),
-    isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
-    isAdmin      ? api("/api/users")                   : Promise.resolve([]),
-    isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
-    isAdmin      ? api("/api/filaments")                  : Promise.resolve([]),
-    isAdmin      ? api("/api/settings?key=pricing")    : Promise.resolve(null),
-    store.currentUser ? api("/api/settings?key=contact") : Promise.resolve(null),
-    isAdmin      ? api("/api/expenses")                : Promise.resolve([]),
-    isAdmin      ? api("/api/insights")                : Promise.resolve(null),
-    isAdmin      ? api("/api/goals")                   : Promise.resolve([]),
-    isAdmin      ? api("/api/ledger")                  : Promise.resolve([]),
-    !isAdmin     ? api("/api/transparency").catch(() => null) : Promise.resolve(null),
-    isAdmin      ? api("/api/feedback")                : Promise.resolve([]),
-    isAdmin      ? api("/api/print-jobs")              : Promise.resolve([]),
-    isAdmin      ? api("/api/printer")                 : Promise.resolve(null),
-    isAdmin      ? api("/api/bridge-files")            : Promise.resolve({ files: [], bridge: null }),
+    safe("מוצרים", api("/api/products"), []),
+    safe("קטגוריות", api("/api/categories"), []),
+    isAdmin      ? safe("הזמנות", api("/api/orders"), [])                       : Promise.resolve([]),
+    isAdmin      ? safe("משתמשים", api("/api/users"), [])                       : Promise.resolve([]),
+    isFriendMode ? safe("ההזמנות שלי", api("/api/orders?mine=true"), [])        : Promise.resolve([]),
+    isAdmin      ? safe("פילמנטים", api("/api/filaments"), [])                  : Promise.resolve([]),
+    isAdmin      ? safe("הגדרות תמחור", api("/api/settings?key=pricing"), null)  : Promise.resolve(null),
+    store.currentUser ? safe("פרטי קשר", api("/api/settings?key=contact"), null) : Promise.resolve(null),
+    isAdmin      ? safe("הוצאות", api("/api/expenses"), [])                     : Promise.resolve([]),
+    isAdmin      ? safe("תובנות", api("/api/insights"), null)                   : Promise.resolve(null),
+    isAdmin      ? safe("יעדים", api("/api/goals"), [])                         : Promise.resolve([]),
+    isAdmin      ? safe("יומן כספי", api("/api/ledger"), [])                    : Promise.resolve([]),
+    !isAdmin     ? safe("שקיפות", api("/api/transparency"), null)               : Promise.resolve(null),
+    isAdmin      ? safe("משוב", api("/api/feedback"), [])                       : Promise.resolve([]),
+    isAdmin      ? safe("משימות הדפסה", api("/api/print-jobs"), [])             : Promise.resolve([]),
+    isAdmin      ? safe("מצב מדפסת", api("/api/printer"), null)                 : Promise.resolve(null),
+    isAdmin      ? safe("קובצי הגשר", api("/api/bridge-files"), { files: [], bridge: null }) : Promise.resolve({ files: [], bridge: null }),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -68,6 +80,7 @@ export async function loadData() {
   store.printer          = printer;
   store.bridgeFiles      = bridgeFilesResponse?.files ?? [];
   store.bridge           = bridgeFilesResponse?.bridge ?? null;
+  store.dataLoadFailures = [...new Set(failures)];
 }
 
 export function findProduct(productId) {

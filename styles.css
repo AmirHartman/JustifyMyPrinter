@@ -994,6 +994,16 @@ body[data-mode="admin"] .app-shell {
   width: min(1880px, calc(100% - 40px));
 }
 
+.data-load-warning {
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid #e1b56a;
+  border-radius: 0.75rem;
+  background: #fff6e5;
+  color: #6f4708;
+  font-weight: 700;
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;
