@@ -122,8 +122,8 @@ async function deductOrderInventory(sql, order, status) {
 // internal orders and deducts filament inventory. The ledger insert and the
 // deduction are each independently idempotent (unique index on
 // owner_ledger(order_id, kind); the inventory_deducted claim-CTE), so a
-// duplicate call is safe. Both the orders PUT handler and the print-jobs bridge
-// report handler route completion through here so deduction lives in one place.
+// duplicate call is safe. Order completion routes through this helper so the
+// inventory deduction and the self-print ledger entry stay in one place.
 async function finalizeOrder(sql, order, status) {
   if (status === 'completed' && order?.internal) {
     await sql`INSERT INTO owner_ledger (id, kind, description, amount, order_id)

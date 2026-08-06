@@ -31,7 +31,6 @@
           <div class="admin-nav-menu" id="admin-nav-menu" aria-label="כלי ניהול" hidden>
             <a class="global-tab admin-nav-link" href="dashboard.html#overview" data-view="overview">סקירה</a>
             <a class="global-tab admin-nav-link" href="dashboard.html#orders" data-view="orders">הזמנות <span class="tab-badge" id="new-orders-badge" hidden></span></a>
-            <a class="global-tab admin-nav-link" href="dashboard.html#printer" data-view="printer">מדפסת <span class="tab-badge" id="print-jobs-badge" hidden></span></a>
             <a class="global-tab admin-nav-link" href="dashboard.html#products" data-view="products">מוצרים</a>
             <a class="global-tab admin-nav-link" href="dashboard.html#users" data-view="users">משתמשים <span class="tab-badge" id="pending-tab-badge" hidden></span></a>
             <a class="global-tab admin-nav-link" href="dashboard.html#finance" data-view="finance">כספים</a>
@@ -190,37 +189,6 @@
 
         <div class="orders-groups" id="orders-groups"></div>
         <p class="empty-state" id="orders-empty">אין עדיין הזמנות.</p>
-      </section>
-
-      <!-- ── Printer: printer state, job timeline and the print queue ── -->
-      <section class="view" id="printer-view" aria-labelledby="printer-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="printer-title">מדפסת</h2>
-            <p>מצב המדפסת, משימות ההדפסה וההזמנות שממתינות לתורן.</p>
-          </div>
-        </div>
-        <section class="print-jobs-panel" id="print-jobs-panel" hidden>
-          <div class="section-heading section-heading--sub">
-            <div>
-              <h3>המדפסת ומשימות ההדפסה</h3>
-              <p class="form-hint">שום משימה לא נשלחת לגשר לפני אישור ידני. המדפסת נשארת בעבודה עד שתפנה את המשטח ותסמן אותה כפנויה.</p>
-            </div>
-          </div>
-          <div class="printer-status" id="printer-status" role="status" aria-live="polite"></div>
-          <h4 class="print-jobs-list-title">ציר משימות</h4>
-          <div id="print-jobs-list"></div>
-        </section>
-
-        <section class="print-queue-panel" id="print-queue-panel" hidden>
-          <div class="section-heading section-heading--sub">
-            <div>
-              <h3>הזמנות שממתינות להדפסה</h3>
-              <p class="form-hint">כל הזמנה בסטטוס "ממתין להדפסה". יצירת משימה דורשת קובץ הדפסה פרוס למוצר.</p>
-            </div>
-          </div>
-          <div id="print-queue-list"></div>
-        </section>
       </section>
 
       <!-- ── Products ── -->

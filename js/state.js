@@ -19,8 +19,6 @@ export const store = {
   ledger:         [],
   transparency:   null,      // aggregate public-safe project data, when the endpoint is available
   feedback:       [],        // admin only: bug reports & improvement suggestions
-  printJobs:      [],        // admin only: live one-click print jobs (bridge state)
-  printer:        null,      // admin only: P2S state + bridge heartbeat
 };
 
 export const pageName = document.body.dataset.page || "app";
@@ -29,7 +27,7 @@ export async function loadData() {
   const isAdmin      = store.appMode === "admin";
   const isFriendMode = store.currentUser && !isAdmin;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback, printJobs, printer] = await Promise.all([
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback] = await Promise.all([
     api("/api/products"),
     api("/api/categories"),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
@@ -44,8 +42,6 @@ export async function loadData() {
     isAdmin      ? api("/api/ledger")                  : Promise.resolve([]),
     !isAdmin     ? api("/api/transparency").catch(() => null) : Promise.resolve(null),
     isAdmin      ? api("/api/feedback")                : Promise.resolve([]),
-    isAdmin      ? api("/api/print-jobs")              : Promise.resolve([]),
-    isAdmin      ? api("/api/printer")                 : Promise.resolve(null),
   ]);
   store.products       = products;
   store.categories     = categories;
@@ -61,8 +57,6 @@ export async function loadData() {
   store.ledger           = ledger;
   store.transparency     = transparency;
   store.feedback         = feedback;
-  store.printJobs        = printJobs;
-  store.printer          = printer;
 }
 
 export function findProduct(productId) {

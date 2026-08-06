@@ -335,30 +335,22 @@ Dashboard widgets:
 - future: low filament warnings;
 - users waiting for approval;
 - products missing price/photo/info.
-- home-printer state (idle/busy), bridge connectivity, current print progress,
-  and a per-job event timeline.
 
 Quick actions:
 - add product;
 - add expense;
 - mark multiple orders from a friend as paid;
 - WhatsApp friends with ready orders.
-- create a self-print or order print job, approve it manually before the local
-  bridge may claim it, cancel before printing begins, and mark the printer idle
-  after the owner clears the bed.
 
-Admin management pages: orders, printer, products, users, categories,
+Admin management pages: orders, products, users, categories,
 income/expenses, transparency/goals, future: filament/colors/inventory, future:
 WhatsApp templates.
 
-The orders page and the printer page are deliberately separate jobs:
-- **Orders** — open orders only by default, grouped by friend. Each group shows
-  the money (cost, profit, debt, total), a readiness chip (not printed /
-  partially ready / all printed), bulk mark-as-paid and a WhatsApp payment
-  summary, over the individual product cards.
-- **Printer** — printer and bridge state, the print-job timeline with manual
-  approval and cancellation, and the queue of orders waiting to print with a
-  one-click "create print job" per order.
+The orders page shows open orders by default, grouped by friend. Each group
+shows the money (cost, profit, debt, total), a readiness chip (not printed /
+partially ready / all printed), bulk mark-as-paid and a WhatsApp payment
+summary over the individual product cards. Printing progress is updated
+manually through the order status controls.
 
 ## 10. Personal area
 
@@ -454,8 +446,7 @@ Post-release (can wait):
 - file uploads;
 - advanced inventory;
 - monthly reports;
-- physical-printer FTPS/MQTT hardening, firmware compatibility, and AMS-slot
-  mapping beyond the verified simulated bridge flow;
+- optional local-printer automation and hardware integration;
 - online payment;
 - automatic WhatsApp notifications;
 - friend-submitted idea board;

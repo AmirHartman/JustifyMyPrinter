@@ -289,70 +289,6 @@ module.exports = async (req, res) => {
       VALUES ('initial-printer-investment', 'investment', 'מדפסת Bambu Lab P2S', 4300)
       ON CONFLICT (id) DO NOTHING`;
 
-    // ── Print jobs (one-click print) ──────────────────────────
-    // The printer/bridge state machine layered on top of an order. Every job is
-    // backed by an order (customer order, or an internal order auto-created for a
-    // self-print), so all filament deduction stays on the single order owner and
-    // this table never touches the filaments table directly.
-    await sql`
-      CREATE TABLE IF NOT EXISTS print_jobs (
-        id TEXT PRIMARY KEY,
-        source TEXT NOT NULL DEFAULT 'self',
-        order_id TEXT,
-        product_id TEXT NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 1,
-        selected_colors JSONB NOT NULL DEFAULT '[]',
-        status TEXT NOT NULL DEFAULT 'queued',
-        progress NUMERIC(5,2) NOT NULL DEFAULT 0,
-        error_reason TEXT NOT NULL DEFAULT '',
-        production_cost NUMERIC(10,2),
-        material_grams NUMERIC(10,2),
-        print_hours NUMERIC(10,2),
-        print_file_url TEXT NOT NULL DEFAULT '',
-        print_file_name TEXT NOT NULL DEFAULT '',
-        print_file_checksum TEXT NOT NULL DEFAULT '',
-        claimed_by TEXT,
-        claimed_at TIMESTAMPTZ,
-        started_at TIMESTAMPTZ,
-        finished_at TIMESTAMPTZ,
-        printer_name TEXT NOT NULL DEFAULT '',
-        created_by TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
-    // Manual approval gate + a per-job event timeline for full transparency.
-    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS events JSONB NOT NULL DEFAULT '[]'`;
-    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`;
-    await sql`ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS approved_by TEXT`;
-    await sql`CREATE INDEX IF NOT EXISTS print_jobs_status_created_idx ON print_jobs(status, created_at)`;
-    await sql`CREATE INDEX IF NOT EXISTS print_jobs_order_id_idx ON print_jobs(order_id)`;
-    // At most one live job per order (double-print guard). Includes the new
-    // awaiting_approval state, so a job pending approval already reserves the order.
-    await sql`DROP INDEX IF EXISTS print_jobs_active_order_idx`;
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_active_order_idx ON print_jobs(order_id)
-      WHERE order_id IS NOT NULL AND status IN ('awaiting_approval', 'queued', 'claimed', 'uploading', 'printing')`;
-    // Global guard: at most one job may occupy the single printer at a time.
-    await sql`CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_single_active_idx ON print_jobs((1))
-      WHERE status IN ('claimed', 'uploading', 'printing')`;
-
-    // ── Printer state (single physical Bambu P2S) ─────────────
-    // Operational state the owner controls: the printer goes busy when the bridge
-    // takes a job and is returned to idle manually after the bed is cleared. The
-    // bridge heartbeats bridge_seen_at on every poll so the site can show it online.
-    await sql`
-      CREATE TABLE IF NOT EXISTS printers (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL DEFAULT 'Bambu Lab P2S',
-        state TEXT NOT NULL DEFAULT 'idle',
-        current_job_id TEXT,
-        bridge_seen_at TIMESTAMPTZ,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
-    await sql`INSERT INTO printers (id, name, state) VALUES ('p2s', 'Bambu Lab P2S', 'idle')
-      ON CONFLICT (id) DO NOTHING`;
-
     const SEED_FILAMENTS = [
       { id: 'filament-black-pla', manufacturer: 'eSun', materialType: 'PLA', colorName: 'Black', colorHex: '#111111', pricePerKg: 80 },
       { id: 'filament-white-pla', manufacturer: 'eSun', materialType: 'PLA', colorName: 'White', colorHex: '#ffffff', pricePerKg: 80 },
@@ -472,7 +408,7 @@ module.exports = async (req, res) => {
 
     res.json({
       ok: true,
-      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories', 'feedback', 'print_jobs', 'printers'],
+      tables: ['users', 'products', 'orders', 'sessions', 'filaments', 'settings', 'expenses', 'categories', 'feedback'],
       demoDataSeeded: seedDemoData,
       demoUsersSeeded: demoUsers.length > 0,
       adminBootstrap: canBootstrapAdmin ? (adminCreated ? 'created' : 'already-exists') : 'skipped',
