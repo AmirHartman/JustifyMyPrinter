@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מדפסת לחברים - שקיפות הפרויקט</title>
+    <meta name="description" content="מצב מדפסת החברים, חומרים זמינים, יעדי צמיחה והשקעות שפורסמו בשקיפות." />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-auth="signed-out" data-entry="public" data-role="friend" data-mode="friend" data-page="transparency">
+    <a class="skip-link" href="#main-content">דילוג לתוכן המרכזי</a>
+    <nav class="global-tabs">
+      <div class="global-tabs-group global-tabs-primary">
+        <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
+        <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+        <a class="global-tab" href="transparency.html" data-tab="transparency">הפרויקט</a>
+      </div>
+      <div class="global-tabs-group global-tabs-account">
+        <div class="global-tabs-admin admin-only">
+          <button class="admin-nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav-menu">כלי ניהול</button>
+          <div class="admin-nav-menu" id="admin-nav-menu" aria-label="כלי ניהול" hidden>
+            <a class="global-tab admin-nav-link" href="dashboard.html#overview" data-view="overview">סקירה</a><a class="global-tab admin-nav-link" href="dashboard.html#orders" data-view="orders">הזמנות</a><a class="global-tab admin-nav-link" href="dashboard.html#printer" data-view="printer">מדפסת</a><a class="global-tab admin-nav-link" href="dashboard.html#products" data-view="products">מוצרים</a><a class="global-tab admin-nav-link" href="dashboard.html#users" data-view="users">משתמשים</a><a class="global-tab admin-nav-link" href="dashboard.html#finance" data-view="finance">כספים</a><a class="global-tab admin-nav-link" href="dashboard.html#materials" data-view="materials">חומרים ותחזוקה</a><a class="global-tab admin-nav-link" href="dashboard.html#feedback" data-view="feedback">משוב</a><a class="global-tab admin-nav-link" href="dashboard.html#settings" data-view="settings">הגדרות</a>
+          </div>
+        </div>
+        <a class="global-tab" href="welcome.html" data-tab="welcome">האזור שלי</a>
+        <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
+      </div>
+    </nav>
+
+    <main class="transparency-shell" id="main-content">
+      <section class="transparency-hero" aria-labelledby="transparency-title">
+        <div>
+          <p class="eyebrow">הפרויקט של כולנו</p>
+          <h1 id="transparency-title">שקיפות הפרויקט</h1>
+          <p id="project-status-message">כאן אפשר לראות איך מדפסת החברים מתקדמת, אילו חומרים זמינים ולאן התמיכה חוזרת.</p>
+          <div class="project-status-line">
+            <span class="project-status-chip" id="project-status-chip">טוען מצב…</span>
+            <span id="project-lead-time" hidden></span>
+            <span id="project-updated-at" hidden></span>
+          </div>
+        </div>
+        <div class="transparency-hero-note">
+          <strong>כל הזמנה פותחת עוד אפשרויות</strong>
+          <p>המחיר החברי מכסה את ההדפסה ועוזר לחומרים, לתחזוקה ולשיפורים קטנים להצטבר בהדרגה.</p>
+        </div>
+      </section>
+
+      <section class="transparency-section" aria-labelledby="snapshot-title">
+        <div class="transparency-heading">
+          <div><p class="eyebrow">במבט אחד</p><h2 id="snapshot-title">תמונת מצב</h2></div>
+        </div>
+        <div class="project-metrics" id="project-metrics" aria-live="polite"></div>
+      </section>
+
+      <section class="transparency-section" aria-labelledby="materials-public-title">
+        <div class="transparency-heading">
+          <div><p class="eyebrow">על המדף</p><h2 id="materials-public-title">חומרים וצבעים</h2></div>
+          <p>הכמות מוצגת באופן כללי בלבד. זמינות סופית נבדקת לפי המוצר והכמות לפני ההדפסה.</p>
+        </div>
+        <div class="public-materials-grid" id="public-materials-grid"></div>
+        <p class="transparency-empty" id="public-materials-empty" hidden>עדיין לא פורסמו חומרים זמינים.</p>
+      </section>
+
+      <section class="transparency-section transparency-finance" aria-labelledby="support-title">
+        <div class="transparency-heading">
+          <div><p class="eyebrow">צומחים יחד</p><h2 id="support-title">תמיכה, יעדים והשקעה חוזרת</h2></div>
+          <p>מוצגים רק סכומים מצטברים ורשומות שאמיר סימן במפורש לפרסום.</p>
+        </div>
+        <div class="public-goals" id="public-goals"></div>
+        <div class="public-investments" id="public-investments"></div>
+      </section>
+
+      <section class="transparency-section" id="project-updates-section" aria-labelledby="project-updates-title" hidden>
+        <div class="transparency-heading">
+          <div><p class="eyebrow">מה חדש</p><h2 id="project-updates-title">עדכוני הפרויקט</h2></div>
+        </div>
+        <div class="project-updates" id="project-updates"></div>
+      </section>
+
+      <section class="transparency-cta" aria-labelledby="transparency-cta-title">
+        <div>
+          <p class="eyebrow">יש לכם רעיון?</p>
+          <h2 id="transparency-cta-title">ההדפסה הבאה יכולה להתחיל מכם</h2>
+          <p>התחברו לקטלוג, בחרו משהו קיים או שלחו רעיון חדש לבדיקה.</p>
+        </div>
+        <a class="primary-button" id="transparency-catalog-link" href="dashboard.html">כניסה לקטלוג</a>
+      </section>
+
+      <p class="transparency-error" id="transparency-error" role="status" hidden>לא הצלחנו לטעון כרגע את נתוני הפרויקט. אפשר לנסות שוב מאוחר יותר.</p>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

@@ -59,7 +59,7 @@ app.use((req, res, next) => {
 });
 
 // HTML pages
-const HTML_PAGES = ['index.html', 'welcome.html', 'dashboard.html'];
+const HTML_PAGES = ['index.html', 'welcome.html', 'transparency.html', 'dashboard.html'];
 app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 // The catalog and the cart are for signed-in friends only, so each is session
 // gated here rather than served from the plain HTML_PAGES list. They stay two

@@ -3,14 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>מדפסת לחברים - האזור האישי</title>
+    <title>מדפסת לחברים - האזור שלי</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-auth="signed-out" data-entry="app" data-role="friend" data-mode="friend" data-page="welcome">
+    <a class="skip-link" href="#main-content">דילוג לתוכן המרכזי</a>
     <nav class="global-tabs">
       <div class="global-tabs-group global-tabs-primary">
         <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
         <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+        <a class="global-tab" href="transparency.html" data-tab="transparency">הפרויקט</a>
       </div>
       <div class="global-tabs-group global-tabs-account">
         <div class="global-tabs-admin admin-only">
@@ -19,13 +21,13 @@
             <a class="global-tab admin-nav-link" href="dashboard.html#overview" data-view="overview">סקירה</a><a class="global-tab admin-nav-link" href="dashboard.html#orders" data-view="orders">הזמנות</a><a class="global-tab admin-nav-link" href="dashboard.html#products" data-view="products">מוצרים</a><a class="global-tab admin-nav-link" href="dashboard.html#users" data-view="users">משתמשים</a><a class="global-tab admin-nav-link" href="dashboard.html#finance" data-view="finance">כספים</a><a class="global-tab admin-nav-link" href="dashboard.html#materials" data-view="materials">חומרים ותחזוקה</a><a class="global-tab admin-nav-link" href="dashboard.html#feedback" data-view="feedback">משוב</a><a class="global-tab admin-nav-link" href="dashboard.html#settings" data-view="settings">הגדרות</a>
           </div>
         </div>
-        <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+        <a class="global-tab" href="welcome.html" data-tab="welcome">האזור שלי</a>
         <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
       </div>
     </nav>
     <header class="topbar">
       <div>
-        <p class="eyebrow">האזור האישי שלך</p>
+        <p class="eyebrow">האזור שלי</p>
         <h1>מדפסת לחברים</h1>
       </div>
       <div class="topbar-actions">
@@ -36,16 +38,16 @@
       </div>
     </header>
 
-    <main class="workspace-shell">
+    <main class="workspace-shell" id="main-content">
 
       <div class="ws-pending-banner" id="ws-account-banner" role="status" hidden>
         <strong id="ws-account-title"></strong>
         <p id="ws-account-message"></p>
       </div>
 
-      <section class="ws-card ws-card-full" id="ws-transparency-card" hidden aria-labelledby="ws-transparency-title">
-        <div class="ws-card-head"><h3 id="ws-transparency-title">שקיפות הפרויקט</h3></div>
-        <div id="ws-transparency-content"></div>
+      <section class="ws-card ws-card-full ws-attention-card" id="ws-attention-card" hidden aria-labelledby="ws-attention-title">
+        <div class="ws-card-head"><h3 id="ws-attention-title">מחכה לפעולה שלך</h3></div>
+        <div class="ws-attention-list" id="ws-attention-list"></div>
       </section>
 
       <!-- ── Hero ── -->
@@ -66,6 +68,22 @@
           <span>בדרך כלל התשובה היא: אולי. וזה כבר מספיק מעניין כדי לבדוק.</span>
         </div>
       </section>
+
+      <section class="ws-summary" aria-label="סיכום אישי">
+        <article><span>הזמנות פתוחות</span><strong id="ws-summary-open">0</strong></article>
+        <article><span>נותר לתשלום</span><strong id="ws-summary-due">₪0</strong></article>
+        <article><span>מוכנות לאיסוף</span><strong id="ws-summary-ready">0</strong></article>
+        <article><span>התמיכה שלך בפרויקט</span><strong id="ws-summary-support">₪0</strong></article>
+      </section>
+
+      <aside class="ws-project-link" aria-labelledby="ws-project-link-title">
+        <div>
+          <p class="eyebrow">התמונה המשותפת</p>
+          <h2 id="ws-project-link-title">רוצים לראות איך הפרויקט מתקדם?</h2>
+          <p>החומרים הזמינים, היעדים והרכישות שפורסמו מחכים בעמוד נפרד שפתוח לכולם.</p>
+        </div>
+        <a class="ghost-button" href="transparency.html">לשקיפות הפרויקט</a>
+      </aside>
 
       <div class="workspace-grid">
 

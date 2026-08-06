@@ -1618,6 +1618,70 @@ document.querySelector("#ledger-form")?.addEventListener("submit", async (event)
   }, "שגיאה בשמירת הרשומה");
 });
 
+async function saveProjectSettings(value) {
+  const saved = await api("/api/settings?key=project", {
+    method: "PUT",
+    body: JSON.stringify(value),
+  });
+  store.projectSettings = saved;
+  render();
+  return saved;
+}
+
+document.querySelector("#project-settings-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const button = form.querySelector("[type='submit']");
+  const status = document.querySelector("#project-settings-save-status");
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "שומר...";
+  if (status) status.textContent = "";
+  try {
+    await saveProjectSettings({
+      ...store.projectSettings,
+      status: String(data.get("status") ?? "active"),
+      leadTime: String(data.get("leadTime") ?? "").trim(),
+      statusMessage: String(data.get("statusMessage") ?? "").trim(),
+      updates: store.projectSettings?.updates ?? [],
+    });
+    if (status) status.textContent = "מצב הפרויקט נשמר";
+  } catch (err) {
+    alert(`שגיאה בשמירת מצב הפרויקט: ${err.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+});
+
+document.querySelector("#project-update-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const button = form.querySelector("[type='submit']");
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "מפרסם...";
+  try {
+    await saveProjectSettings({
+      ...(store.projectSettings ?? {}),
+      updates: [{
+        title: String(data.get("title") ?? "").trim(),
+        body: String(data.get("body") ?? "").trim(),
+        publishedAt: String(data.get("publishedAt") ?? "").trim(),
+      }, ...(store.projectSettings?.updates ?? [])],
+    });
+    form.reset();
+    form.elements.publishedAt.value = new Date().toISOString().slice(0, 10);
+  } catch (err) {
+    alert(`שגיאה בפרסום העדכון: ${err.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+});
+
 // ── Contact settings form ─────────────────────────────────────
 document.querySelector("#contact-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1671,13 +1735,14 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
 
   // Admin visiting catalog or welcome is forced into friend mode so they see the friend UI.
   // Set this before loadData so admin data is not fetched needlessly on those pages.
-  if (["catalog", "welcome", "cart"].includes(pageName) && store.currentUser?.role === "admin") {
+  if (["catalog", "welcome", "cart", "transparency"].includes(pageName) && store.currentUser?.role === "admin") {
     store.appMode = "friend";
     applyMode();
   }
 
   const shouldLoadData = store.currentUser && ["app", "welcome", "catalog", "cart"].includes(pageName);
-  if (shouldLoadData) {
+  const shouldLoadPublicData = pageName === "transparency";
+  if (shouldLoadData || shouldLoadPublicData) {
     try {
       await loadData();
     } catch (err) {

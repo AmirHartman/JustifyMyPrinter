@@ -77,11 +77,13 @@ export function render() {
   renderCategoriesAdmin();
   renderActionQueue();
   renderWelcome();
+  renderTransparencyPage();
   renderFilaments();
   renderPricingForm();
   renderContactSettingsForm();
   renderExpenses();
   renderBusinessInsights();
+  renderProjectSettingsForm();
   renderFeedback();
   renderNotifications();
 }
@@ -2510,10 +2512,11 @@ function renderWelcome() {
   if (nameEl && store.currentUser) nameEl.textContent = store.currentUser.name;
 
   renderAccountStatus();
-  renderTransparency();
 
   const open = store.myOrders.filter((o) => !["completed", "cancelled"].includes(o.status));
   const past = store.myOrders.filter((o) => ["completed", "cancelled"].includes(o.status));
+
+  renderWelcomeSummary(open);
 
   const openCount = document.querySelector("#ws-open-count");
   if (openCount) {
@@ -2540,6 +2543,52 @@ function renderWelcome() {
     const note = document.querySelector("#ws-whatsapp-note");
     if (note) note.hidden = !whatsappLink.disabled;
   }
+}
+
+function renderWelcomeSummary(openOrders) {
+  const unpaidOpen = openOrders.filter((order) => !order.paid);
+  const setText = (selector, value) => {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = value;
+  };
+  setText("#ws-summary-open", String(openOrders.length));
+  setText("#ws-summary-due", formatCurrency(sumOrderAmounts(unpaidOpen)));
+  setText("#ws-summary-ready", String(openOrders.filter((order) => order.status === "ready_delivery").length));
+  setText("#ws-summary-support", formatCurrency(store.myOrders
+    .filter((order) => order.paid)
+    .reduce((total, order) => total + (Number(order.supportAmount) || 0), 0)));
+
+  const attentionCard = document.querySelector("#ws-attention-card");
+  const attentionList = document.querySelector("#ws-attention-list");
+  if (!attentionCard || !attentionList) return;
+  const items = [
+    {
+      count: openOrders.filter((order) => order.status === "waiting_approval" && order.requiresUserPriceApproval && !order.userApprovedPrice).length,
+      label: "מחיר שממתין לאישור שלך",
+    },
+    {
+      count: openOrders.filter((order) => order.colorAlternativeStatus === "pending").length,
+      label: "חלופת צבע שממתינה לאישור שלך",
+    },
+    {
+      count: openOrders.filter((order) => order.status === "ready_delivery").length,
+      label: "הזמנה שמוכנה לאיסוף",
+    },
+    {
+      count: unpaidOpen.filter((order) => order.status === "ready_delivery" && orderAmount(order) != null).length,
+      label: "הזמנה מוכנה עם תשלום פתוח",
+    },
+  ].filter((item) => item.count > 0);
+
+  attentionCard.hidden = items.length === 0;
+  attentionList.replaceChildren();
+  items.forEach((item) => {
+    const link = document.createElement("a");
+    link.className = "ws-attention-item";
+    link.href = "#ws-orders-card";
+    link.innerHTML = `<strong>${item.count}</strong><span>${escapeHtml(item.label)}</span><span aria-hidden="true">←</span>`;
+    attentionList.append(link);
+  });
 }
 
 // Totals span the whole checkout, so they are taken from store.myOrders rather
@@ -2689,30 +2738,165 @@ function renderAccountStatus() {
   banner.hidden = false;
 }
 
-function renderTransparency() {
-  const card = document.querySelector("#ws-transparency-card");
-  const content = document.querySelector("#ws-transparency-content");
+function formatPublicDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("he-IL", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function renderTransparencyPage() {
+  const metrics = document.querySelector("#project-metrics");
+  if (!metrics) return;
   const data = store.transparency;
-  if (!card || !content || !data) return;
-  card.hidden = false;
-  const metrics = [
-    ["סך התמיכה שנאספה", formatCurrency(data.totalSupport ?? 0)],
-    ["הושקע מחדש בפרויקט", formatCurrency(data.reinvestedAmount ?? 0)],
+  const error = document.querySelector("#transparency-error");
+  if (!data) {
+    if (error) error.hidden = false;
+    return;
+  }
+  if (error) error.hidden = true;
+
+  const project = data.project ?? {};
+  const statusLabels = { active: "הפרויקט פעיל", busy: "יש כרגע עומס", paused: "הפרויקט בהפסקה", maintenance: "המדפסת בתחזוקה" };
+  const statusChip = document.querySelector("#project-status-chip");
+  if (statusChip) {
+    statusChip.textContent = statusLabels[project.status] ?? statusLabels.active;
+    statusChip.dataset.status = project.status ?? "active";
+  }
+  const statusMessage = document.querySelector("#project-status-message");
+  if (statusMessage && project.statusMessage) statusMessage.textContent = project.statusMessage;
+  const leadTime = document.querySelector("#project-lead-time");
+  if (leadTime) {
+    leadTime.textContent = project.leadTime ? `זמן טיפול משוער: ${project.leadTime}` : "";
+    leadTime.hidden = !project.leadTime;
+  }
+  const updatedAt = document.querySelector("#project-updated-at");
+  const updatedLabel = formatPublicDate(project.updatedAt);
+  if (updatedAt) {
+    updatedAt.textContent = updatedLabel ? `עודכן לאחרונה: ${updatedLabel}` : "";
+    updatedAt.hidden = !updatedLabel;
+  }
+  const catalogLink = document.querySelector("#transparency-catalog-link");
+  if (catalogLink) {
+    catalogLink.href = store.currentUser ? "catalog.html" : "dashboard.html";
+    catalogLink.textContent = store.currentUser ? "לקטלוג המוצרים" : "כניסה לקטלוג";
+  }
+
+  const summaryMetrics = [
     ["הדפסות שהושלמו", String(data.completedPrints ?? 0)],
+    ["הושלמו החודש", String(data.completedThisMonth ?? 0)],
+    ["צבעים זמינים", String(data.availableMaterialCount ?? 0)],
+    ["תמיכה שנאספה", formatCurrency(data.totalSupport ?? 0)],
+    ["הושקע מחדש", formatCurrency(data.reinvestedAmount ?? 0)],
   ];
-  content.innerHTML = `<div class="business-summary-grid">${metrics.map(([label, value]) => `<article class="finance-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("")}</div>`;
-  (data.goals ?? []).forEach((goal) => {
-    const row = document.createElement("article"); row.className = "business-row";
-    row.innerHTML = `<span>${escapeHtml(goal.label ?? goal.name ?? "יעד")}</span><progress max="${Number(goal.targetAmount ?? goal.target ?? 0)}" value="${Number(goal.currentAmount ?? goal.saved ?? 0)}"></progress><strong>${formatCurrency(goal.currentAmount ?? goal.saved ?? 0)} / ${formatCurrency(goal.targetAmount ?? goal.target ?? 0)}</strong>`;
-    content.append(row);
-  });
-  if ((data.investments ?? []).length) {
-    const heading = document.createElement("h3"); heading.textContent = "רכישות והשקעות שפורסמו"; content.append(heading);
-    (data.investments ?? []).forEach((investment) => {
-      const row = document.createElement("article"); row.className = "business-row";
-      row.innerHTML = `<span>${escapeHtml(investment.label ?? "השקעה בפרויקט")}</span><strong>${formatCurrency(investment.amount ?? 0)}</strong>`;
-      content.append(row);
+  metrics.innerHTML = summaryMetrics.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("");
+
+  const materialsGrid = document.querySelector("#public-materials-grid");
+  const materialsEmpty = document.querySelector("#public-materials-empty");
+  const availabilityLabels = { available: "זמין", limited: "כמות מוגבלת", unavailable: "לא זמין כרגע" };
+  const materialDescriptions = { PLA: "מתאים לרוב ההדפסות", PETG: "עמיד יותר לחום ולשימוש", TPU: "גמיש", ABS: "חזק ועמיד" };
+  if (materialsGrid) {
+    materialsGrid.replaceChildren();
+    (data.materials ?? []).forEach((material) => {
+      const card = document.createElement("article");
+      card.className = "public-material-card";
+      card.dataset.availability = material.availability ?? "unavailable";
+      const safeColor = /^#[0-9a-f]{6}$/i.test(material.colorHex ?? "") ? material.colorHex : "#8b8b8b";
+      card.innerHTML = `
+        <span class="public-material-swatch" style="--material-color:${safeColor}" aria-hidden="true"></span>
+        <div><strong>${escapeHtml(material.colorName ?? "צבע ללא שם")}</strong><span>${escapeHtml(material.materialType ?? "חומר")}</span></div>
+        <p>${escapeHtml(materialDescriptions[material.materialType] ?? "חומר זמין לפי התאמה למוצר")}</p>
+        <span class="public-material-status">${escapeHtml(availabilityLabels[material.availability] ?? availabilityLabels.unavailable)}</span>
+      `;
+      materialsGrid.append(card);
     });
+  }
+  if (materialsEmpty) materialsEmpty.hidden = (data.materials ?? []).length > 0;
+
+  const goalsContainer = document.querySelector("#public-goals");
+  if (goalsContainer) {
+    goalsContainer.replaceChildren();
+    if ((data.goals ?? []).length) {
+      const heading = document.createElement("h3"); heading.textContent = "יעדים בתהליך"; goalsContainer.append(heading);
+    }
+  (data.goals ?? []).forEach((goal) => {
+      const target = Math.max(Number(goal.targetAmount ?? goal.target ?? 0), 0);
+      const current = Math.max(Number(goal.currentAmount ?? goal.saved ?? 0), 0);
+      const row = document.createElement("article"); row.className = "public-goal-card";
+      row.innerHTML = `<div><strong>${escapeHtml(goal.label ?? goal.name ?? "יעד")}</strong><span>${formatCurrency(current)} מתוך ${formatCurrency(target)}</span></div><progress max="${target || 1}" value="${Math.min(current, target || 1)}" aria-label="התקדמות יעד"></progress>`;
+      goalsContainer.append(row);
+  });
+  }
+
+  const investmentsContainer = document.querySelector("#public-investments");
+  if (investmentsContainer) investmentsContainer.replaceChildren();
+  if ((data.investments ?? []).length) {
+    const heading = document.createElement("h3"); heading.textContent = "רכישות והשקעות שפורסמו"; investmentsContainer?.append(heading);
+    (data.investments ?? []).forEach((investment) => {
+      const row = document.createElement("article"); row.className = "public-investment-row";
+      row.innerHTML = `<div><strong>${escapeHtml(investment.label ?? "השקעה בפרויקט")}</strong><span>${escapeHtml(formatPublicDate(investment.occurredAt))}</span></div><strong>${formatCurrency(investment.amount ?? 0)}</strong>`;
+      investmentsContainer?.append(row);
+    });
+  }
+
+  const updatesSection = document.querySelector("#project-updates-section");
+  const updatesContainer = document.querySelector("#project-updates");
+  const updates = project.updates ?? [];
+  if (updatesSection) updatesSection.hidden = updates.length === 0;
+  if (updatesContainer) {
+    updatesContainer.replaceChildren();
+    updates.forEach((update) => {
+      const article = document.createElement("article");
+      article.innerHTML = `<time datetime="${escapeHtml(update.publishedAt ?? "")}">${escapeHtml(formatPublicDate(update.publishedAt))}</time><h3>${escapeHtml(update.title)}</h3>${update.body ? `<p>${escapeHtml(update.body)}</p>` : ""}`;
+      updatesContainer.append(article);
+    });
+  }
+}
+
+function renderProjectSettingsForm() {
+  const form = document.querySelector("#project-settings-form");
+  if (!form || !store.projectSettings) return;
+  form.elements.status.value = store.projectSettings.status ?? "active";
+  form.elements.leadTime.value = store.projectSettings.leadTime ?? "";
+  form.elements.statusMessage.value = store.projectSettings.statusMessage ?? "";
+
+  const updateForm = document.querySelector("#project-update-form");
+  if (updateForm && !updateForm.elements.publishedAt.value) {
+    updateForm.elements.publishedAt.value = new Date().toISOString().slice(0, 10);
+  }
+  const list = document.querySelector("#project-updates-admin-list");
+  const empty = document.querySelector("#project-updates-admin-empty");
+  const updates = store.projectSettings.updates ?? [];
+  if (empty) empty.classList.toggle("is-visible", updates.length === 0);
+  if (!list) return;
+  list.replaceChildren();
+  updates.forEach((update) => {
+    const row = document.createElement("article");
+    row.className = "business-row project-update-admin-row";
+    row.innerHTML = `<div><strong>${escapeHtml(update.title)}</strong><span>${escapeHtml(update.body ?? "")}</span></div><time datetime="${escapeHtml(update.publishedAt ?? "")}">${escapeHtml(formatPublicDate(update.publishedAt))}</time>`;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost-button btn-sm user-delete-btn";
+    remove.textContent = "הסרה";
+    remove.addEventListener("click", () => deleteProjectUpdate(update.id));
+    row.append(remove);
+    list.append(row);
+  });
+}
+
+async function deleteProjectUpdate(updateId) {
+  if (!window.confirm("להסיר את העדכון מהעמוד הציבורי?")) return;
+  try {
+    store.projectSettings = await api("/api/settings?key=project", {
+      method: "PUT",
+      body: JSON.stringify({
+        ...store.projectSettings,
+        updates: (store.projectSettings?.updates ?? []).filter((update) => update.id !== updateId),
+      }),
+    });
+    render();
+  } catch (err) {
+    alert(`שגיאה בהסרת העדכון: ${err.message}`);
   }
 }
 

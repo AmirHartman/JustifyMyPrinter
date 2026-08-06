@@ -68,6 +68,9 @@ export function applyAuth() {
   document.querySelectorAll(".global-tab[data-tab='cart']").forEach((link) => {
     link.setAttribute("href", store.currentUser ? "cart.html" : "dashboard.html");
   });
+  document.querySelectorAll(".global-tab[data-tab='welcome']").forEach((link) => {
+    link.setAttribute("href", store.currentUser ? "welcome.html" : "dashboard.html");
+  });
 
   const userLabel = document.querySelector("#current-user");
   if (userLabel && store.currentUser) {
@@ -93,9 +96,9 @@ export function applyAuth() {
   const ideaButton = document.querySelector("#landing-idea-button");
   if (store.currentUser) {
     hero?.setAttribute("href", "welcome.html");
-    if (hero)  hero.textContent  = "לאזור האישי";
+    if (hero)  hero.textContent  = "לאזור שלי";
     final?.setAttribute("href", "welcome.html");
-    if (final) final.textContent = "לאזור האישי";
+    if (final) final.textContent = "לאזור שלי";
     catalogHero?.setAttribute("href", "catalog.html");
     if (catalogHero) catalogHero.textContent = "לצפייה בקטלוג";
     catalogFinal?.setAttribute("href", "catalog.html");

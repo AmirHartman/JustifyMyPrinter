@@ -18,6 +18,7 @@ export const store = {
   goals:          [],
   ledger:         [],
   transparency:   null,      // aggregate public-safe project data, when the endpoint is available
+  projectSettings: null,     // admin-managed public project status and update feed
   feedback:       [],        // admin only: bug reports & improvement suggestions
 };
 
@@ -25,11 +26,13 @@ export const pageName = document.body.dataset.page || "app";
 
 export async function loadData() {
   const isAdmin      = store.appMode === "admin";
-  const isFriendMode = store.currentUser && !isAdmin;
+  const isTransparencyPage = pageName === "transparency";
+  const isFriendMode = store.currentUser && !isAdmin && !isTransparencyPage;
+  const loadAuthenticatedAppData = Boolean(store.currentUser) && !isTransparencyPage;
 
-  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, feedback] = await Promise.all([
-    api("/api/products"),
-    api("/api/categories"),
+  const [products, categories, orders, users, myOrders, filaments, pricingSettings, contactSettings, expenses, insights, goals, ledger, transparency, projectSettings, feedback] = await Promise.all([
+    loadAuthenticatedAppData ? api("/api/products") : Promise.resolve([]),
+    loadAuthenticatedAppData ? api("/api/categories") : Promise.resolve([]),
     isAdmin      ? api("/api/orders")                  : Promise.resolve([]),
     isAdmin      ? api("/api/users")                   : Promise.resolve([]),
     isFriendMode ? api("/api/orders?mine=true")         : Promise.resolve([]),
@@ -40,7 +43,8 @@ export async function loadData() {
     isAdmin      ? api("/api/insights")                : Promise.resolve(null),
     isAdmin      ? api("/api/goals")                   : Promise.resolve([]),
     isAdmin      ? api("/api/ledger")                  : Promise.resolve([]),
-    !isAdmin     ? api("/api/transparency").catch(() => null) : Promise.resolve(null),
+    isTransparencyPage || !isAdmin ? api("/api/transparency").catch(() => null) : Promise.resolve(null),
+    isAdmin      ? api("/api/settings?key=project")    : Promise.resolve(null),
     isAdmin      ? api("/api/feedback")                : Promise.resolve([]),
   ]);
   store.products       = products;
@@ -56,6 +60,7 @@ export async function loadData() {
   store.goals            = goals;
   store.ledger           = ledger;
   store.transparency     = transparency;
+  store.projectSettings  = projectSettings;
   store.feedback         = feedback;
 }
 

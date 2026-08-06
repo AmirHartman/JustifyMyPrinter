@@ -1,8 +1,36 @@
+const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
 const { parseBody, requireAdmin } = require('./_middleware');
 const { mergedSettings, editableSettings } = require('./_pricing');
 
-const ALLOWED_KEYS = ['pricing', 'contact'];
+const ALLOWED_KEYS = ['pricing', 'contact', 'project'];
+const PROJECT_STATUSES = new Set(['active', 'busy', 'paused', 'maintenance']);
+
+function cleanText(value, maxLength) {
+  return String(value ?? '').trim().slice(0, maxLength);
+}
+
+function normalizeProject(value = {}, { touch = false } = {}) {
+  const status = PROJECT_STATUSES.has(value.status) ? value.status : 'active';
+  const updates = Array.isArray(value.updates)
+    ? value.updates.slice(0, 12).map((item) => ({
+        id: cleanText(item?.id, 80) || randomUUID(),
+        title: cleanText(item?.title, 100),
+        body: cleanText(item?.body, 500),
+        publishedAt: /^\d{4}-\d{2}-\d{2}$/.test(String(item?.publishedAt ?? ''))
+          ? String(item.publishedAt)
+          : new Date().toISOString().slice(0, 10),
+      })).filter((item) => item.title)
+    : [];
+
+  return {
+    status,
+    statusMessage: cleanText(value.statusMessage, 300),
+    leadTime: cleanText(value.leadTime, 100),
+    updates,
+    updatedAt: touch ? new Date().toISOString() : cleanText(value.updatedAt, 40) || null,
+  };
+}
 
 function publicContact(value = {}) {
   return {
@@ -25,6 +53,7 @@ module.exports = async (req, res) => {
       if (key === 'contact') return res.json(publicContact(rows[0]?.value));
       const user = await requireAdmin(req, res);
       if (!user) return;
+      if (key === 'project') return res.json(normalizeProject(rows[0]?.value));
       if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
       return res.json(mergedSettings(rows[0].value));
     } catch (err) {
@@ -40,6 +69,8 @@ module.exports = async (req, res) => {
       let value;
       if (key === 'contact') {
         value = publicContact(body);
+      } else if (key === 'project') {
+        value = normalizeProject(body, { touch: true });
       } else {
         const currentRows = await sql`SELECT value FROM settings WHERE key = ${key}`;
         const marginPercent = Number(body.marginPercent);

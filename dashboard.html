@@ -24,6 +24,7 @@
       <div class="global-tabs-group global-tabs-primary">
         <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
         <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+        <a class="global-tab" href="transparency.html" data-tab="transparency">הפרויקט</a>
       </div>
       <div class="global-tabs-group global-tabs-account">
         <div class="global-tabs-admin admin-only">
@@ -39,7 +40,7 @@
             <a class="global-tab admin-nav-link" href="dashboard.html#settings" data-view="settings">הגדרות</a>
           </div>
         </div>
-        <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+        <a class="global-tab" href="welcome.html" data-tab="welcome">האזור שלי</a>
         <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
       </div>
     </nav>
@@ -467,6 +468,7 @@
           <button class="sub-tab is-active" data-sub="finance-summary">סיכום</button>
           <button class="sub-tab" data-sub="finance-expenses">הוצאות</button>
           <button class="sub-tab" data-sub="finance-business">העסק</button>
+          <button class="sub-tab" data-sub="finance-project">שקיפות</button>
         </div>
 
         <div class="sub-view" id="finance-business-sub">
@@ -541,6 +543,58 @@
             </table>
           </div>
           <p class="empty-state" id="expenses-empty">אין הוצאות רשומות עדיין.</p>
+        </div>
+
+        <div class="sub-view" id="finance-project-sub">
+          <section class="project-admin-section" aria-labelledby="project-status-admin-title">
+            <div class="section-heading section-heading--sub">
+              <div>
+                <h3 id="project-status-admin-title">מצב ציבורי של הפרויקט</h3>
+                <p>המידע הזה מופיע בראש עמוד השקיפות ופתוח גם למי שאינו מחובר.</p>
+              </div>
+              <a class="ghost-button btn-sm" href="transparency.html">תצוגה ציבורית</a>
+            </div>
+            <form id="project-settings-form" class="product-form project-settings-form">
+              <label>
+                מצב נוכחי
+                <select name="status">
+                  <option value="active">פעיל</option>
+                  <option value="busy">עמוס</option>
+                  <option value="paused">בהפסקה</option>
+                  <option value="maintenance">בתחזוקה</option>
+                </select>
+              </label>
+              <label>
+                זמן טיפול משוער
+                <input name="leadTime" maxlength="100" placeholder="למשל: בדרך כלל עד שבוע" />
+              </label>
+              <label class="project-settings-message">
+                הודעה ציבורית
+                <textarea name="statusMessage" maxlength="300" rows="3" placeholder="עדכון קצר על מצב הפרויקט"></textarea>
+              </label>
+              <div class="side-drawer-actions project-settings-actions">
+                <button class="primary-button btn-sm" type="submit">שמירת מצב הפרויקט</button>
+                <span class="form-hint" id="project-settings-save-status" role="status"></span>
+              </div>
+            </form>
+          </section>
+
+          <section class="project-admin-section" aria-labelledby="project-updates-admin-title">
+            <div class="section-heading section-heading--sub">
+              <div>
+                <h3 id="project-updates-admin-title">עדכונים ציבוריים</h3>
+                <p>עדכונים קצרים על חומר חדש, שיפור, תחזוקה או יעד שהושלם.</p>
+              </div>
+            </div>
+            <form id="project-update-form" class="filament-inline-form project-update-form">
+              <input name="title" maxlength="100" required placeholder="כותרת העדכון" />
+              <input name="body" maxlength="500" placeholder="מה השתנה ולמה זה שימושי לחברים?" />
+              <input name="publishedAt" type="date" required aria-label="תאריך פרסום" />
+              <button class="primary-button btn-sm" type="submit">פרסום עדכון</button>
+            </form>
+            <div class="business-list project-updates-admin-list" id="project-updates-admin-list"></div>
+            <p class="empty-state" id="project-updates-admin-empty">אין עדיין עדכונים ציבוריים.</p>
+          </section>
         </div>
       </section>
 
