@@ -1249,6 +1249,61 @@ body[data-mode="admin"] .app-shell {
   flex-shrink: 0;
 }
 
+.category-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.category-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 140px;
+  padding: 18px;
+  color: var(--ink);
+  text-align: start;
+  font: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.category-picker-card:hover,
+.category-picker-card:focus-visible {
+  border-color: rgba(15, 127, 122, 0.5);
+  box-shadow: 0 10px 24px rgba(23, 33, 38, 0.1);
+  transform: translateY(-2px);
+}
+
+.category-picker-card strong {
+  color: var(--teal-dark);
+  font-size: var(--text-lg);
+}
+
+.category-picker-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.category-picker-count {
+  margin-top: auto;
+  padding-top: 14px;
+  color: var(--teal-dark);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.category-back {
+  margin-bottom: 10px;
+}
+
 .category-filters {
   display: flex;
   flex-wrap: wrap;
@@ -2108,6 +2163,7 @@ menu {
   .category-strip,
   .process-grid,
   .resource-grid,
+  .category-picker,
   .welcome-grid,
   .form-row,
   .summary-strip {

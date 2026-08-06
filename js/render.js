@@ -313,9 +313,22 @@ function ordersForUser(user) {
 
 // ── Catalog (friend view) ─────────────────────────────────────
 
-// Transient UI state — which category chip is selected. Not persisted in
-// store since it's a local view filter, not app data.
-let selectedCategoryId = null;
+// The category choice lives in the URL so refreshes, cart round-trips and the
+// browser back button preserve the catalog context.
+const ALL_CATEGORIES = "all";
+
+function selectedCategoryId() {
+  const value = new URLSearchParams(location.hash.replace(/^#/, "")).get("c");
+  return value || null;
+}
+
+function selectCategory(id) {
+  location.hash = id ? `c=${encodeURIComponent(id)}` : "";
+}
+
+function clearCategoryHash() {
+  history.replaceState(history.state, "", `${location.pathname}${location.search}`);
+}
 
 // Some iOS in-app browsers and restricted WebKit contexts deny Web Storage
 // access by throwing a SecurityError. Reorder state is a convenience only, so
@@ -338,33 +351,58 @@ function savePendingReorder(previous) {
   }
 }
 
-function renderCategoryFilters() {
+function renderCategoryPicker(categories) {
+  const container = document.querySelector("#category-picker");
+  if (!container) return;
+
+  container.replaceChildren(...categories.map((category) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "category-picker-card";
+
+    const name = document.createElement("strong");
+    name.textContent = category.name;
+    const count = document.createElement("span");
+    count.className = "category-picker-count";
+    count.textContent = category.count === 1 ? "מוצר אחד" : `${category.count} מוצרים`;
+    card.append(name);
+
+    if (category.description) {
+      const description = document.createElement("p");
+      description.textContent = category.description;
+      card.append(description);
+    }
+
+    card.append(count);
+    card.addEventListener("click", () => selectCategory(category.id));
+    return card;
+  }));
+}
+
+function renderCategoryFilters(categories, selectedId) {
   const container = document.querySelector("#category-filters");
   if (!container) return;
 
-  const activeCategories = store.categories.filter((c) => c.active !== false);
-  if (activeCategories.length === 0) { container.replaceChildren(); return; }
-
-  // Selected category may have been deactivated/deleted since last render.
-  if (selectedCategoryId && !activeCategories.some((c) => c.id === selectedCategoryId)) {
-    selectedCategoryId = null;
-  }
-
   container.replaceChildren();
+  if (categories.length === 0) return;
 
   const allChip = document.createElement("button");
   allChip.type = "button";
-  allChip.className = `category-chip${selectedCategoryId === null ? " is-active" : ""}`;
+  allChip.className = `category-chip${selectedId === ALL_CATEGORIES ? " is-active" : ""}`;
+  allChip.setAttribute("role", "tab");
+  allChip.setAttribute("aria-selected", String(selectedId === ALL_CATEGORIES));
   allChip.textContent = "הכל";
-  allChip.addEventListener("click", () => { selectedCategoryId = null; render(); });
+  allChip.addEventListener("click", () => selectCategory(ALL_CATEGORIES));
   container.append(allChip);
 
-  activeCategories.forEach((category) => {
+  categories.forEach((category) => {
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = `category-chip${selectedCategoryId === category.id ? " is-active" : ""}`;
+    chip.className = `category-chip${selectedId === category.id ? " is-active" : ""}`;
+    chip.setAttribute("role", "tab");
+    chip.setAttribute("aria-selected", String(selectedId === category.id));
     chip.textContent = category.name;
-    chip.addEventListener("click", () => { selectedCategoryId = category.id; render(); });
+    chip.addEventListener("click", () => selectCategory(category.id));
     container.append(chip);
   });
 }
@@ -385,12 +423,49 @@ function renderCatalog() {
   const cardTemplate = document.querySelector("#product-card-template");
   if (!catalogGrid || !cardTemplate) return;
 
-  renderCategoryFilters();
+  const activeCategories = store.categories.filter((category) => category.active !== false);
+  const activeCategoryIds = new Set(activeCategories.map((category) => category.id));
+  const eligibleProducts = store.products.filter((product) => product.catalogStatus !== "incomplete");
+  const catalogProducts = eligibleProducts.filter((product) =>
+    product.categoryIds?.some((id) => activeCategoryIds.has(id)));
+  const pickableCategories = activeCategories
+    .map((category) => ({
+      ...category,
+      count: catalogProducts.filter((product) => product.categoryIds?.includes(category.id)).length,
+    }))
+    .filter((category) => category.count > 0);
+  const useUncategorizedFallback = pickableCategories.length === 0;
 
-  let visibleProducts = store.products.filter((product) => product.catalogStatus !== "incomplete");
+  let selectedId = selectedCategoryId();
+  const invalidSelection = selectedId !== null
+    && selectedId !== ALL_CATEGORIES
+    && !pickableCategories.some((category) => category.id === selectedId);
+  const unrelatedHash = location.hash && selectedId === null;
+  if (invalidSelection || unrelatedHash || (useUncategorizedFallback && location.hash)) {
+    clearCategoryHash();
+    selectedId = null;
+  }
 
-  if (selectedCategoryId) {
-    visibleProducts = visibleProducts.filter((p) => p.categoryIds?.includes(selectedCategoryId));
+  const showCategoryPicker = !useUncategorizedFallback && selectedId === null;
+  const visibleProducts = showCategoryPicker
+    ? []
+    : useUncategorizedFallback
+      ? eligibleProducts
+      : selectedId === ALL_CATEGORIES
+        ? catalogProducts
+        : catalogProducts.filter((product) => product.categoryIds?.includes(selectedId));
+
+  renderCategoryPicker(pickableCategories);
+  renderCategoryFilters(pickableCategories, selectedId);
+
+  const pickerSection = document.querySelector("#category-picker-section");
+  const filters = document.querySelector("#category-filters");
+  const backButton = document.querySelector("#category-back");
+  if (pickerSection) pickerSection.hidden = !showCategoryPicker;
+  if (filters) filters.hidden = showCategoryPicker || useUncategorizedFallback;
+  if (backButton) {
+    backButton.hidden = showCategoryPicker || useUncategorizedFallback;
+    backButton.onclick = () => selectCategory(null);
   }
 
   const eligibility = getOrderEligibility();
@@ -398,7 +473,7 @@ function renderCatalog() {
   catalogGrid.replaceChildren();
   ideasGrid?.replaceChildren();
   document.querySelector("#catalog-empty")
-    ?.classList.toggle("is-visible", visibleProducts.length === 0);
+    ?.classList.toggle("is-visible", !showCategoryPicker && visibleProducts.length === 0);
 
   visibleProducts.forEach((product) => {
     const card = cardTemplate.content.firstElementChild.cloneNode(true);
@@ -460,8 +535,8 @@ function renderCatalog() {
   const hasPrinted = visibleProducts.some((product) => !isUntested(product));
   const ideasSection = document.querySelector("#idea-products-section");
   const printedSection = document.querySelector("#printed-products-section");
-  if (ideasSection) ideasSection.hidden = !hasIdeas;
-  if (printedSection) printedSection.hidden = !hasPrinted;
+  if (ideasSection) ideasSection.hidden = showCategoryPicker || !hasIdeas;
+  if (printedSection) printedSection.hidden = showCategoryPicker || !hasPrinted;
 
   const pendingReorder = readAndClearPendingReorder();
   if (pendingReorder) {

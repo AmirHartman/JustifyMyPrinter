@@ -1696,7 +1696,9 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
 })();
 
 window.addEventListener("hashchange", () => {
-  if (pageName === "app" && store.appMode === "admin") {
+  if (pageName === "catalog") {
+    render();
+  } else if (pageName === "app" && store.appMode === "admin") {
     setView(viewFromHash(), { updateHash: false });
   }
 });
