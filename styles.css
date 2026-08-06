@@ -16,6 +16,7 @@
   --coral: #c2533b;
   --coral-dark: #9e3f2c;
   --plum: #5b4b7a;
+  --plum-dark: #453a5f;
   --gold: #b58b2b;
   --danger: #b83e42;
   --shadow: 0 18px 44px rgba(23, 33, 38, 0.1);
@@ -3077,12 +3078,13 @@ body[data-auth="signed-out"] .workspace-shell { display: none; }
 }
 
 /* ── Global tab bar ── */
+/* Plain `row` under dir="rtl" starts at the right edge, so the tabs read from
+   the right in DOM order and the cart is free to sit at the far left. */
 .global-tabs {
   position: sticky;
   top: 0;
   z-index: 200;
   display: flex;
-  flex-direction: row-reverse;
   gap: 0;
   background: var(--surface);
   border-bottom: 2px solid var(--line);
@@ -3113,12 +3115,65 @@ body[data-role="admin"] .global-tab.admin-only { display: flex; }
 /* Active tab per page */
 body[data-page="welcome"] .global-tab[data-tab="welcome"],
 body[data-page="catalog"]  .global-tab[data-tab="catalog"],
+body[data-page="cart"]     .global-tab[data-tab="cart"],
 body[data-page="landing"]  .global-tab[data-tab="landing"],
 body[data-page="app"]      .global-tab[data-tab="admin"] {
   color: var(--teal-dark);
   border-bottom-color: var(--teal);
   font-weight: 700;
 }
+
+/* The cart, and the owner's back office next to it, belong at the opposite end
+   of the bar from the browsing tabs. The auto margin sits on whichever of the
+   two comes first, since the admin tab is absent for everyone but the owner. */
+.global-tab[data-tab="cart"] { margin-inline-start: auto; }
+body[data-role="admin"] .global-tab[data-tab="admin"] { margin-inline-start: auto; }
+body[data-role="admin"] .global-tab[data-tab="cart"] { margin-inline-start: 0; }
+
+/* Management is the owner's own destination, not another friend-facing page,
+   so it carries its own colour instead of blending into the row — including
+   while it is the active tab. Placed after the active-tab rule to win. */
+.global-tab[data-tab="admin"] {
+  color: var(--plum);
+  font-weight: 700;
+}
+.global-tab[data-tab="admin"]:hover { color: var(--plum-dark); }
+body[data-page="app"] .global-tab[data-tab="admin"] {
+  color: var(--plum-dark);
+  border-bottom-color: var(--plum);
+}
+
+.global-tab-cart {
+  position: relative;
+  padding-inline: 14px;
+}
+
+.cart-tab-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* Item count on the cart tab. Hidden entirely when the cart is empty, so an
+   empty cart never reads as a "0" badge demanding attention. It overlaps the
+   icon on the inner side, where the nav padding cannot clip it. */
+.cart-tab-count {
+  position: absolute;
+  top: 7px;
+  inset-inline-start: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--coral);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.cart-tab-count[hidden] { display: none; }
 
 @media (max-width: 480px) {
   .global-tab { padding: 10px 12px; }
