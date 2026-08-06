@@ -64,6 +64,10 @@ export function applyAuth() {
   document.querySelectorAll(".global-tab[data-tab='catalog']").forEach((link) => {
     link.setAttribute("href", store.currentUser ? "catalog.html" : "dashboard.html");
   });
+  // The cart is per signed-in friend, so signed out the tab leads to the login page.
+  document.querySelectorAll(".global-tab[data-tab='cart']").forEach((link) => {
+    link.setAttribute("href", store.currentUser ? "cart.html" : "dashboard.html");
+  });
 
   const userLabel = document.querySelector("#current-user");
   if (userLabel && store.currentUser) {

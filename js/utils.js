@@ -18,6 +18,24 @@ export function composeFilamentName(manufacturer, materialType, colorName) {
     .join(" ");
 }
 
+// Shown wherever a price is not knowable yet.
+export const NO_PRICE_YET = "ייקבע לאחר בדיקה";
+
+// An idea has never been printed, so it has no price yet — the admin quotes one
+// after reviewing. Mirrors api/orders.js, which stores no amount for such orders.
+export function isUnpriced(product) {
+  return product?.catalogKind === "idea";
+}
+
+// Print time is mostly fixed per job, so several units cost less than the unit
+// price times the quantity. The server precomputes that table per product
+// (pricesByQuantity in api/products.js); the client only ever reads it.
+export function linePrice(product, quantity) {
+  if (!product || isUnpriced(product)) return 0;
+  const units = Math.max(Number(quantity) || 1, 1);
+  return Number(product.pricesByQuantity?.[units] ?? product.cost * units);
+}
+
 export function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value;

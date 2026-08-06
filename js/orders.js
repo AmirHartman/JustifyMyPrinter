@@ -1,12 +1,8 @@
 import { store, findProduct } from "./state.js";
-import { formatCurrency } from "./utils.js";
-
-const NO_PRICE_YET = "ייקבע לאחר בדיקה";
+import { formatCurrency, isUnpriced, linePrice, NO_PRICE_YET } from "./utils.js";
 
 const orderDialog = document.querySelector("#order-dialog");
 const orderForm   = document.querySelector("#order-form");
-
-let tipAmount = 0;
 
 function productColorOptions(product) {
   if (Array.isArray(product?.colorOptions) && product.colorOptions.length) {
@@ -31,18 +27,17 @@ export function openOrderDialog(productId, previousOptions = {}) {
   orderForm.reset();
   orderForm.productId.value = product.id;
   orderForm.friendName.value = store.currentUser?.name ?? "";
-  tipAmount = 0;
 
   const greetingElement = document.querySelector("#order-greeting");
   if (greetingElement && store.currentUser) {
     const isFemale = store.currentUser.gender === "female";
     greetingElement.textContent = isFemale
       ? `איזו החלטה נהדרת, ${store.currentUser.name}! 🎉\n` +
-        `עכשיו נשאר רק לבחור כמה יחידות את רוצה, \n` +
-        `ובהמשך גם כמה נראה לך הוגן לפרגן על ההדפסה.`
+        `נשאר רק לבחור כמה יחידות את רוצה ובאיזה צבע, \n` +
+        `ואפשר להוסיף לעגלה ולהמשיך לבחור.`
       : `איזו החלטה נהדרת, ${store.currentUser.name}! 🎉\n` +
-        `עכשיו נשאר רק לבחור כמה יחידות אתה רוצה, \n` +
-        `ובהמשך גם כמה נראה לך הוגן לפרגן על ההדפסה.`;
+        `נשאר רק לבחור כמה יחידות אתה רוצה ובאיזה צבע, \n` +
+        `ואפשר להוסיף לעגלה ולהמשיך לבחור.`;
   }
 
   const quantityInput = orderForm.elements.quantity;
@@ -102,22 +97,15 @@ export function openOrderDialog(productId, previousOptions = {}) {
       : "";
 
   updateReviewCosts();
-  updateTipBreakdown();
   goToStep("review");
   orderDialog.showModal();
 }
 
-// An idea has never been printed, so it has no price yet — the admin quotes one
-// after reviewing. Mirrors api/orders.js, which stores no amount for such orders.
-function isUnpriced(product) {
-  return product?.catalogKind === "idea";
-}
-
 function getBaseCost() {
   const product = findProduct(orderForm?.productId.value);
-  if (!product || isUnpriced(product)) return 0;
+  if (!product) return 0;
   const quantity = product.allowMultiple === false ? 1 : Math.max(Number(orderForm.quantity.value) || 1, 1);
-  return Number(product.pricesByQuantity?.[quantity] ?? product.cost * quantity);
+  return linePrice(product, quantity);
 }
 
 export function updateReviewCosts() {
@@ -135,44 +123,6 @@ export function updateReviewCosts() {
   if (note) note.hidden = unpriced || !(quantity > 1 && total < Number(product.cost) * quantity);
 }
 
-export function addTip(amount) {
-  tipAmount += Number(amount) || 0;
-  updateTipBreakdown();
-}
-
-export function resetTip() {
-  tipAmount = 0;
-  updateTipBreakdown();
-}
-
-export function updateTipBreakdown() {
-  const product = findProduct(orderForm?.productId.value);
-  const unpriced = isUnpriced(product);
-  const base = getBaseCost();
-  document.querySelector("#tip-base-cost").textContent  = unpriced ? NO_PRICE_YET : formatCurrency(base);
-  document.querySelector("#tip-extra-cost").textContent = formatCurrency(tipAmount);
-  document.querySelector("#tip-total-cost").textContent = unpriced
-    ? formatCurrency(tipAmount) : formatCurrency(base + tipAmount);
-}
-
-export function updateSummary() {
-  const product  = findProduct(orderForm?.productId.value);
-  const quantity = Math.max(Number(orderForm?.quantity.value) || 1, 1);
-  const base     = getBaseCost();
-  document.querySelector("#summary-product-name").textContent = product?.name ?? "";
-  document.querySelector("#summary-quantity").textContent     = String(quantity);
-  const selectedColor = orderForm?.querySelector('[name="selectedColor"]:checked');
-  const colorRow = document.querySelector("#summary-color-row");
-  const colorValue = document.querySelector("#summary-color");
-  if (colorRow) colorRow.hidden = !selectedColor;
-  if (colorValue) colorValue.textContent = selectedColor?.closest("label")?.textContent?.trim() ?? "";
-  const unpriced = isUnpriced(product);
-  document.querySelector("#summary-base-cost").textContent    = unpriced ? NO_PRICE_YET : formatCurrency(base);
-  document.querySelector("#summary-tip-cost").textContent     = formatCurrency(tipAmount);
-  document.querySelector("#summary-total-cost").textContent   = unpriced
-    ? NO_PRICE_YET : formatCurrency(base + tipAmount);
-}
-
 export function goToStep(step) {
   if (!orderForm) return;
   orderForm.dataset.step = step;
@@ -182,19 +132,19 @@ export function goToStep(step) {
   orderForm.querySelectorAll("[data-step-dot]").forEach((dot) => {
     dot.classList.toggle("is-active", dot.dataset.stepDot === step);
   });
-  if (step === "review")  updateReviewCosts();
-  if (step === "tip")     updateTipBreakdown();
-  if (step === "summary") updateSummary();
+  if (step === "review") updateReviewCosts();
 }
 
-export function getTipAmount() {
-  return tipAmount;
-}
-
-export function getOrderFriendName(data) {
-  return store.currentUser
-    ? store.currentUser.name
-    : String(data.get("friendName") ?? "").trim();
+// What was just put in the cart, for the confirmation panel.
+export function describeAddedLine() {
+  const product  = findProduct(orderForm?.productId.value);
+  const quantity = Math.max(Number(orderForm?.quantity.value) || 1, 1);
+  const color    = orderForm?.querySelector('[name="selectedColor"]:checked');
+  const colorText = color?.closest("label")?.textContent?.trim();
+  const price = isUnpriced(product) ? NO_PRICE_YET : formatCurrency(getBaseCost());
+  return [product?.name ?? "", `כמות ${quantity}`, colorText, price]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function getOrderOptions() {

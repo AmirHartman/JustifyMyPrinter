@@ -1,7 +1,8 @@
 import { store, loadData, findProduct } from "./state.js";
-import { formatCurrency, escapeHtml, calculateProductCost, composeFilamentName } from "./utils.js";
+import { formatCurrency, escapeHtml, calculateProductCost, composeFilamentName, NO_PRICE_YET as UNPRICED_LABEL } from "./utils.js";
 import { api } from "./api.js";
 import { openOrderDialog, openCustomOrderDialog } from "./orders.js";
+import { cartCount, cartTotals, updateLine, removeLine } from "./cart.js";
 import { createWhatsAppLink, whatsappTemplates, STATUS_LABELS } from "./whatsapp.js";
 import { setView } from "./auth.js";
 
@@ -312,6 +313,8 @@ function renderPrintJobs() {
 
 export function render() {
   renderCatalog();
+  renderCart();
+  renderCartBadge();
   renderOrders();
   renderPrintJobs();
   renderItemStats();
@@ -671,7 +674,7 @@ function renderCatalog() {
     renderProductFacts(card, product);
 
     const orderBtn = card.querySelector(".product-meta .primary-button");
-    orderBtn.textContent = product.inventoryAvailable === false ? "בקשת חלופה" : isIdea ? "בקשת בדיקה" : "הזמנה";
+    orderBtn.textContent = product.inventoryAvailable === false ? "בקשת חלופה" : isIdea ? "בקשת בדיקה" : "הוספה לעגלה";
     if (eligibility.canOrder) {
       orderBtn.addEventListener("click", () => openOrderDialog(product.id));
     } else {
@@ -941,7 +944,7 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
 
   const orderButton = document.querySelector("#product-detail-order");
   orderButton.disabled = !eligibility.canOrder && !eligibility.clickable;
-  orderButton.textContent = eligibility.canOrder ? (product.inventoryAvailable === false ? "בקשת חלופה" : "מעבר להזמנה") : eligibility.label;
+  orderButton.textContent = eligibility.canOrder ? (product.inventoryAvailable === false ? "בקשת חלופה" : "הוספה לעגלה") : eligibility.label;
   orderButton.onclick = () => {
     dialog.close();
     if (eligibility.canOrder) openOrderDialog(product.id);
@@ -953,6 +956,120 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
 document.querySelectorAll("[data-close-product-detail]").forEach((button) => {
   button.addEventListener("click", () => document.querySelector("#product-detail-dialog")?.close());
 });
+
+// ── Cart ──────────────────────────────────────────────────────
+
+// The count sits in the global nav on every page, so it is refreshed by the
+// same render() pass as everything else.
+export function renderCartBadge() {
+  const count = store.currentUser ? cartCount() : 0;
+  document.querySelectorAll("[data-cart-count]").forEach((badge) => {
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+  });
+  // The tab is an icon, so its accessible name is the only thing a screen
+  // reader gets — it has to carry the count the badge shows visually.
+  document.querySelectorAll(".global-tab[data-tab='cart']").forEach((tab) => {
+    tab.setAttribute("aria-label", count === 0
+      ? "עגלת קניות — ריקה"
+      : `עגלת קניות — ${count} פריטים`);
+  });
+}
+
+// Colour ids only mean something next to the product that offers them, so the
+// label comes from the product's own palette rather than the filament list
+// (which friends never receive).
+function cartLineColorLabels(line) {
+  const options = line.product?.colorOptions ?? [];
+  return (line.selectedColors ?? []).map((value) => {
+    const option = options.find((entry) => String(entry.value ?? entry) === value);
+    return String(option?.label ?? option?.name ?? value);
+  });
+}
+
+function buildCartLineRow(line) {
+  const row = document.createElement("article");
+  row.className = `cart-line${line.missing ? " is-missing" : ""}`;
+  const name = line.product?.name ?? "מוצר שאינו זמין עוד";
+  const colors = cartLineColorLabels(line);
+  const image = line.product?.image;
+
+  row.innerHTML = `
+    <div class="cart-line-image">${image
+      ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" />` : ""}</div>
+    <div class="cart-line-info">
+      <strong class="cart-line-name">${escapeHtml(name)}</strong>
+      ${colors.length ? `<span class="cart-line-meta">צבע: ${escapeHtml(colors.join(", "))}</span>` : ""}
+      ${line.unpriced ? `<span class="cart-line-meta">${escapeHtml(UNPRICED_LABEL)} — נדרשת בדיקה לפני ההדפסה</span>` : ""}
+      ${line.missing ? '<span class="cart-line-meta">המוצר ירד מהקטלוג ולא יישלח בהזמנה.</span>' : ""}
+    </div>
+    <div class="cart-line-controls"></div>
+    <div class="cart-line-price">${line.unpriced || line.missing
+      ? escapeHtml(UNPRICED_LABEL) : formatCurrency(line.price)}</div>
+  `;
+
+  const controls = row.querySelector(".cart-line-controls");
+  if (!line.missing) {
+    const label = document.createElement("label");
+    label.className = "cart-line-quantity";
+    label.textContent = "כמות";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "1";
+    input.max = line.product?.allowMultiple === false ? "1" : "50";
+    input.value = String(line.quantity);
+    input.readOnly = line.product?.allowMultiple === false;
+    input.setAttribute("aria-label", `כמות עבור ${name}`);
+    input.addEventListener("change", () => {
+      updateLine(line.lineId, { quantity: Number(input.value) });
+      render();
+    });
+    label.append(input);
+    controls.append(label);
+  }
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "ghost-button btn-sm";
+  removeBtn.textContent = "הסרה";
+  removeBtn.setAttribute("aria-label", `הסרת ${name} מהעגלה`);
+  removeBtn.addEventListener("click", () => { removeLine(line.lineId); render(); });
+  controls.append(removeBtn);
+
+  return row;
+}
+
+function renderCart() {
+  const list = document.querySelector("#cart-lines");
+  if (!list) return;
+  // After a successful checkout the page shows the thank-you panel; a later
+  // render pass must not put the (now empty) cart back on screen over it.
+  const thanks = document.querySelector("#cart-thanks");
+  if (thanks && !thanks.hidden) return;
+
+  const totals = cartTotals();
+  const contents = document.querySelector("#cart-contents");
+  const empty = document.querySelector("#cart-empty");
+  if (contents) contents.hidden = totals.lines.length === 0;
+  if (empty) empty.hidden = totals.lines.length > 0;
+
+  list.replaceChildren(...totals.lines.map(buildCartLineRow));
+
+  const missingNote = document.querySelector("#cart-missing-note");
+  if (missingNote) missingNote.hidden = !totals.hasMissing;
+
+  document.querySelector("#cart-base-cost").textContent = totals.hasUnpriced && totals.base === 0
+    ? UNPRICED_LABEL : formatCurrency(totals.base);
+  document.querySelector("#cart-tip-cost").textContent = formatCurrency(totals.tip);
+  document.querySelector("#cart-total-cost").textContent = totals.hasUnpriced && totals.base === 0
+    ? formatCurrency(totals.tip) : formatCurrency(totals.total);
+  const unpricedNote = document.querySelector("#cart-unpriced-note");
+  if (unpricedNote) unpricedNote.hidden = !totals.hasUnpriced;
+
+  const checkout = document.querySelector("#checkout-button");
+  // A cart of nothing but unavailable products has nothing to send.
+  if (checkout) checkout.disabled = totals.lines.every((line) => line.missing);
+}
 
 // ── Orders (admin view): grouped cards, filter bar, drawer ────
 
@@ -1011,6 +1128,17 @@ async function setOrderStatus(order, next, cancellationReason) {
   }
 }
 
+// A cart checkout is several orders that arrived together. Each card still
+// stands alone — one product, one status, one print job — so the cart only adds
+// a badge saying which purchase this line came from.
+function cartBadgeLabel(order) {
+  if (!order.cartId) return "";
+  const siblings = store.orders.filter((entry) => entry.cartId === order.cartId);
+  if (siblings.length < 2) return "";
+  return `<span class="status-badge status-pending">🛒 פריט ${
+    (Number(order.cartPosition) || 0) + 1} מתוך ${siblings.length}</span>`;
+}
+
 function buildOrderCard(order) {
   const product = findProduct(order.productId);
   const user = findOrderUser(order);
@@ -1035,6 +1163,7 @@ function buildOrderCard(order) {
       ${order.orderType && order.orderType !== "catalog"
         ? `<span class="status-badge status-inactive">${escapeHtml(ORDER_TYPE_LABELS[order.orderType] ?? order.orderType)}</span>`
         : ""}
+      ${cartBadgeLabel(order)}
     </div>
     <div class="order-card-actions"></div>
   `;
@@ -2460,6 +2589,30 @@ function renderWelcome() {
   }
 }
 
+// Totals span the whole checkout, so they are taken from store.myOrders rather
+// than from whichever sublist (active / past) is being rendered right now.
+function buildCartGroupHeader(cartId) {
+  const siblings = store.myOrders.filter((entry) => entry.cartId === cartId);
+  const items = siblings.reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+  const support = siblings.reduce((sum, entry) => sum + (Number(entry.supportAmount) || 0), 0);
+  const amounts = siblings.map(orderAmount);
+  const known = amounts.filter((value) => value != null);
+  const total = known.reduce((sum, value) => sum + value, 0);
+  const partial = known.length < amounts.length;
+
+  const header = document.createElement("div");
+  header.className = "ws-cart-group";
+  const totalText = known.length === 0
+    ? NO_PRICE_YET
+    : `${partial ? "עד כה " : ""}${formatCurrency(total)}`;
+  header.innerHTML = `
+    <span class="ws-cart-group-title">הזמנה אחת · ${siblings.length} מוצרים (${items} יחידות)</span>
+    <span class="ws-cart-group-total">סה"כ ${escapeHtml(totalText)}${
+      support > 0 ? ` · כולל ${formatCurrency(support)} תמיכה 💛` : ""}</span>
+  `;
+  return header;
+}
+
 function renderWsOrderList(container, orders, emptyMsg, { allowReorder = true } = {}) {
   if (!container) return;
   container.replaceChildren();
@@ -2470,7 +2623,17 @@ function renderWsOrderList(container, orders, emptyMsg, { allowReorder = true } 
     container.append(p);
     return;
   }
+  // Orders placed in one cart checkout arrive adjacent (same created_at, sorted
+  // newest first), so a header when the cart id changes is enough to read them
+  // as one purchase. Each line stays its own card: price approval, colour
+  // alternatives and cancellation are decided per item, not per cart.
+  let lastCartId = null;
   orders.forEach((order) => {
+    if (order.cartId && order.cartId !== lastCartId) {
+      container.append(buildCartGroupHeader(order.cartId));
+    }
+    lastCartId = order.cartId ?? null;
+
     const product = store.products.find((p) => p.id === order.productId);
     const snapshot = order.productSnapshot ?? {};
     const title = product?.name ?? snapshot.name ?? order.requestDescription ?? "בקשה מיוחדת";
@@ -2489,7 +2652,7 @@ function renderWsOrderList(container, orders, emptyMsg, { allowReorder = true } 
       <div class="ws-order-info">
         <span class="ws-order-product">${escapeHtml(title)}</span>
         <span class="ws-order-meta">כמות ${order.quantity} · ${escapeHtml(amountLabel)}</span>
-        ${supportAmount > 0 ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} תמיכה בפרויקט — תודה! 💛</span>` : ""}
+        ${supportAmount > 0 && !order.cartId ? `<span class="ws-order-meta">כולל ${formatCurrency(supportAmount)} תמיכה בפרויקט — תודה! 💛</span>` : ""}
         ${orderColorNames(order).length ? `<span class="ws-order-meta">צבע: ${escapeHtml(orderColorNames(order).join(", "))}</span>` : ""}
         ${order.colorAlternativeStatus && order.colorAlternativeStatus !== "none"
           ? `<span class="ws-order-meta">חלופת צבע: ${escapeHtml(colorAlternativeLabel(order))}</span>` : ""}

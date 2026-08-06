@@ -157,9 +157,16 @@ module.exports = async (req, res) => {
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS color_alternative_status TEXT NOT NULL DEFAULT 'none'`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS color_alternative_proposed_at TIMESTAMPTZ`;
     await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS color_alternative_responded_at TIMESTAMPTZ`;
+    // A cart checkout writes one order row per line, joined by a shared cart_id.
+    // Every order placed before the cart existed keeps cart_id NULL and renders
+    // exactly as it always did.
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cart_id TEXT`;
+    await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cart_position INTEGER NOT NULL DEFAULT 0`;
     await sql`UPDATE orders SET color_alternative_status = 'none'
       WHERE color_alternative_status IS NULL OR color_alternative_status NOT IN ('none', 'needed', 'pending', 'approved', 'rejected')`;
     await sql`UPDATE orders SET paid_at = created_at WHERE paid = TRUE AND paid_at IS NULL`;
+    // The friend area groups a checkout back together by cart_id on every load.
+    await sql`CREATE INDEX IF NOT EXISTS orders_cart_id_idx ON orders(cart_id)`;
 
     // ── Extended product columns ──────────────────────────────
     await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS source_url TEXT DEFAULT ''`;

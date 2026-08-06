@@ -219,7 +219,15 @@ friend approves or rejects it in the personal area. An order cannot move to the
 print queue or printing while an alternative is needed, pending, or rejected.
 This workflow does not add new canonical order statuses.
 
-MVP: one order = one product/request. No cart.
+A friend adds products to a cart in the browser (localStorage, per user) and
+sends the whole cart in one checkout. One order row is still one product: a
+checkout writes one order per cart line, joined by a shared `cart_id`, so
+inventory, print jobs, per-product statistics and WhatsApp messages stay
+single-product. The optional support amount is chosen once per checkout and
+recorded whole on a single row of the cart, never split across rows.
+
+External-link and custom requests are not part of the cart; they are still sent
+one at a time from their own dialog.
 
 Admin can group a friend's orders for a WhatsApp payment summary and mark
 multiple orders as paid together.
@@ -417,7 +425,7 @@ Post-release (can wait):
 - automatic WhatsApp notifications;
 - friend-submitted idea board;
 - advanced visual polish;
-- cart.
+- a server-side cart synced across devices (the cart lives in the browser).
 
 ## 15. Technical constraints
 

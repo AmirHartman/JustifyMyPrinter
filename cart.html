@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מדפסת לחברים - העגלה שלי</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-auth="signed-out" data-entry="app" data-role="friend" data-mode="friend" data-page="cart">
+    <nav class="global-tabs">
+      <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+      <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
+      <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+      <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+      <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
+    </nav>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">לפני שמזמינים</p>
+        <h1>העגלה שלי</h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="user-bar" aria-label="משתמש מחובר">
+          <span id="current-user">תצוגת חבר</span>
+          <button class="ghost-button" id="logout-button" type="button">יציאה</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell cart-shell" id="cart-view">
+      <section class="cart-intro" aria-labelledby="cart-title">
+        <div>
+          <p class="eyebrow">סיכום לפני שליחה</p>
+          <h2 id="cart-title">כל מה שבחרתם</h2>
+          <p>אפשר לשנות כמויות, להסיר מוצרים ולשלוח את כל ההזמנה בלחיצה אחת.</p>
+        </div>
+      </section>
+
+      <p class="empty-state" id="cart-empty" hidden>
+        העגלה ריקה. <a href="catalog.html">אפשר לבחור מוצרים בקטלוג</a>.
+      </p>
+
+      <p class="form-error" id="cart-missing-note" hidden role="status">
+        חלק מהמוצרים בעגלה אינם זמינים יותר בקטלוג. הם מסומנים למטה ולא יישלחו בהזמנה.
+      </p>
+
+      <section id="cart-contents" hidden aria-labelledby="cart-lines-title">
+        <h3 id="cart-lines-title" class="visually-hidden">פריטים בעגלה</h3>
+        <div class="cart-lines" id="cart-lines"></div>
+
+        <section class="cart-tip" aria-labelledby="tip-title">
+          <h3 id="tip-title">רוצה לעזור לפרויקט לגדול? 💛</h3>
+          <p class="tip-pitch">
+            מחיר המוצרים כבר כולל את ההדפסה ואת החלק שמאפשר לפרויקט להתקדם.
+            אם בא לך להוסיף תמיכה, היא תעזור לקנות עוד חומרים וצבעים ולנסות דברים חדשים —
+            אבל היא לגמרי אופציונלית.
+          </p>
+          <div class="tip-buttons">
+            <button class="tip-button" type="button" data-tip-add="1">+1 ₪</button>
+            <button class="tip-button" type="button" data-tip-add="5">+5 ₪</button>
+            <button class="tip-button" type="button" data-tip-add="10">+10 ₪</button>
+            <button class="ghost-button btn-sm" type="button" id="tip-reset">איפוס</button>
+          </div>
+        </section>
+
+        <div class="cost-review cart-totals">
+          <div class="cost-review-row"><span>מחיר המוצרים</span><span id="cart-base-cost"></span></div>
+          <div class="cost-review-row"><span>תמיכה בפרויקט (לא חובה)</span><span id="cart-tip-cost"></span></div>
+          <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="cart-total-cost"></span></div>
+          <small id="cart-unpriced-note" hidden>חלק מהפריטים ממתינים לבדיקה ולהצעת מחיר, ולכן הסכום עדיין חלקי.</small>
+        </div>
+
+        <p class="form-error" id="cart-error"></p>
+        <menu class="cart-actions">
+          <a class="ghost-button" href="catalog.html">המשך לבחור</a>
+          <button class="primary-button" id="checkout-button" type="button">אישור ושליחת ההזמנה</button>
+        </menu>
+      </section>
+
+      <section class="cart-thanks" id="cart-thanks" hidden aria-labelledby="cart-thanks-title">
+        <h2 id="cart-thanks-title">תודה רבה! 🎉</h2>
+        <p id="cart-thanks-summary" role="status"></p>
+        <p>אני אעדכן אותך בוואטסאפ לגבי הסטטוס וההדפסה.</p>
+        <menu class="cart-actions">
+          <a class="ghost-button" href="catalog.html">חזרה לקטלוג</a>
+          <a class="primary-button" href="welcome.html">מעבר לאזור האישי</a>
+        </menu>
+      </section>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

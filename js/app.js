@@ -2,9 +2,10 @@ import { api } from "./api.js";
 import { store, pageName, loadData } from "./state.js";
 import { render } from "./render.js";
 import {
-  openOrderDialog, updateReviewCosts, getOrderFriendName, openCustomOrderDialog,
-  addTip, resetTip, goToStep, getTipAmount, getOrderOptions,
+  openOrderDialog, updateReviewCosts, openCustomOrderDialog,
+  goToStep, getOrderOptions, describeAddedLine,
 } from "./orders.js";
+import { addLine, addTip, resetTip, clearCart, checkoutPayload } from "./cart.js";
 import { setAuthPanel, showRegisterError, showRegisterPending, showLoginStatus, applyAuth, applyMode, setView } from "./auth.js";
 import { formatCurrency, calculateProductCost, composeFilamentName } from "./utils.js";
 
@@ -207,61 +208,88 @@ orderDialog?.querySelector(".close-button")?.addEventListener("click", () => ord
 document.querySelector("#cancel-order")?.addEventListener("click", () => orderDialog?.close());
 orderForm?.quantity?.addEventListener("input", updateReviewCosts);
 
-orderForm?.querySelectorAll("[data-wizard-next]").forEach((button) => {
-  button.addEventListener("click", () => {
-    if (button.dataset.wizardNext === "tip" && !orderForm.reportValidity()) return;
-    goToStep(button.dataset.wizardNext);
-  });
-});
 orderForm?.querySelectorAll("[data-wizard-back]").forEach((button) => {
   button.addEventListener("click", () => goToStep(button.dataset.wizardBack));
 });
-orderForm?.querySelectorAll("[data-tip-add]").forEach((button) => {
-  button.addEventListener("click", () => addTip(Number(button.dataset.tipAdd)));
-});
-document.querySelector("#tip-reset")?.addEventListener("click", () => resetTip());
 
-document.querySelector("#close-thanks")?.addEventListener("click", () => {
+document.querySelector("#continue-shopping")?.addEventListener("click", () => {
   orderDialog?.close();
-  setView(store.appMode === "admin" ? "orders" : "catalog");
+});
+document.querySelector("#go-to-cart")?.addEventListener("click", () => {
+  window.location.href = "cart.html";
 });
 
-orderForm?.addEventListener("submit", async (event) => {
+// Nothing is ordered here — the choice is recorded in the browser and the whole
+// cart is sent once, from cart.html. The form's own validation still gates it,
+// so a missing colour or quantity is caught before anything is stored.
+orderForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const data    = new FormData(orderForm);
   const product = store.products.find((p) => p.id === data.get("productId"));
   if (!product) return;
 
-  const quantity     = Number(data.get("quantity"));
-  const supportAmount = getTipAmount();
-  const orderOptions  = getOrderOptions();
+  addLine({
+    productId: product.id,
+    quantity: Number(data.get("quantity")),
+    selectedColors: getOrderOptions().selectedColors,
+  });
 
-  let order;
+  const summary = document.querySelector("#added-to-cart-summary");
+  if (summary) summary.textContent = describeAddedLine();
+  goToStep("added");
+  render();
+});
+
+// ── Cart page ─────────────────────────────────────────────────
+document.querySelectorAll("[data-tip-add]").forEach((button) => {
+  button.addEventListener("click", () => { addTip(Number(button.dataset.tipAdd)); render(); });
+});
+document.querySelector("#tip-reset")?.addEventListener("click", () => { resetTip(); render(); });
+
+document.querySelector("#checkout-button")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const errorBox = document.querySelector("#cart-error");
+  const payload = checkoutPayload();
+  errorBox?.classList.remove("is-visible");
+  if (payload.items.length === 0) return;
+
+  // The whole cart is one request, so the button must not be able to fire twice
+  // and create the order set twice.
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = "שולח…";
+  let orders;
   try {
-    order = await api("/api/orders", {
-      method: "POST",
-      body: JSON.stringify({
-        productId:  product.id,
-        friendName: getOrderFriendName(data),
-        quantity,
-        supportAmount,
-        selectedColors: orderOptions.selectedColors,
-      }),
-    });
+    orders = await api("/api/orders", { method: "POST", body: JSON.stringify(payload) });
   } catch (err) {
-    alert(`שגיאה ביצירת הזמנה: ${err.message}`);
+    if (errorBox) {
+      errorBox.textContent = `שגיאה ביצירת ההזמנה: ${err.message}`;
+      errorBox.classList.add("is-visible");
+    }
+    button.disabled = false;
+    button.textContent = originalLabel;
     return;
   }
 
-  if (store.appMode === "admin") store.orders.unshift(order);
-  else store.myOrders.unshift(order);
-  goToStep("thanks");
+  // The orders exist from here on. Nothing below may make a failure look like
+  // the checkout did not happen.
+  clearCart();
+  store.myOrders.unshift(...orders);
+  const contents = document.querySelector("#cart-contents");
+  const thanks   = document.querySelector("#cart-thanks");
+  const summary  = document.querySelector("#cart-thanks-summary");
+  if (summary) {
+    const units = orders.reduce((sum, order) => sum + (Number(order.quantity) || 0), 0);
+    summary.textContent = `נקלטו ${orders.length} מוצרים (${units} יחידות) בהזמנה אחת.`;
+  }
+  if (contents) contents.hidden = true;
+  if (thanks) thanks.hidden = false;
   try {
     render();
   } catch (err) {
-    // The order already exists. A browser-specific repaint failure must not be
-    // reported as a failed order and tempt the customer to submit it again.
-    console.error("Order created, but the UI refresh failed:", err);
+    // The orders already exist. A browser-specific repaint failure must not be
+    // reported as a failed checkout and tempt the customer to submit it again.
+    console.error("Cart checked out, but the UI refresh failed:", err);
   }
 });
 
@@ -1563,7 +1591,7 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
 
   // Personal and catalog pages require a valid session. The server enforces the
   // catalog route too; this client guard also covers static-build deployments.
-  if (["welcome", "catalog"].includes(pageName) && !store.currentUser) {
+  if (["welcome", "catalog", "cart"].includes(pageName) && !store.currentUser) {
     window.location.href = "dashboard.html";
     return;
   }
@@ -1574,12 +1602,12 @@ document.querySelector("#contact-form")?.addEventListener("submit", async (event
 
   // Admin visiting catalog or welcome is forced into friend mode so they see the friend UI.
   // Set this before loadData so admin data is not fetched needlessly on those pages.
-  if (["catalog", "welcome"].includes(pageName) && store.currentUser?.role === "admin") {
+  if (["catalog", "welcome", "cart"].includes(pageName) && store.currentUser?.role === "admin") {
     store.appMode = "friend";
     applyMode();
   }
 
-  const shouldLoadData = store.currentUser && ["app", "welcome", "catalog"].includes(pageName);
+  const shouldLoadData = store.currentUser && ["app", "welcome", "catalog", "cart"].includes(pageName);
   if (shouldLoadData) {
     try {
       await loadData();

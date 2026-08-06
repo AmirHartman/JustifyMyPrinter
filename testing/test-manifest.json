@@ -54,7 +54,7 @@
       "mutation": "none",
       "timeoutMs": 60000,
       "requires": ["Node.js 20-22"],
-      "proves": "The exercised pure behavior, mocked authorization handlers, runner policy, wrapper constraints, and sensitivity fixtures pass.",
+      "proves": "The exercised pure behavior (including cart normalization and support-amount targeting in api/_cart.js), mocked authorization handlers, runner policy, wrapper constraints, source-contract fixtures (including the cart checkout button-lock, orders.js transaction/validation shape, and js/cart.js storage guards), and sensitivity fixtures pass.",
       "doesNotProve": "Database, browser, deployment, or unexercised behavior.",
       "owner": "Quality Curator"
     },

@@ -63,10 +63,18 @@ app.use((req, res, next) => {
 // HTML pages
 const HTML_PAGES = ['index.html', 'welcome.html', 'dashboard.html'];
 app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+// The catalog and the cart are for signed-in friends only, so each is session
+// gated here rather than served from the plain HTML_PAGES list. They stay two
+// explicit routes so the guard is visible per page, not hidden behind a loop.
 app.get('/catalog.html', async (req, res) => {
   const user = await getSession(req);
   if (!user) return res.redirect(302, '/dashboard.html');
   return res.sendFile(path.join(ROOT, 'catalog.html'));
+});
+app.get('/cart.html', async (req, res) => {
+  const user = await getSession(req);
+  if (!user) return res.redirect(302, '/dashboard.html');
+  return res.sendFile(path.join(ROOT, 'cart.html'));
 });
 for (const page of HTML_PAGES) {
   app.get(`/${page}`, (req, res) => res.sendFile(path.join(ROOT, page)));

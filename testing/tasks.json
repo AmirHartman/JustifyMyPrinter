@@ -24,10 +24,10 @@
       "id": "T3",
       "fingerprint": "catalog-order-submit-lock",
       "title": "Lock catalog order submission while the request is in flight",
-      "status": "later",
+      "status": "done",
       "source": "shared-plan",
       "acceptance": "Repeated clicks cannot create duplicate orders.",
-      "evidence": "Deferred nice-to-have."
+      "evidence": "The catalog product dialog no longer submits an order at all — its submit handler only calls addLine() into the local cart (js/app.js, js/cart.js), so there is nothing left to double-fire there. The one remaining order-creation request is the cart checkout, in the #checkout-button click handler in js/app.js: it disables the button and swaps its label before the request, and restores both only on failure, so a repeated click cannot create a duplicate order set. Covered by tests/order-submit-resilience.test.js (source contract) and confirmed passing 2026-08-04; a later independent Tester rerun should confirm before this is treated as fully closed against the live UI."
     },
     {
       "id": "T4",

@@ -129,9 +129,7 @@
 
         <div class="wizard-steps" aria-hidden="true">
           <span class="wizard-step-dot" data-step-dot="review"></span>
-          <span class="wizard-step-dot" data-step-dot="tip"></span>
-          <span class="wizard-step-dot" data-step-dot="summary"></span>
-          <span class="wizard-step-dot" data-step-dot="thanks"></span>
+          <span class="wizard-step-dot" data-step-dot="added"></span>
         </div>
 
         <section class="wizard-panel" data-panel="review">
@@ -155,55 +153,17 @@
           </div>
           <menu>
             <button class="ghost-button" type="button" id="cancel-order">ביטול</button>
-            <button class="primary-button" type="button" data-wizard-next="tip">המשך</button>
+            <button class="primary-button" id="add-to-cart" type="submit">הוספה לעגלה</button>
           </menu>
         </section>
 
-        <section class="wizard-panel" data-panel="tip" hidden>
-          <h2 id="tip-title">רוצה לעזור לפרויקט לגדול? 💛</h2>
-          <p class="tip-pitch">
-            מחיר המוצר כבר כולל את ההדפסה ואת החלק שמאפשר לפרויקט להתקדם.
-            אם בא לך להוסיף תמיכה, היא תעזור לקנות עוד חומרים וצבעים ולנסות דברים חדשים —
-            אבל היא לגמרי אופציונלית.
-          </p>
-          <div class="tip-buttons">
-            <button class="tip-button" type="button" data-tip-add="1">+1 ₪</button>
-            <button class="tip-button" type="button" data-tip-add="5">+5 ₪</button>
-            <button class="tip-button" type="button" data-tip-add="10">+10 ₪</button>
-            <button class="ghost-button btn-sm" type="button" id="tip-reset">איפוס</button>
-          </div>
-          <div class="cost-review">
-            <div class="cost-review-row"><span>מחיר המוצר</span><span id="tip-base-cost"></span></div>
-            <div class="cost-review-row"><span>תמיכה בפרויקט (לא חובה)</span><span id="tip-extra-cost"></span></div>
-            <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="tip-total-cost"></span></div>
-          </div>
+        <section class="wizard-panel" data-panel="added" hidden>
+          <h2>נוסף לעגלה 🛒</h2>
+          <p id="added-to-cart-summary" role="status"></p>
+          <p>אפשר להמשיך לבחור עוד מוצרים ולהזמין את הכל יחד בסוף.</p>
           <menu>
-            <button class="ghost-button" type="button" data-wizard-back="review">חזרה</button>
-            <button class="primary-button" type="button" data-wizard-next="summary">המשך</button>
-          </menu>
-        </section>
-
-        <section class="wizard-panel" data-panel="summary" hidden>
-          <h2>סיכום ההזמנה</h2>
-          <div class="cost-review">
-            <div class="cost-review-row"><span>מוצר</span><span id="summary-product-name"></span></div>
-            <div class="cost-review-row"><span>כמות</span><span id="summary-quantity"></span></div>
-            <div class="cost-review-row" id="summary-color-row" hidden><span>צבע</span><span id="summary-color"></span></div>
-            <div class="cost-review-row"><span>מחיר המוצר</span><span id="summary-base-cost"></span></div>
-            <div class="cost-review-row"><span>תמיכה בפרויקט (לא חובה)</span><span id="summary-tip-cost"></span></div>
-            <div class="cost-review-row cost-review-total"><span>סה"כ לתשלום</span><span id="summary-total-cost"></span></div>
-          </div>
-          <menu>
-            <button class="ghost-button" type="button" data-wizard-back="tip">חזרה</button>
-            <button class="primary-button" id="submit-order" type="submit">אישור ושליחת ההזמנה</button>
-          </menu>
-        </section>
-
-        <section class="wizard-panel" data-panel="thanks" hidden>
-          <h2>תודה רבה! 🎉</h2>
-          <p>ההזמנה נקלטה בהצלחה. אני אעדכן אותך בוואטסאפ לגבי הסטטוס וההדפסה.</p>
-          <menu>
-            <button class="primary-button" type="button" id="close-thanks">סגירה</button>
+            <button class="ghost-button" type="button" id="continue-shopping">המשך לבחור</button>
+            <button class="primary-button" type="button" id="go-to-cart">מעבר לעגלה</button>
           </menu>
         </section>
       </form>

@@ -8,6 +8,7 @@ const files = [
   "dashboard.html",
   "welcome.html",
   "catalog.html",
+  "cart.html",
   "styles.css",
 ];
 const directories = ["js", "assets"];
