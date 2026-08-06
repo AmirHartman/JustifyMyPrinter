@@ -4,21 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>מדפסת לחברים - איך זה עובד</title>
+    <meta name="description" content="מדפסת חברים — הדפסות תלת־ממד במחיר חברי, קטלוג רעיונות ובקשות מיוחדות לחברים ולמכרים." />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-auth="signed-out" data-entry="landing" data-role="friend" data-mode="friend" data-page="landing">
+    <a class="skip-link" href="#main-content">דילוג לתוכן המרכזי</a>
     <nav class="global-tabs">
-      <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
-      <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
-      <a class="global-tab" href="index.html" data-tab="landing">הסבר</a>
-      <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+      <div class="landing-nav-inner">
+        <a class="landing-brand" href="index.html" aria-label="מדפסת חברים — דף הבית">
+          <span class="landing-brand-mark" aria-hidden="true">מ</span>
+          <span>
+            <strong>מדפסת חברים</strong>
+            <small>הדפסות תלת־ממד בגובה העיניים</small>
+          </span>
+        </a>
+        <div class="global-tabs-list">
+          <a class="global-tab" href="welcome.html" data-tab="welcome">אזור אישי</a>
+          <a class="global-tab" href="index.html" data-tab="landing">איך זה עובד</a>
+          <a class="global-tab" href="catalog.html" data-tab="catalog">קטלוג</a>
+          <a class="global-tab admin-only" href="dashboard.html" data-tab="admin">ניהול</a>
+          <a class="global-tab global-tab-cart" href="cart.html" data-tab="cart" aria-label="עגלת קניות"><span class="cart-tab-icon" aria-hidden="true">🛒</span><span class="cart-tab-count" data-cart-count hidden></span></a>
+        </div>
+      </div>
     </nav>
-    <main class="public-landing">
+    <main class="public-landing" id="main-content">
       <section class="landing-hero-v2">
         <div class="landing-copy">
-          <p class="eyebrow">הדפסות תלת־ממד לחברים ולמכרים</p>
-          <h1>מדפיסים במחיר חברי. כל הזמנה פותחת עוד אפשרויות.</h1>
-          <p>
+          <p class="hero-kicker"><span aria-hidden="true"></span> כרגע פתוח לחברים ולמכרים</p>
+          <h1>מדפיסים במחיר חברי.<br /><em>כל הזמנה פותחת עוד אפשרויות.</em></h1>
+          <p class="hero-lead">
             בוחרים מוצר שכבר קיים, או מוצאים רעיון חדש ושולחים לי קישור.
             אני בודק מה אפשרי, מציג מחיר ברור ומתאם איתכם ישירות ב־WhatsApp.
           </p>
@@ -29,17 +43,42 @@
           <p class="landing-fineprint">
             הקטלוג פתוח לאחר התחברות. כדי להזמין צריך גם אישור הצטרפות ממני — זה בדרך כלל מהיר.
           </p>
+          <ul class="hero-assurances" aria-label="עקרונות השירות">
+            <li>מחיר ברור מראש</li>
+            <li>בדיקה אישית לכל רעיון</li>
+            <li>תיאום ישיר, בלי סליקה באתר</li>
+          </ul>
         </div>
 
-        <div class="landing-product-wall" aria-label="דוגמאות למוצרים מודפסים">
-          <img src="https://images.weserv.nl/?url=cdn.thingiverse.com%2Fassets%2F98%2F76%2Fba%2F5b%2Fad%2Fa0d89ce3-2a7a-4ce6-bf0d-48ddec0eed44.png&w=628&h=472&fit=contain&output=webp" alt="קופסת כניסה לבית" />
-          <img src="https://images.weserv.nl/?url=cdn.thingiverse.com%2Fassets%2F93%2Ff5%2F9a%2Fe3%2F6d%2FP1060532.JPG&w=628&h=472&fit=contain&output=webp" alt="מחזיק משקפיים" />
-          <img src="https://images.weserv.nl/?url=cdn.thingiverse.com%2Fassets%2Fd9%2F81%2F17%2Fc9%2Fb8%2Fd204dc84-a7fa-4399-a719-5a3a613bc48d.png&w=628&h=472&fit=contain&output=webp" alt="ארגונית כבלים" />
+        <div class="hero-visual" aria-label="דוגמאות למוצרים מודפסים">
+          <div class="hero-visual-grid">
+            <figure class="hero-product hero-product-main">
+              <img src="https://makerworld.bblmw.com/makerworld/model/USc943749bfcad3c/design/2025-10-01_189372a40e7a48.jpeg?x-oss-process=image/resize,w_1000/format,webp" alt="מעמד שחור לאוזניות בעיצוב באטמן" />
+              <figcaption>מעמד לאוזניות בעיצוב באטמן</figcaption>
+            </figure>
+            <figure class="hero-product">
+              <img src="https://res.cloudinary.com/c8zazzp2/image/upload/v1785846951/products/neq2rspqzo4otsojhl7i.png" alt="כלי דקורטיבי צבעוני בעיצוב לוחם ספרטני" />
+              <figcaption>כלי דקורטיבי בעיצוב ספרטני</figcaption>
+            </figure>
+            <figure class="hero-product">
+              <img src="https://makerworld.bblmw.com/makerworld/model/US544ca505350052/design/2025-12-01_ae8f03b1a6b198.jpg?x-oss-process=image/resize,w_1000/format,webp" alt="מעמד לבן לבקרי PlayStation" />
+              <figcaption>מעמד לבקרי PlayStation</figcaption>
+            </figure>
+          </div>
+          <div class="hero-note hero-note-top"><span aria-hidden="true">01</span> בוחרים או מוצאים רעיון</div>
+          <div class="hero-note hero-note-bottom"><span aria-hidden="true">02</span> בודקים, מתמחרים ומדפיסים</div>
         </div>
       </section>
 
-      <section class="landing-section landing-summary" aria-label="מהו הפרויקט">
-        <article>
+      <nav class="landing-quick-nav" aria-label="ניווט בתוך דף ההסבר">
+        <a href="#growth-loop"><span>01</span> למה זה גדל?</a>
+        <a href="#how-it-works"><span>02</span> איך מזמינים?</a>
+        <a href="#find-an-idea"><span>03</span> איפה מוצאים רעיון?</a>
+        <a href="#friendly-price"><span>04</span> איך עובד המחיר?</a>
+      </nav>
+
+      <section class="landing-section landing-summary landing-intro" aria-label="מהו הפרויקט">
+        <article class="intro-card">
           <span>מה זה?</span>
           <h2>מיקרו־עסק חברי שגדל יחד איתכם</h2>
           <p>
@@ -47,7 +86,7 @@
             ולעקוב במקום אחד אחרי ההזמנה, המחיר וההתקדמות שלה.
           </p>
         </article>
-        <article class="dark-panel">
+        <article class="dark-panel intro-card">
           <span>למה זה גדל?</span>
           <h2>כי הכסף חוזר לפרויקט</h2>
           <p>
@@ -57,7 +96,8 @@
         </article>
       </section>
 
-      <section class="landing-section" id="growth-loop">
+      <section class="landing-section landing-section-numbered" id="growth-loop">
+        <span class="section-number" aria-hidden="true">01</span>
         <div class="section-heading landing-heading">
           <div>
             <p class="eyebrow">מעגל הצמיחה</p>
@@ -65,7 +105,7 @@
             <p>הפרויקט גדל לאט ובצורה פשוטה: ממה שמדפיסים, למה שאפשר יהיה להדפיס בהמשך.</p>
           </div>
         </div>
-        <div class="process-grid">
+        <div class="process-grid growth-process">
           <article>
             <span>1</span>
             <h3>מזמינים</h3>
@@ -89,7 +129,8 @@
         </div>
       </section>
 
-      <section class="landing-section" id="how-it-works">
+      <section class="landing-section landing-section-numbered order-section" id="how-it-works">
+        <span class="section-number" aria-hidden="true">02</span>
         <div class="section-heading landing-heading">
           <div>
             <p class="eyebrow">מהרעיון לידיים</p>
@@ -97,7 +138,7 @@
             <p>ארבעה צעדים, בלי סליקה ובלי מערכת הודעות מסובכת.</p>
           </div>
         </div>
-        <div class="process-grid">
+        <div class="process-grid order-process">
           <article>
             <span>1</span>
             <h3>נרשמים ומתחברים</h3>
@@ -121,7 +162,8 @@
         </div>
       </section>
 
-      <section class="landing-section inspiration-section" id="find-an-idea">
+      <section class="landing-section landing-section-numbered inspiration-section" id="find-an-idea">
+        <span class="section-number" aria-hidden="true">03</span>
         <div class="section-heading landing-heading">
           <div>
             <p class="eyebrow">חפשו את הרעיון הבא שלכם</p>
@@ -135,21 +177,25 @@
 
         <div class="resource-grid" aria-label="מאגרים למציאת מודלים להדפסת תלת־ממד">
           <a class="resource-card" href="https://www.printables.com/model" target="_blank" rel="noopener noreferrer" aria-label="פתיחת Printables בלשונית חדשה">
+            <span class="resource-mark" aria-hidden="true">P</span>
             <strong>Printables</strong>
             <p>דגמים שימושיים, אביזרים, ארגוניות, צעצועים וחלקי חילוף, עם סינון לפי קטגוריה ורישיון.</p>
             <span>לחיפוש באתר ↗</span>
           </a>
           <a class="resource-card" href="https://makerworld.com/en/3d-models?isPrintable=false" target="_blank" rel="noopener noreferrer" aria-label="פתיחת MakerWorld בלשונית חדשה">
+            <span class="resource-mark" aria-hidden="true">M</span>
             <strong>MakerWorld</strong>
             <p>מבחר גדול של מודלים, תמונות ותוצאות הדפסה ששיתפו משתמשים.</p>
             <span>לחיפוש באתר ↗</span>
           </a>
           <a class="resource-card" href="https://www.thingiverse.com/search?type=things" target="_blank" rel="noopener noreferrer" aria-label="פתיחת Thingiverse בלשונית חדשה">
+            <span class="resource-mark" aria-hidden="true">T</span>
             <strong>Thingiverse</strong>
             <p>מאגר ותיק ורחב של רעיונות, חלקים, אביזרים ומודלים מכל הסוגים.</p>
             <span>לחיפוש באתר ↗</span>
           </a>
           <a class="resource-card" href="https://thangs.com/search/free?scope=thangs&amp;view=list" target="_blank" rel="noopener noreferrer" aria-label="פתיחת תוצאות חינמיות ב־Thangs בלשונית חדשה">
+            <span class="resource-mark" aria-hidden="true">Th</span>
             <strong>Thangs — Free</strong>
             <p>חיפוש רחב שכולל תוצאות חינמיות וגם תכנים מסחריים. בדקו שהפריט המסוים ניתן להורדה.</p>
             <span>לחיפוש באתר ↗</span>
@@ -186,7 +232,8 @@
         </div>
       </section>
 
-      <section class="landing-section value-panel">
+      <section class="landing-section landing-section-numbered value-panel" id="friendly-price">
+        <span class="section-number" aria-hidden="true">04</span>
         <div>
           <p class="eyebrow">מחיר חברי</p>
           <h2>בלי נוסחאות ובלי הפתעות</h2>
@@ -194,7 +241,8 @@
             המחיר כולל את ההדפסה וגם חלק קטן שעוזר לפרויקט להתקדם. המטרה היא להישאר
             נגיש ותחרותי, ועדיין לאפשר לקנות עוד חומרים, לתחזק את הציוד ולהשתפר.
           </p>
-          <p>
+          <p class="price-challenge">
+            <strong>האתגר החברי:</strong>
             מצאתם ב־AliExpress מוצר מקביל וזול יותר? שלחו לי ונבדוק יחד.
             אני לא מבטיח לנצח כל מחיר, אבל כן לשמור על מחיר חברי והוגן.
           </p>
@@ -206,7 +254,7 @@
         </ul>
       </section>
 
-      <section class="landing-section" id="growth-options">
+      <section class="landing-section growth-options-section" id="growth-options">
         <div class="section-heading landing-heading">
           <div>
             <p class="eyebrow">מה נפתח בהמשך?</p>
@@ -237,7 +285,7 @@
         </div>
       </section>
 
-      <section class="landing-section" id="policy">
+      <section class="landing-section policy-section" id="policy">
         <div class="section-heading landing-heading">
           <div>
             <p class="eyebrow">תיאום ציפיות</p>
@@ -245,7 +293,7 @@
             <p>כמה כללים פשוטים כדי שלא יהיו הפתעות. אם משהו עדיין לא ברור — שואלים אותי ב־WhatsApp.</p>
           </div>
         </div>
-        <div class="landing-summary">
+        <div class="landing-summary policy-grid">
           <article>
             <span>מוצרי קטלוג</span>
             <h3>משלמים רק על מוצר תקין שקיבלתם</h3>
@@ -270,6 +318,8 @@
       </section>
 
       <section class="landing-section future-panel">
+        <span class="future-orbit future-orbit-one" aria-hidden="true"></span>
+        <span class="future-orbit future-orbit-two" aria-hidden="true"></span>
         <p class="eyebrow">המבט קדימה</p>
         <h2>כרגע בין חברים. בעתיד — אולי הרבה מעבר.</h2>
         <p>
@@ -280,7 +330,7 @@
 
       <section class="landing-final-panel">
         <div>
-          <span>מוכנים?</span>
+          <span>ההדפסה הבאה מתחילה ברעיון</span>
           <h2>בואו נמצא את הדבר הבא שכדאי להדפיס.</h2>
           <p>אפשר להתחיל בקטלוג, או לחפש רעיון חדש באחד המאגרים ולשלוח לי קישור.</p>
         </div>
