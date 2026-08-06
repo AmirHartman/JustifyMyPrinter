@@ -2,8 +2,9 @@
 
 const crypto = require('crypto');
 const fs = require('fs/promises');
+const fsc = require('fs');
 const path = require('path');
-const { extract3mfEstimates } = require('../scripts/lib/three-mf-estimates');
+const { extract3mfEstimates: lazyExtract } = require('./three-mf-lazy');
 
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
 
@@ -30,17 +31,7 @@ async function stableFile(target, waitMs) {
 
 async function sha256File(target) {
   const hash = crypto.createHash('sha256');
-  const handle = await fs.open(target, 'r');
-  try {
-    const buffer = Buffer.allocUnsafe(1024 * 1024);
-    let offset = 0;
-    for (;;) {
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
-      if (!bytesRead) break;
-      hash.update(buffer.subarray(0, bytesRead));
-      offset += bytesRead;
-    }
-  } finally { await handle.close(); }
+  for await (const chunk of fsc.createReadStream(target, { highWaterMark: 1024 * 1024 })) hash.update(chunk);
   return hash.digest('hex');
 }
 
@@ -57,6 +48,8 @@ class FileLibrary {
     this.logger = logger;
     this.files = new Map();
     this.cacheLoaded = false;
+    this.scanInFlight = null;
+    this.importInProgress = false;
   }
 
   async init() {
@@ -102,8 +95,7 @@ class FileLibrary {
     if (!isPlateFile(fileName)) throw new Error('Only sliced .gcode.3mf files are accepted');
     if (stat.size <= 0) throw new Error('Print file is empty');
     if (stat.size > this.maxBytes) throw new Error(`Print file exceeds the ${Math.floor(this.maxBytes / 1024 / 1024)}MiB bridge limit`);
-    const buffer = await fs.readFile(target);
-    const estimates = await extract3mfEstimates(buffer, { requirePlateGcode: true });
+    const estimates = await lazyExtract(target);
     const checksum = await sha256File(target);
     return {
       checksum, fileName: safeName(fileName), byteSize: stat.size,
@@ -111,6 +103,18 @@ class FileLibrary {
       printProfile: estimates.printProfile, purgeGrams: estimates.purgeGrams,
     };
   }
+
+  beginImport() {
+    if (this.importInProgress || this.scanInFlight) {
+      const error = new Error('The print library is busy');
+      error.code = 'library_busy';
+      throw error;
+    }
+    this.importInProgress = true;
+  }
+
+  endImport() { this.importInProgress = false; }
+  isBusy() { return this.importInProgress || Boolean(this.scanInFlight); }
 
   async importIncoming(source) {
     const stat = await stableFile(source, this.stableWaitMs);
@@ -120,8 +124,21 @@ class FileLibrary {
       const destination = path.join(this.libraryDir, `${metadata.checksum}.gcode.3mf`);
       if (await exists(destination)) {
         await this.quarantine(source, `Duplicate plate already exists as ${metadata.checksum}.gcode.3mf`);
-      } else await fs.rename(source, destination);
-      this.files.set(metadata.checksum, metadata);
+      } else {
+        const partial = `${destination}.partial`;
+        try {
+          await fs.copyFile(source, partial, fsc.constants.COPYFILE_EXCL);
+          const handle = await fs.open(partial, 'r+');
+          try { await handle.sync(); } finally { await handle.close(); }
+          await fs.rename(partial, destination);
+          await fs.unlink(source);
+        } catch (error) {
+          await fs.unlink(partial).catch(() => {});
+          throw error;
+        }
+      }
+      const destinationStat = await fs.stat(destination);
+      this.files.set(metadata.checksum, { ...metadata, byteSize: destinationStat.size, mtimeMs: destinationStat.mtimeMs });
       return metadata;
     } catch (error) {
       await this.quarantine(source, error.message);
@@ -130,21 +147,35 @@ class FileLibrary {
     }
   }
 
-  async scan() {
+  async scan(force = false) {
+    if (this.importInProgress) {
+      const error = new Error('The print library is busy');
+      error.code = 'library_busy';
+      throw error;
+    }
+    if (this.scanInFlight) return this.scanInFlight;
+    this.scanInFlight = this._scan(force);
+    try { return await this.scanInFlight; } finally { this.scanInFlight = null; }
+  }
+
+  async _scan(force = false) {
     await this.init();
     const incoming = await fs.readdir(this.incomingDir, { withFileTypes: true });
     for (const entry of incoming) {
       if (entry.isFile() && /\.3mf$/i.test(entry.name)) await this.importIncoming(path.join(this.incomingDir, entry.name));
     }
     const library = await fs.readdir(this.libraryDir, { withFileTypes: true });
+    const previous = this.files;
     const seen = new Map();
     for (const entry of library) {
       if (!entry.isFile() || !isPlateFile(entry.name)) continue;
       const target = path.join(this.libraryDir, entry.name);
       try {
         const checksumFromName = entry.name.replace(/\.gcode\.3mf$/i, '');
-        const cached = this.files.get(checksumFromName);
-        const metadata = await this.inspect(target, cached?.fileName || entry.name);
+        const cached = previous.get(checksumFromName);
+        const stat = await fs.stat(target);
+        const metadata = !force && cached && cached.byteSize === stat.size && cached.mtimeMs === stat.mtimeMs
+          ? cached : { ...(await this.inspect(target, cached?.fileName || entry.name)), mtimeMs: stat.mtimeMs };
         if (entry.name !== `${metadata.checksum}.gcode.3mf`) {
           // A file manually placed directly in library is normalized on the
           // same filesystem. Never overwrite a matching existing plate.
@@ -160,8 +191,9 @@ class FileLibrary {
         await this.quarantine(target, error.message);
       }
     }
+    const changed = JSON.stringify([...previous]) !== JSON.stringify([...seen]);
     this.files = seen;
-    await this.saveCache();
+    if (changed || !await exists(this.cachePath)) await this.saveCache();
     return this.inventory();
   }
 

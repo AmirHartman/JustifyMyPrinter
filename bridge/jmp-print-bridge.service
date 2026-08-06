@@ -5,14 +5,30 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=CHANGE_ME
-WorkingDirectory=/ABSOLUTE/PATH/TO/bridge
-EnvironmentFile=/ABSOLUTE/PATH/TO/bridge/.env
-ExecStart=/usr/bin/node /ABSOLUTE/PATH/TO/bridge/index.js
+User=jmpbridge
+Group=jmpbridge
+WorkingDirectory=/opt/justify-my-printer/bridge
+EnvironmentFile=/etc/justify-my-printer/bridge.env
+Environment=NODE_OPTIONS=--max-old-space-size=192
+ExecStart=/usr/bin/node /opt/justify-my-printer/bridge/index.js
 Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0027
+MemoryHigh=240M
+MemoryMax=320M
+TasksMax=64
+ReadWritePaths=/var/lib/justify-my-printer/bridge /run/justify-my-printer
 
 [Install]
 WantedBy=multi-user.target
