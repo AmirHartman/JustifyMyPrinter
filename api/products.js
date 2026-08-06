@@ -1,7 +1,7 @@
 const { randomUUID } = require('crypto');
 const { getSql } = require('./_db');
 const { parseBody, requireAuth, requireAdmin } = require('./_middleware');
-const { calculateProductCost } = require('./_pricing');
+const { calculateProductCost, effectiveRiskTier, hasPrintData } = require('./_pricing');
 
 function roundGrams(value) {
   const numeric = Number(value);
@@ -71,10 +71,12 @@ function missingRequirements(product) {
   if (!product.description.trim()) missing.push('description');
   if (!hasImage) missing.push('image');
   if (!hasCategory) missing.push('category');
-  if (product.catalogKind === 'printed') {
+  // An idea publishes on its description alone; only a printed product must
+  // carry the data a price is derived from. No cost check: withCurrentPrice
+  // overwrites cost with shopPrice, floored at minOrderPrice, so it is never 0.
+  if (product.catalogKind === 'printed' && !hasPrintData(product)) {
     if (!(product.printHours > 0)) missing.push('printHours');
     if (!product.materials.length || product.materials.some((item) => !item.filamentId || !(Number(item.grams) > 0))) missing.push('materials');
-    if (!(product.cost > 0)) missing.push('price');
   }
   return missing;
 }
@@ -104,7 +106,11 @@ function publicProduct(product) {
     requiredColors: product.requiredColorOptions.map((option) => option.name),
     colorOptions: product.colorOptions,
     requiredColorOptions: product.requiredColorOptions,
-    requiresAdminApproval: product.requiresAdminApproval || product.catalogKind === 'idea',
+    // What forces a manual quote is the absence of a price, not the catalog kind:
+    // a priced idea is ordered like any other product, and the approval checkbox
+    // goes back to being the admin's own per-product choice.
+    requiresAdminApproval: product.requiresAdminApproval || product.priceStatus === 'pending',
+    priceStatus: product.priceStatus,
     allowMultiple: product.allowMultiple,
     available: product.inventoryAvailable,
     inventoryAvailable: product.inventoryAvailable,
@@ -182,6 +188,14 @@ function withCurrentPrice(row, context) {
   }).filter((item) => item.value);
   product.missingRequirements = missingRequirements(product);
   product.catalogStatus = product.missingRequirements.length ? 'incomplete' : product.inventoryAvailable ? 'published' : 'unavailable';
+  // Price certainty is a separate axis from "has this ever been printed":
+  //   pending   — no print data yet, the admin still quotes by hand
+  //   estimated — priced, but from an untested model or pending admin approval
+  //   firm      — a proven product at its own risk level
+  product.hasPrintData = hasPrintData(product);
+  product.riskTier = effectiveRiskTier(product);
+  product.priceStatus = !product.hasPrintData ? 'pending'
+    : product.catalogKind === 'idea' || product.requiresAdminApproval ? 'estimated' : 'firm';
   return product;
 }
 

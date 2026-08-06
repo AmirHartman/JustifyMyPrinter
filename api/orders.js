@@ -8,7 +8,7 @@ const {
   requireActiveUser,
   requireAdmin,
 } = require('./_middleware');
-const { calculateProductCost } = require('./_pricing');
+const { calculateProductCost, hasPrintData } = require('./_pricing');
 const { finalizeOrder } = require('./_order-inventory');
 const { normalizeCartItems, supportTargetIndex } = require('./_cart');
 
@@ -187,23 +187,27 @@ async function buildOrderRow(sql, user, item, ctx) {
     return reject('Catalog orders require a product');
   }
 
+  // catalogKind must travel with the pricing input: an untested model is charged
+  // the untested risk tier, and that coercion lives inside calculateProductCost.
+  const productForPricing = product ? {
+    printHours: Number(product.print_hours), printProfile: product.print_profile,
+    materials: product.materials || [], purgeGrams: Number(product.purge_grams),
+    riskPercent: product.risk_percent, riskLevel: product.risk_level, additionalCopyHours: product.additional_copy_hours,
+    minUnitPrice: product.minimum_unit_price, catalogKind: product.catalog_kind,
+  } : null;
   let breakdown = null;
   if (product) {
-    breakdown = calculateProductCost({
-      printHours: Number(product.print_hours), printProfile: product.print_profile,
-      materials: product.materials || [], purgeGrams: Number(product.purge_grams),
-      riskPercent: product.risk_percent, riskLevel: product.risk_level, additionalCopyHours: product.additional_copy_hours,
-      minUnitPrice: product.minimum_unit_price,
-    }, ctx.filaments.map((f) => ({
+    breakdown = calculateProductCost(productForPricing, ctx.filaments.map((f) => ({
       id: f.id, pricePerKg: Number(f.price_per_kg), spoolPrice: Number(f.spool_price),
       spoolGrams: Number(f.spool_grams), remainingGrams: f.remaining_grams == null ? null : Number(f.remaining_grams),
       active: f.active !== false, name: f.name, colorHex: f.color_hex,
     })), ctx.pricingSettings, { quantity });
   }
-  // An idea has never been printed and an external/custom request has not been
-  // reviewed, so neither has a price yet — the admin quotes one. A price is
-  // never taken from the client: it is derived from the catalog product.
-  const priced = Boolean(product) && product.catalog_kind !== 'idea';
+  // An idea with print time and materials is priced like anything else, at the
+  // untested risk tier. Only an idea without that data, or an external/custom
+  // request, still waits for the admin to quote. A price is never taken from the
+  // client: it is derived from the catalog product.
+  const priced = Boolean(product) && (product.catalog_kind !== 'idea' || hasPrintData(productForPricing));
   const baseCost = priced
     ? product.manual_price_enabled && product.manual_price != null
       ? Number(product.manual_price) * quantity
@@ -246,8 +250,14 @@ async function buildOrderRow(sql, user, item, ctx) {
     return !filament || !filament.active || (filament.remaining_grams != null && Number(filament.remaining_grams) < Number(material.grams || 0) * quantity);
   });
   const needsColorAlternative = Boolean(noColorAvailable || unavailableMaterials);
-  const requiresPriceApproval = orderType !== 'catalog' || Boolean(product?.requires_admin_approval) || product?.catalog_kind === 'idea';
-  const requiresApproval = requiresPriceApproval || needsColorAlternative;
+  // What forces the friend to approve a price is not having one, plus whatever
+  // the admin marked by hand. A priced idea is ordered at the price shown.
+  const requiresPriceApproval = orderType !== 'catalog' || Boolean(product?.requires_admin_approval) || !priced;
+  // A model that has never been printed still lands in the admin's queue rather
+  // than straight in the print queue, so a first print is never claimed by the
+  // bridge unseen. The friend is asked for nothing: this only sets the status.
+  const untestedFirstPrint = product?.catalog_kind === 'idea';
+  const requiresApproval = requiresPriceApproval || needsColorAlternative || untestedFirstPrint;
 
   return {
     priced,
@@ -262,6 +272,7 @@ async function buildOrderRow(sql, user, item, ctx) {
       selectedColors: JSON.stringify(selectedColorsArray),
       productSnapshot: product ? JSON.stringify({
         id: product.id, name: product.name, image: product.image, catalogKind: product.catalog_kind,
+        priceStatus: priced ? (product.catalog_kind === 'idea' ? 'estimated' : 'firm') : 'pending',
         possibleColors: product.possible_colors || [], allowMultiple: product.allow_multiple !== false,
         selectedColors: selectedColorsArray,
       }) : null,

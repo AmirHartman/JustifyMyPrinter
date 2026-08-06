@@ -1,5 +1,5 @@
 import { store, findProduct } from "./state.js";
-import { isUnpriced, linePrice } from "./utils.js";
+import { isUnpriced, isUntested, linePrice } from "./utils.js";
 
 // The cart lives only in the browser. It holds what the friend chose — product,
 // quantity, colour — and never a price: prices are recomputed from the catalog
@@ -124,6 +124,7 @@ export function cartLines() {
       product: product ?? null,
       missing: !product,
       unpriced: Boolean(product) && isUnpriced(product),
+      untested: Boolean(product) && isUntested(product),
       price: linePrice(product, line.quantity),
     };
   });
@@ -136,8 +137,10 @@ export function cartTotals() {
     lines,
     itemCount: available.reduce((sum, line) => sum + line.quantity, 0),
     base: available.reduce((sum, line) => sum + line.price, 0),
-    // A cart of ideas has no total yet; the admin quotes each one after review.
+    // A cart of unpriced ideas has no total yet; the admin quotes each one after
+    // review. A priced idea does count, but is still flagged as never printed.
     hasUnpriced: available.some((line) => line.unpriced),
+    hasUntested: available.some((line) => line.untested),
     hasMissing: lines.some((line) => line.missing),
     tip: getTip(),
     get total() { return this.base + this.tip; },

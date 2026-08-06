@@ -85,7 +85,7 @@ async function createSelfPrint(sql, admin, body, res) {
 
   const rows = await sql`
     SELECT id, name, print_hours, print_profile, materials, purge_grams, risk_percent,
-           risk_level, additional_copy_hours, minimum_unit_price,
+           risk_level, catalog_kind, additional_copy_hours, minimum_unit_price,
            print_file_url, print_file_name, print_file_checksum
     FROM products WHERE id = ${productId}
   `;
@@ -101,6 +101,9 @@ async function createSelfPrint(sql, admin, body, res) {
     printHours: Number(product.print_hours), printProfile: product.print_profile,
     materials: product.materials || [], purgeGrams: Number(product.purge_grams),
     riskPercent: product.risk_percent, riskLevel: product.risk_level,
+    // An untested model carries its own risk tier here too, so a self-print of an
+    // idea is costed the same way the catalog prices it.
+    catalogKind: product.catalog_kind,
     additionalCopyHours: product.additional_copy_hours, minUnitPrice: product.minimum_unit_price,
   }, filamentRows.map((f) => ({
     id: f.id, pricePerKg: Number(f.price_per_kg), spoolPrice: Number(f.spool_price),

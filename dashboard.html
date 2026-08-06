@@ -284,6 +284,7 @@
               <section class="product-materials-section" aria-labelledby="product-pricing-title">
                 <h4 id="product-pricing-title">2. תמחור</h4>
                 <label>רמת סיכון<select name="riskLevel" id="product-risk-level"><option value="low">נמוך</option><option value="medium" selected>בינוני</option><option value="high">גבוה</option></select></label>
+                <p class="form-hint" id="product-risk-untested-note" hidden>מודל שטרם הודפס מתומחר תמיד לפי תעריף "לא נוסה" שבהגדרות התמחור, ולא לפי הרמה שנבחרה כאן. הרמה הזו תחול אחרי שתעביר אותו ל"מוצרים שכבר הדפסתי".</p>
                 <label>מחיר מינימום ליחידה<input name="minUnitPrice" type="number" min="0" step="0.01" placeholder="ללא רצפה נוספת" /></label>
                 <label class="checkbox-label"><input name="manualPriceEnabled" type="checkbox" id="manual-price-toggle" style="width:auto" /> קביעת מחיר ידנית</label>
                 <label id="manual-price-field" hidden>מחיר ידני (₪)<input name="manualPrice" type="number" min="0" step="0.01" placeholder="0" /></label>
@@ -703,6 +704,8 @@
               <label>סיכון נמוך (%)<input name="riskLowPercent" type="number" min="0" max="500" step="1" value="8" required /></label>
               <label>סיכון בינוני (%)<input name="riskMediumPercent" type="number" min="0" max="500" step="1" value="15" required /></label>
               <label>סיכון גבוה (%)<input name="riskHighPercent" type="number" min="0" max="500" step="1" value="25" required /></label>
+              <label>לא נוסה (%)<input name="riskUntestedPercent" type="number" min="0" max="500" step="1" value="35" required /></label>
+              <p class="form-hint">"לא נוסה" חל אוטומטית על כל מודל שטרם הודפס, במקום הרמה שנבחרה למוצר.</p>
             </fieldset>
             <div class="cost-preview-panel"><strong>קבועי עלות (לקריאה בלבד)</strong><div id="pricing-readonly-breakdown"></div></div>
             <button class="primary-button" type="submit">שמור הגדרות</button>
