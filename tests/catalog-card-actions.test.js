@@ -38,13 +38,14 @@ test('catalog ordering targets the product action without overwriting gallery na
   assert.match(createImageGallery, /makeNav\(["']next["'],\s*["']התמונה הבאה["'],\s*["']‹["']\)/);
 });
 
-test('public catalog facts do not expose possible color identifiers', () => {
-  const renderProductFacts = sourceSection(
-    'function renderProductFacts(',
-    '// ── Product interactions',
-  );
+test('public catalog cards and product detail dialog do not expose print time, material weight, or source file', () => {
+  const renderCatalog = sourceSection('function renderCatalog()', 'function normalizedProductImages(');
+  const openProductDetail = sourceSection('function openProductDetail(', '// ── Cart');
 
-  assert.match(renderProductFacts, /product\.printHours/);
-  assert.match(renderProductFacts, /product\.grams/);
-  assert.doesNotMatch(renderProductFacts, /possibleColors/);
+  for (const section of [renderCatalog, openProductDetail]) {
+    assert.doesNotMatch(section, /product\.printHours/);
+    assert.doesNotMatch(section, /product\.grams/);
+    assert.doesNotMatch(section, /product\.sourceUrl/);
+    assert.doesNotMatch(section, /product\.stlUrl/);
+  }
 });

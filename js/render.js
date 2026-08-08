@@ -504,9 +504,7 @@ function renderCatalog() {
         : product.requiresAdminApproval
           ? `מחיר משוער ${formatCurrency(product.cost)}`
           : formatCurrency(product.cost);
-    renderStlLink(card, product);
     renderProductBadges(card, product);
-    renderProductFacts(card, product);
 
     const orderBtn = card.querySelector(".product-meta .primary-button");
     orderBtn.textContent = product.inventoryAvailable === false
@@ -706,8 +704,6 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
         : formatCurrency(product.cost);
 
   const facts = [];
-  if (Number(product.printHours) > 0) facts.push(`זמן הדפסה משוער: כ־${product.printHours} שעות`);
-  if (Number(product.grams) > 0) facts.push(`משקל משוער: כ־${product.grams} גרם`);
   if (product.allowMultiple === false) facts.push("ניתן להזמין יחידה אחת בלבד");
   if (product.requiredColors?.length) facts.push(`צבעים נדרשים: ${product.requiredColors.join(", ")}`);
   const factsContainer = document.querySelector("#product-detail-facts");
@@ -744,11 +740,6 @@ function openProductDetail(product, eligibility = getOrderEligibility()) {
     badge.textContent = "לא זמין כרגע";
     badges.append(badge);
   }
-
-  const source = document.querySelector("#product-detail-source");
-  const sourceUrl = product.sourceUrl || product.stlUrl;
-  source.hidden = !sourceUrl;
-  if (sourceUrl) source.href = sourceUrl;
 
   const images = normalizedProductImages(product);
   const main = document.querySelector("#product-detail-main-image");
@@ -2346,12 +2337,6 @@ function openExpenseEditForm(expense) {
 
 // ── Shared rendering helpers ──────────────────────────────────
 
-function renderStlLink(card, product) {
-  const stlLink = card.querySelector(".stl-link");
-  if (!product.stlUrl) { stlLink?.remove(); return; }
-  if (stlLink) stlLink.href = product.stlUrl;
-}
-
 function renderProductBadges(card, product) {
   const container = card.querySelector(".product-badges");
   if (!container) return;
@@ -2366,24 +2351,6 @@ function renderProductBadges(card, product) {
     badge.className = "product-badge product-badge-idea";
     badge.textContent = text;
     container.append(badge);
-  });
-}
-
-function renderProductFacts(card, product) {
-  const container = card.querySelector(".product-facts");
-  if (!container) return;
-  container.replaceChildren();
-
-  const facts = [];
-  if (product.printHours) facts.push(`⏱️ כ־${product.printHours} שעות הדפסה`);
-  if (product.grams) facts.push(`🧵 כ־${product.grams} גרם חומר`);
-
-  if (facts.length === 0) { container.remove(); return; }
-  facts.forEach((fact) => {
-    const span = document.createElement("span");
-    span.className = "product-fact";
-    span.textContent = fact;
-    container.append(span);
   });
 }
 
