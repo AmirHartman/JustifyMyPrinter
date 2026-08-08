@@ -54,6 +54,31 @@
         </div>
       </section>
 
+      <section id="category-picker-section" aria-labelledby="category-picker-title">
+        <p class="eyebrow">קטלוג לפי נושא</p>
+        <h2 id="category-picker-title">במה מתחילים?</h2>
+        <p>בחרו קטגוריה כדי לראות את המוצרים שלה.</p>
+        <div class="category-picker" id="category-picker"></div>
+      </section>
+
+      <button class="ghost-button btn-sm category-back" id="category-back" type="button" hidden>‏→ כל הקטגוריות</button>
+      <div class="category-filters" id="category-filters" role="tablist" aria-label="סינון לפי קטגוריה"></div>
+
+      <section id="printed-products-section" aria-labelledby="printed-products-title">
+        <p class="eyebrow">מוכנים להזמנה</p>
+        <h2 id="printed-products-title">מוצרים שכבר הודפסו</h2>
+        <p>מוצרים שנבדקו בפועל, עם מחיר ידוע ותהליך הזמנה רגיל.</p>
+        <div class="catalog-grid" id="catalog-grid"></div>
+      </section>
+
+      <section id="idea-products-section" aria-labelledby="idea-products-title" hidden>
+        <p class="eyebrow">רעיונות עתידיים</p>
+        <h2 id="idea-products-title">מודלים שעדיין לא נוסו</h2>
+        <p>דגמים שעדיין לא הדפסתי. לחלקם כבר יש מחיר — הוא כולל תוספת סיכון על חוסר הוודאות ועשוי לרדת אחרי ההדפסה הראשונה. לדגמים שאין להם מחיר עדיין, אשלח הצעה לאחר בדיקה.</p>
+        <div class="catalog-grid" id="ideas-grid"></div>
+      </section>
+      <p class="empty-state" id="catalog-empty">אין עדיין מוצרים בקטלוג. אפשר לבקש הדפסה מיוחדת למעלה.</p>
+
       <section class="catalog-inspiration" aria-labelledby="catalog-inspiration-title">
         <div>
           <p class="eyebrow">חפשו את הרעיון הבא שלכם</p>
@@ -83,31 +108,6 @@
           <button class="primary-button" data-open-custom-order type="button">מצאתי משהו — שליחת קישור</button>
         </div>
       </section>
-
-      <section id="category-picker-section" aria-labelledby="category-picker-title">
-        <p class="eyebrow">קטלוג לפי נושא</p>
-        <h2 id="category-picker-title">במה מתחילים?</h2>
-        <p>בחרו קטגוריה כדי לראות את המוצרים שלה.</p>
-        <div class="category-picker" id="category-picker"></div>
-      </section>
-
-      <button class="ghost-button btn-sm category-back" id="category-back" type="button" hidden>‏→ כל הקטגוריות</button>
-      <div class="category-filters" id="category-filters" role="tablist" aria-label="סינון לפי קטגוריה"></div>
-
-      <section id="printed-products-section" aria-labelledby="printed-products-title">
-        <p class="eyebrow">מוכנים להזמנה</p>
-        <h2 id="printed-products-title">מוצרים שכבר הודפסו</h2>
-        <p>מוצרים שנבדקו בפועל, עם מחיר ידוע ותהליך הזמנה רגיל.</p>
-        <div class="catalog-grid" id="catalog-grid"></div>
-      </section>
-
-      <section id="idea-products-section" aria-labelledby="idea-products-title" hidden>
-        <p class="eyebrow">רעיונות עתידיים</p>
-        <h2 id="idea-products-title">מודלים שעדיין לא נוסו</h2>
-        <p>דגמים שעדיין לא הדפסתי. לחלקם כבר יש מחיר — הוא כולל תוספת סיכון על חוסר הוודאות ועשוי לרדת אחרי ההדפסה הראשונה. לדגמים שאין להם מחיר עדיין, אשלח הצעה לאחר בדיקה.</p>
-        <div class="catalog-grid" id="ideas-grid"></div>
-      </section>
-      <p class="empty-state" id="catalog-empty">אין עדיין מוצרים בקטלוג. אפשר לבקש הדפסה מיוחדת למעלה.</p>
     </main>
 
     <dialog id="product-detail-dialog" aria-labelledby="product-detail-title">
