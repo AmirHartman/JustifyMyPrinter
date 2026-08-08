@@ -1154,7 +1154,7 @@ function renderOrderCostSummary(order, form) {
     return;
   }
   const totalCost = form ? Number(form.elements.finalAmount.value) || 0 : Number(order.finalAmount) || 0;
-  const profit = totalCost - myCost;
+  const profit = totalCost - Number(myCost);
   body.innerHTML = `
     <div class="cost-preview-row"><span>העלות שלי (חומרים, חשמל, בלאי)</span><span>${formatCurrency(myCost)}</span></div>
     <div class="cost-preview-row"><span>עלות כוללת (מה שהחבר משלם)</span><span>${formatCurrency(totalCost)}</span></div>
@@ -1448,7 +1448,7 @@ function renderItemStats() {
     const completed = orders.filter((o) => o.status === "completed").length;
     const paidTotal   = sumOrderAmounts(orders.filter((o) => o.paid));
     const debtTotal   = sumOrderAmounts(orders.filter((o) => !o.paid));
-    const supportTotal = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
+    const profitTotal = orders.reduce((s, o) => s + (orderCostBreakdown(o).profit ?? 0), 0);
 
     const row = document.createElement("tr");
     row.innerHTML = `
@@ -1460,7 +1460,7 @@ function renderItemStats() {
       <td class="stat-cell stat-completed">${completed}</td>
       <td class="stat-cell stat-revenue">${formatCurrency(paidTotal)}</td>
       <td class="stat-cell ${debtTotal > 0 ? "stat-negative" : "stat-muted"}">${formatCurrency(debtTotal)}</td>
-      <td class="stat-cell ${supportTotal >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(supportTotal)}</td>
+      <td class="stat-cell ${profitTotal >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(profitTotal)}</td>
     `;
 
     const imgCell = document.createElement("td");
@@ -1495,8 +1495,8 @@ function getUserOrderStats(user) {
   const orders  = ordersForUser(user).filter((o) => o.status !== "cancelled");
   const revenue = sumOrderAmounts(orders);
   const paid    = sumOrderAmounts(orders.filter((o) => o.paid));
-  const support = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
-  return { count: orders.length, revenue, paid, debt: revenue - paid, support };
+  const profit = orders.reduce((s, o) => s + (orderCostBreakdown(o).profit ?? 0), 0);
+  return { count: orders.length, revenue, paid, debt: revenue - paid, profit };
 }
 
 // One order's money split, matching renderOrderCostSummary's meanings:
@@ -1504,6 +1504,9 @@ function getUserOrderStats(user) {
 // (materials + electricity + wear), profit = the gap. Any of these is null when
 // the underlying figure is missing (unpriced idea, or non-catalog order without
 // a cost) so it can be shown as "—" and excluded from sums — never invent money.
+// Admin views show the exact profit (unrounded); rounding the cost up is only
+// applied to the public-facing total on the transparency page, to avoid
+// confusing customers with fractional shekels.
 function orderCostBreakdown(order) {
   const total  = orderAmount(order);
   const cost   = order.productionCost != null ? Number(order.productionCost) : null;
@@ -1638,7 +1641,7 @@ function renderUsersAdmin() {
         <td class="stat-cell stat-revenue">${formatCurrency(stats.revenue)}</td>
         <td class="stat-cell">${formatCurrency(stats.paid)}</td>
         <td class="stat-cell ${stats.debt > 0 ? "stat-negative" : "stat-muted"}">${formatCurrency(stats.debt)}</td>
-        <td class="stat-cell ${stats.support >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.support)}</td>
+        <td class="stat-cell ${stats.profit >= 0 ? "stat-positive" : "stat-negative"}">${formatCurrency(stats.profit)}</td>
         <td class="actions-cell"></td>
       `;
 
@@ -1876,7 +1879,7 @@ function renderStoreEdit() {
 
   store.products.forEach((product) => {
     const orders = store.orders.filter((o) => o.productId === product.id && o.status !== "cancelled");
-    const supportTotal = orders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
+    const profitTotal = orders.reduce((s, o) => s + (orderCostBreakdown(o).profit ?? 0), 0);
 
     const card = document.createElement("article");
     card.className = "store-edit-card";
@@ -1918,7 +1921,7 @@ function renderStoreEdit() {
       ${stockNotice}
       <div class="store-edit-live-stats">
         <span>${orders.length} הזמנות</span>
-        <span class="${supportTotal > 0 ? "stat-positive" : "stat-muted"}">${formatCurrency(supportTotal)} תמיכה</span>
+        <span class="${profitTotal > 0 ? "stat-positive" : "stat-muted"}">${formatCurrency(profitTotal)} רווח</span>
       </div>
     `;
 
@@ -2219,7 +2222,7 @@ function computeFinanceSummary() {
 
   const paidIncome    = sumOrderAmounts(paidOrders);
   const unpaidTotal   = sumOrderAmounts(unpaidOrders);
-  const supportTotal  = paidOrders.reduce((s, o) => s + (Number(o.supportAmount) || 0), 0);
+  const profitTotal   = paidOrders.reduce((s, o) => s + (orderCostBreakdown(o).profit ?? 0), 0);
   const totalExpenses = store.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const reinvestmentBalance = paidIncome - totalExpenses;
 
@@ -2235,7 +2238,7 @@ function computeFinanceSummary() {
   const monthBalance = monthIncome - monthExpenses;
 
   return {
-    paidIncome, unpaidTotal, supportTotal, totalExpenses, reinvestmentBalance,
+    paidIncome, unpaidTotal, profitTotal, totalExpenses, reinvestmentBalance,
     monthIncome, monthExpenses, monthBalance,
   };
 }
@@ -2267,7 +2270,7 @@ function renderFinanceSummary() {
     { label: "יתרה החודש", value: s.monthBalance, tone: s.monthBalance >= 0 ? "positive" : "negative" },
     { label: "חוב פתוח", value: s.unpaidTotal, tone: s.unpaidTotal > 0 ? "negative" : undefined },
     { label: "יתרת השקעה חוזרת (משוערת)", value: s.reinvestmentBalance, tone: s.reinvestmentBalance >= 0 ? "positive" : "negative" },
-    { label: "תמיכה שהתקבלה", value: s.supportTotal, tone: "positive" },
+    { label: "רווח שהתקבל", value: s.profitTotal, tone: "positive" },
   ]);
 }
 
@@ -2753,7 +2756,7 @@ function renderTransparencyPage() {
     ["הדפסות שהושלמו", String(data.completedPrints ?? 0)],
     ["הושלמו החודש", String(data.completedThisMonth ?? 0)],
     ["צבעים זמינים", String(data.availableMaterialCount ?? 0)],
-    ["תמיכה שנאספה", formatCurrency(data.totalSupport ?? 0)],
+    ["רווח שנאסף", formatCurrency(data.totalProfit ?? 0)],
     ["הושקע מחדש", formatCurrency(data.reinvestedAmount ?? 0)],
   ];
   metrics.innerHTML = summaryMetrics.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("");

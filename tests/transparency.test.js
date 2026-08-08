@@ -48,10 +48,12 @@ function assertPrivateFieldsAbsent(value) {
 // T1: mocked handler behavior. The real endpoint DTO is exercised, while Neon
 // results are fixtures so this does not claim database or browser coverage.
 test('GET transparency returns public aggregates, project status, and material availability without private records', async () => {
+  let summaryQuery = '';
   const sql = async (strings) => {
     const query = strings.join(' ');
-    if (query.includes('total_support')) {
-      return [{ total_support: '275', reinvested: '80', completed_prints: '7', completed_this_month: '2' }];
+    if (query.includes('total_profit')) {
+      summaryQuery = query;
+      return [{ total_profit: '275', reinvested: '80', completed_prints: '7', completed_this_month: '2' }];
     }
     if (query.includes('FROM goals')) {
       return [{ label: 'New nozzle', target_amount: '400', saved: '275', achieved_at: null, internal_notes: 'private' }];
@@ -85,7 +87,10 @@ test('GET transparency returns public aggregates, project status, and material a
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.headers['content-type'], 'application/json');
-  assert.equal(res.body.totalSupport, 275);
+  assert.equal(res.body.totalProfit, 275);
+  assert.match(summaryQuery, /CEIL\(production_cost\)/);
+  assert.match(summaryQuery, /internal = FALSE/);
+  assert.match(summaryQuery, /production_cost IS NOT NULL/);
   assert.equal(res.body.reinvestedAmount, 80);
   assert.equal(res.body.completedPrints, 7);
   assert.equal(res.body.completedThisMonth, 2);

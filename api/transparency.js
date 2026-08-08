@@ -38,7 +38,14 @@ module.exports = async (req, res) => {
     const sql = getSql();
     const [summaryRows, goals, investments, filaments, projectRows] = await Promise.all([
       sql`SELECT
-        COALESCE((SELECT SUM(support_amount) FROM orders WHERE paid = TRUE), 0) AS total_support,
+        COALESCE((
+          SELECT SUM(final_amount - CEIL(production_cost))
+          FROM orders
+          WHERE paid = TRUE
+            AND internal = FALSE
+            AND production_cost IS NOT NULL
+            AND final_amount IS NOT NULL
+        ), 0) AS total_profit,
         COALESCE((SELECT SUM(ABS(amount)) FROM owner_ledger WHERE public_visible = TRUE AND amount < 0), 0) AS reinvested,
         COALESCE((SELECT COUNT(*) FROM orders WHERE status IN ('completed', 'delivered') AND internal = FALSE), 0) AS completed_prints,
         COALESCE((SELECT COUNT(*) FROM orders
@@ -60,7 +67,7 @@ module.exports = async (req, res) => {
       availability: materialAvailability(item),
     }));
     return res.json({
-      totalSupport: Number(summary.total_support) || 0,
+      totalProfit: Number(summary.total_profit) || 0,
       reinvestedAmount: Number(summary.reinvested) || 0,
       completedPrints: Number(summary.completed_prints) || 0,
       completedThisMonth: Number(summary.completed_this_month) || 0,
